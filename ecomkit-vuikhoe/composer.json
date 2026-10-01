@@ -1,0 +1,19 @@
+{
+    "name": "vuikhoe/ecomkit-vuikhoe",
+    "description": "WordPress plugin foundation for Ecomkit - Vui Khỏe.",
+    "type": "wordpress-plugin",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1"
+    },
+    "autoload": {
+        "classmap": [
+            "includes/"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
+

@@ -2,7 +2,7 @@
 
 ## WP.0 — Architecture + Canonical Contract Recovery
 
-Trạng thái: **hoàn tất tài liệu**.
+Trạng thái: **PASS** (`f617278`).
 
 - Khóa đúng 24 header, thứ tự, key, kiểu và NULL/export rules.
 - Phục hồi matching, Result/Error/History behavior, Shopee mapping và security decisions.
@@ -12,19 +12,23 @@ Exit gate: sáu tài liệu tồn tại; repo Git riêng; repo cũ không thay �
 
 ## WP.1 — Plugin scaffold và quality baseline
 
-- Plugin bootstrap, autoload/namespaces, coding standard, test harness và build/dev tooling.
-- Activation/deactivation an toàn; chưa tạo business tables nếu migration design chưa duyệt.
-- Capability matrix, REST error envelope và configuration conventions.
+Trạng thái: **PASS**.
 
-Exit gate: plugin activate/deactivate sạch, static analysis/test baseline pass, không secret.
+- Plugin bootstrap, Composer classmap autoload, compatibility guard và packaging.
+- Sáu custom table foundation, schema version `1`, `dbDelta()` và incremental upgrade hook.
+- Activation idempotent; deactivation/uninstall mặc định không xóa dữ liệu.
+- Bảy trang quản trị placeholder, `manage_options`, diagnostic và admin notice an toàn.
+- Không có Excel, matching, Shopee, provider call hoặc background job.
 
-## WP.2 — Schema, migrations và repositories
+Exit gate: static/package/schema checks pass; ZIP cài đặt có đúng plugin root; không secret/provider traffic. Manual activation vẫn cần thực hiện trên WordPress staging/local vì workspace không có instance WordPress.
 
-- Versioned custom-table migrations cho Batch/File/Order/Item/Error/Log và Marketplace.
-- Index, uniqueness, transaction boundary, retention và uninstall policy.
-- Repository contract độc lập UI.
+## WP.2 — Excel Upload + Batch + Internal Order Identity
 
-Exit gate: fresh install, upgrade, rollback/backup runbook và idempotent migration tests.
+- Upload Excel an toàn và tạo Batch thực.
+- Internal order identity/repository trên schema foundation.
+- Chưa thay đổi contract 24 cột hoặc rule `Mã đơn sàn`.
+
+Exit gate: upload/Batch/identity tests trên WordPress staging; không tự động bắt đầu stage này từ WP.1.
 
 ## WP.3 — File ingestion và parser
 

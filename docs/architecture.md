@@ -100,3 +100,14 @@ Quy tắc duplicate ưu tiên cao hơn matched/missing. Một normalized code t�
 
 Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp vụ và ranh giới bảo mật.
 
+## 9. Quyết định triển khai WP.1
+
+- Baseline runtime: PHP 8.1+, WordPress 6.6+; bootstrap kiểm tra trước khi tải autoload/runtime.
+- Composer dùng classmap cho các class theo naming convention WordPress, không có package runtime bên ngoài ở WP.1.
+- Schema version `1` dùng sáu bảng foundation: `ecomkit_batches`, `ecomkit_orders`, `ecomkit_order_items`, `ecomkit_errors`, `ecomkit_marketplace_connections`, `ecomkit_sync_runs`, luôn ghép với `$wpdb->prefix`.
+- `dbDelta()` chạy khi activation và khi stored schema version thấp hơn expected version; upgrade không phụ thuộc deactivate/reactivate.
+- WP.1 chưa tạo các bảng snapshot/log riêng được đề xuất ở WP.0. Raw/canonical metadata foundation dùng JSON-encoded `longtext`; việc tách bảng ở migration tương lai cần giữ compatibility và không thay contract 24 cột.
+- Không khai báo foreign key vật lý ở WP.1 để tương thích vận hành/migration WordPress; quan hệ dùng ID và index có chủ đích. Multi-shop uniqueness là `(connection_id, marketplace_order_id)`, không phải global order ID.
+- Deactivation và uninstall mặc định giữ nguyên toàn bộ dữ liệu. Destructive uninstall chỉ có thể được bổ sung bằng opt-in rõ ràng ở stage sau.
+- Admin dùng `manage_options`, page callback kiểm tra lại capability; không có public route hoặc mutating form ở WP.1.
+
