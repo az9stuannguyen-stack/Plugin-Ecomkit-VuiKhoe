@@ -83,3 +83,11 @@ Lỗi trả `error_code` ổn định, message người dùng an toàn, severity
 - Formula không được tính; chỉ cached scalar result mới được đọc. Raw metadata không lưu object thực thi hoặc công thức.
 - Output admin được escape; SQL value dùng `$wpdb->insert`, `$wpdb->update` hoặc prepared query. Không có provider/network call.
 
+## 11. InnoDB migration WP.2D
+
+- Migration chỉ thao tác sáu bảng Ecomkit có tên do plugin tạo từ `$wpdb->prefix`; không có endpoint SQL công khai, table name do người dùng chọn hoặc câu lệnh tùy ý.
+- Preflight xác minh máy chủ thật sự hỗ trợ InnoDB. Plugin không âm thầm hạ cấp sang MyISAM và vẫn giữ guard `ECOMKIT_NON_TRANSACTIONAL_TABLE` nếu môi trường chưa an toàn.
+- Việc chuyển engine chỉ dùng `ALTER TABLE ... ENGINE=InnoDB`; không dùng `DROP`, `TRUNCATE`, bảng thay thế hay thay đổi bảng core/third-party. Schema version chỉ tăng sau khi cả sáu bảng và fingerprint bảo toàn dữ liệu đều được xác minh.
+- Checkpoint migration chỉ lưu số dòng cùng hash cấu trúc/index và collation, không lưu nội dung hàng hoặc PII. Database Runtime Diagnostics chỉ hiển thị loại DB, hỗ trợ InnoDB, logical table name, engine và transactional status; không hiển thị host, username, password hoặc SQL.
+- Migration có thể tiếp tục sau partial implicit commit: bảng đã đạt InnoDB không bị ALTER lại; lỗi còn lại giữ schema cũ và chặn import cho đến khi tất cả bảng đạt yêu cầu.
+

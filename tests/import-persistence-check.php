@@ -2,8 +2,8 @@
 /** WP.2A persistence checks with an in-memory wpdb double. */
 declare(strict_types=1);
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.2.3' );
-define( 'ECOMKIT_VUIKHOE_DB_VERSION', 2 );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.2.4' );
+define( 'ECOMKIT_VUIKHOE_DB_VERSION', 3 );
 define( 'ARRAY_A', 'ARRAY_A' );
 function wp_max_upload_size(): int { return 20 * 1024 * 1024; }
 function size_format( int $bytes ): string { return (string) $bytes; }
@@ -18,6 +18,8 @@ final class FakeWpdb {
 	public function esc_like( string $value ): string { return $value; }
 	public function prepare( string $query, mixed ...$args ): string { return vsprintf( str_replace( '%s', "'%s'", $query ), $args ); }
 	public function get_row( string $query, string $output ): array { return array( 'Engine' => 'InnoDB' ); }
+	public function get_results( string $query, string $output ): array { return str_contains( $query, 'SHOW ENGINES' ) ? array( array( 'Engine' => 'InnoDB', 'Support' => 'DEFAULT' ) ) : array(); }
+	public function db_server_info(): string { return 'MySQL 8.0'; }
 }
 function check_import( bool $condition, string $message ): void { if ( ! $condition ) { throw new RuntimeException( $message ); } }
 

@@ -75,7 +75,7 @@ final class Ecomkit_Vuikhoe_Admin {
 			$code = sanitize_key( wp_unslash( $_GET['runtime_code'] ) );
 			$test = array( 'ok' => 'pass' === $result, 'stage' => strtoupper( $stage ), 'classification' => strtoupper( $code ) );
 		}
-		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose(), 'excel_runtime' => ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->snapshot(), 'runtime_test' => $test ) );
+		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose(), 'database_runtime' => Ecomkit_Vuikhoe_DB::database_runtime_diagnostic(), 'excel_runtime' => ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->snapshot(), 'runtime_test' => $test ) );
 	}
 
 	public function handle_excel_runtime_test(): void {

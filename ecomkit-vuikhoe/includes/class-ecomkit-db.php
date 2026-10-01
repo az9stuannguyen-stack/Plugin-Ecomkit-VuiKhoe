@@ -9,6 +9,7 @@ final class Ecomkit_Vuikhoe_DB {
 	public const SCHEMA_OPTION = 'ecomkit_vuikhoe_db_version';
 	public const PLUGIN_VERSION_OPTION = 'ecomkit_vuikhoe_plugin_version';
 	public const INSTALL_ERROR_OPTION = 'ecomkit_vuikhoe_install_error';
+	public const INNODB_MIGRATION_OPTION = 'ecomkit_vuikhoe_innodb_migration_state';
 
 	/**
 	 * Returns table names for the current WordPress site prefix.
@@ -37,6 +38,10 @@ final class Ecomkit_Vuikhoe_DB {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		$tables  = self::table_names();
+		$before  = self::diagnose();
+		if ( $before['tables_ok'] ) {
+			self::migrate_tables_to_innodb();
+		}
 		$collate = $wpdb->get_charset_collate();
 		$sql     = self::schema_sql( $tables, $collate );
 
@@ -48,6 +53,12 @@ final class Ecomkit_Vuikhoe_DB {
 		if ( ! $diagnostic['tables_ok'] ) {
 			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_DB_SCHEMA_INITIALIZATION_FAILED', false );
 			throw new RuntimeException( 'ECOMKIT_DB_SCHEMA_INITIALIZATION_FAILED' );
+		}
+
+		self::migrate_tables_to_innodb();
+		if ( ! self::database_runtime_diagnostic()['ready'] ) {
+			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_DB_INNODB_MIGRATION_FAILED', false );
+			throw new RuntimeException( 'ECOMKIT_DB_INNODB_MIGRATION_FAILED' );
 		}
 
 		update_option( self::SCHEMA_OPTION, ECOMKIT_VUIKHOE_DB_VERSION, false );
@@ -99,18 +110,134 @@ final class Ecomkit_Vuikhoe_DB {
 	 * transactional engine. Unknown or missing engines fail closed.
 	 */
 	public static function supports_import_transactions(): bool {
+		return self::database_runtime_diagnostic()['ready'];
+	}
+
+	/** @return array{db_type:string,innodb_supported:bool,tables:array<string,array<string,mixed>>,ready:bool} */
+	public static function database_runtime_diagnostic(): array {
 		global $wpdb;
 
-		$tables = self::table_names();
-		foreach ( array( 'batches', 'orders', 'order_items', 'errors' ) as $key ) {
-			$status = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS LIKE %s', $wpdb->esc_like( $tables[ $key ] ) ), ARRAY_A );
-			$engine = is_array( $status ) ? strtoupper( (string) ( $status['Engine'] ?? '' ) ) : '';
-			if ( ! in_array( $engine, array( 'INNODB', 'NDBCLUSTER' ), true ) ) {
-				return false;
+		$server = method_exists( $wpdb, 'db_server_info' ) ? (string) $wpdb->db_server_info() : '';
+		$db_type = false !== stripos( $server, 'mariadb' ) ? 'MariaDB' : ( '' !== $server ? 'MySQL' : 'Unknown' );
+		$engines = $wpdb->get_results( 'SHOW ENGINES', ARRAY_A );
+		$innodb_supported = false;
+		foreach ( is_array( $engines ) ? $engines : array() as $engine ) {
+			if ( 'INNODB' === strtoupper( (string) ( $engine['Engine'] ?? '' ) ) && ! in_array( strtoupper( (string) ( $engine['Support'] ?? '' ) ), array( 'NO', 'DISABLED', '' ), true ) ) {
+				$innodb_supported = true;
+				break;
 			}
 		}
 
-		return true;
+		$table_status = array();
+		foreach ( self::table_names() as $key => $table ) {
+			$status = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS LIKE %s', $wpdb->esc_like( $table ) ), ARRAY_A );
+			$engine = is_array( $status ) ? strtoupper( (string) ( $status['Engine'] ?? '' ) ) : '';
+			$table_status[ $key ] = array( 'engine' => $engine ?: 'UNKNOWN', 'transactional' => 'INNODB' === $engine );
+		}
+
+		return array(
+			'db_type'          => $db_type,
+			'innodb_supported' => $innodb_supported,
+			'tables'           => $table_status,
+			'ready'            => $innodb_supported && ! in_array( false, array_column( $table_status, 'transactional' ), true ),
+		);
+	}
+
+	/**
+	 * Converts only plugin-controlled tables, preserving data and definitions.
+	 * The operation is resumable because already-InnoDB tables are never altered.
+	 *
+	 * @return array{converted:string[],counts:array<string,int>}
+	 */
+	public static function migrate_tables_to_innodb(): array {
+		global $wpdb;
+
+		$runtime = self::database_runtime_diagnostic();
+		if ( ! $runtime['innodb_supported'] ) {
+			throw new RuntimeException( 'ECOMKIT_INNODB_UNSUPPORTED' );
+		}
+
+		$tables = self::table_names();
+		$before = get_option( self::INNODB_MIGRATION_OPTION, array() );
+		if ( ! is_array( $before ) || array_keys( $before ) !== array_keys( $tables ) ) {
+			$before = array();
+			foreach ( $tables as $key => $table ) {
+				$before[ $key ] = self::table_fingerprint( $table );
+			}
+			update_option( self::INNODB_MIGRATION_OPTION, $before, false );
+		}
+
+		$converted = array();
+		foreach ( $tables as $key => $table ) {
+			$current = self::table_fingerprint( $table );
+			if ( 'INNODB' === $current['engine'] ) {
+				continue;
+			}
+			$identifier = self::safe_table_identifier( $table, $tables );
+			if ( false === $wpdb->query( "ALTER TABLE `$identifier` ENGINE=InnoDB" ) ) {
+				throw new RuntimeException( 'ECOMKIT_INNODB_ALTER_FAILED_' . strtoupper( $key ) );
+			}
+			$converted[] = $key;
+		}
+
+		$counts = array();
+		foreach ( $tables as $key => $table ) {
+			$after = self::table_fingerprint( $table );
+			if ( 'INNODB' !== $after['engine'] ) {
+				throw new RuntimeException( 'ECOMKIT_INNODB_VERIFY_FAILED_' . strtoupper( $key ) );
+			}
+			if ( $before[ $key ]['count'] !== $after['count'] ) {
+				throw new RuntimeException( 'ECOMKIT_INNODB_ROW_COUNT_MISMATCH_' . strtoupper( $key ) );
+			}
+			if ( $before[ $key ]['columns'] !== $after['columns'] || $before[ $key ]['indexes'] !== $after['indexes'] ) {
+				throw new RuntimeException( 'ECOMKIT_INNODB_DEFINITION_MISMATCH_' . strtoupper( $key ) );
+			}
+			if ( $before[ $key ]['collation'] !== $after['collation'] ) {
+				throw new RuntimeException( 'ECOMKIT_INNODB_COLLATION_MISMATCH_' . strtoupper( $key ) );
+			}
+			$counts[ $key ] = $after['count'];
+		}
+
+		delete_option( self::INNODB_MIGRATION_OPTION );
+		return array( 'converted' => $converted, 'counts' => $counts );
+	}
+
+	/** @return array{engine:string,count:int,columns:string,indexes:string,collation:string} */
+	private static function table_fingerprint( string $table ): array {
+		global $wpdb;
+
+		$tables = self::table_names();
+		$identifier = self::safe_table_identifier( $table, $tables );
+		$status = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS LIKE %s', $wpdb->esc_like( $table ) ), ARRAY_A );
+		if ( ! is_array( $status ) ) {
+			throw new RuntimeException( 'ECOMKIT_TABLE_STATUS_MISSING' );
+		}
+		$columns = $wpdb->get_results( "SHOW COLUMNS FROM `$identifier`", ARRAY_A );
+		$indexes = $wpdb->get_results( "SHOW INDEX FROM `$identifier`", ARRAY_A );
+		$count = $wpdb->get_var( "SELECT COUNT(*) FROM `$identifier`" );
+		$column_definition = array_map(
+			static fn( array $column ): array => array_intersect_key( $column, array_flip( array( 'Field', 'Type', 'Null', 'Key', 'Default', 'Extra' ) ) ),
+			is_array( $columns ) ? $columns : array()
+		);
+		$index_definition = array_map(
+			static fn( array $index ): array => array_intersect_key( $index, array_flip( array( 'Non_unique', 'Key_name', 'Seq_in_index', 'Column_name', 'Collation', 'Sub_part', 'Packed', 'Null', 'Index_type', 'Comment', 'Index_comment', 'Visible', 'Expression' ) ) ),
+			is_array( $indexes ) ? $indexes : array()
+		);
+		return array(
+			'engine'    => strtoupper( (string) ( $status['Engine'] ?? '' ) ),
+			'count'     => (int) $count,
+			'columns'   => hash( 'sha256', wp_json_encode( $column_definition ) ),
+			'indexes'   => hash( 'sha256', wp_json_encode( $index_definition ) ),
+			'collation' => (string) ( $status['Collation'] ?? '' ),
+		);
+	}
+
+	/** @param array<string,string> $allowed */
+	private static function safe_table_identifier( string $table, array $allowed ): string {
+		if ( ! in_array( $table, $allowed, true ) || 1 !== preg_match( '/^[A-Za-z0-9_]+$/', $table ) ) {
+			throw new RuntimeException( 'ECOMKIT_INVALID_TABLE_IDENTIFIER' );
+		}
+		return $table;
 	}
 
 	/**
@@ -143,7 +270,7 @@ final class Ecomkit_Vuikhoe_DB {
 	PRIMARY KEY  (id),
 	KEY status (status),
 	KEY created_at (created_at)
-) $collate;",
+) ENGINE=InnoDB $collate;",
 			"CREATE TABLE {$tables['marketplace_connections']} (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	platform varchar(32) NOT NULL,
@@ -163,7 +290,7 @@ final class Ecomkit_Vuikhoe_DB {
 	UNIQUE KEY platform_shop (platform,external_shop_id),
 	KEY status (status),
 	KEY created_at (created_at)
-) $collate;",
+) ENGINE=InnoDB $collate;",
 			"CREATE TABLE {$tables['orders']} (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	batch_id bigint(20) unsigned NOT NULL,
@@ -207,7 +334,7 @@ final class Ecomkit_Vuikhoe_DB {
 	KEY normalized_order_code (normalized_order_code),
 	KEY matching_status (matching_status),
 	KEY created_at (created_at)
-) $collate;",
+) ENGINE=InnoDB $collate;",
 			"CREATE TABLE {$tables['order_items']} (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	order_id bigint(20) unsigned NOT NULL,
@@ -222,7 +349,7 @@ final class Ecomkit_Vuikhoe_DB {
 	updated_at datetime NOT NULL,
 	PRIMARY KEY  (id),
 	KEY order_id (order_id)
-) $collate;",
+) ENGINE=InnoDB $collate;",
 			"CREATE TABLE {$tables['errors']} (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	batch_id bigint(20) unsigned DEFAULT NULL,
@@ -248,7 +375,7 @@ final class Ecomkit_Vuikhoe_DB {
 	KEY error_code (error_code),
 	KEY severity (severity),
 	KEY created_at (created_at)
-) $collate;",
+) ENGINE=InnoDB $collate;",
 			"CREATE TABLE {$tables['sync_runs']} (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	connection_id bigint(20) unsigned NOT NULL,
@@ -273,7 +400,7 @@ final class Ecomkit_Vuikhoe_DB {
 	KEY batch_id (batch_id),
 	KEY status (status),
 	KEY created_at (created_at)
-) $collate;",
+) ENGINE=InnoDB $collate;",
 		);
 	}
 }

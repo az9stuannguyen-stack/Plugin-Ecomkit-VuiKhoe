@@ -2,6 +2,15 @@
 <div class="wrap">
 	<h1><?php echo esc_html__( 'Cài đặt', 'ecomkit-vuikhoe' ); ?></h1>
 	<p><?php echo esc_html__( 'Thông tin chẩn đoán an toàn; trang này không hiển thị secret hoặc đường dẫn máy chủ.', 'ecomkit-vuikhoe' ); ?></p>
+	<?php $database = $data['database_runtime']; $labels = array( 'batches' => 'Batches', 'orders' => 'Orders', 'order_items' => 'Order Items', 'errors' => 'Errors', 'marketplace_connections' => 'Marketplace Connections', 'sync_runs' => 'Sync Runs' ); ?>
+	<h2><?php echo esc_html__( 'Database Runtime Diagnostics', 'ecomkit-vuikhoe' ); ?></h2>
+	<?php if ( ! $database['innodb_supported'] ) : ?><div class="notice notice-error inline"><p><?php echo esc_html__( 'Máy chủ cơ sở dữ liệu hiện không hỗ trợ InnoDB, Ecomkit chưa thể xử lý dữ liệu an toàn.', 'ecomkit-vuikhoe' ); ?></p></div><?php endif; ?>
+	<table class="widefat striped" style="max-width:900px"><tbody>
+	<tr><th><?php echo esc_html__( 'Database server', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $database['db_type'] ); ?></td></tr>
+	<tr><th><?php echo esc_html__( 'InnoDB support', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $database['innodb_supported'] ? 'YES' : 'NO' ); ?></td></tr>
+	<?php foreach ( $labels as $key => $label ) : $table = $database['tables'][ $key ]; ?><tr><th><?php echo esc_html( $label ); ?></th><td><?php echo esc_html( $table['engine'] . ' — ' . ( $table['transactional'] ? 'OK' : 'FAIL' ) ); ?></td></tr><?php endforeach; ?>
+	<tr><th><?php echo esc_html__( 'Transactional database readiness', 'ecomkit-vuikhoe' ); ?></th><td><strong><?php echo esc_html( $database['ready'] ? 'PASS' : 'FAIL' ); ?></strong></td></tr>
+	</tbody></table>
 	<h2><?php echo esc_html__( 'Excel Runtime Diagnostics', 'ecomkit-vuikhoe' ); ?></h2>
 	<?php if ( is_array( $data['runtime_test'] ) ) : ?>
 		<div class="notice <?php echo $data['runtime_test']['ok'] ? 'notice-success' : 'notice-error'; ?> inline"><p>

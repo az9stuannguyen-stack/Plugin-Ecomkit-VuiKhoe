@@ -65,6 +65,18 @@ Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
 
 Batch #6 đã được tạo bởi build trước khi diagnostics đầy đủ được triển khai; nếu metadata hiện hữu không có stage/classification thì exact historical cause không thể phục hồi. Exit gate cuối là self-test PASS rồi import File C đạt 8 Order/18 Item trên WordPress thật.
 
+### WP.2D — Database Transaction Compatibility / InnoDB Migration
+
+Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
+
+- Batch #7 xác nhận blocker tại `BATCH_PERSIST` với `ECOMKIT_NON_TRANSACTIONAL_TABLE`; Excel runtime và parser không phải nguyên nhân hiện tại.
+- Runtime `0.2.4`, schema `3`; migration `2 → 3` kiểm tra hỗ trợ InnoDB rồi chỉ chuyển các bảng Ecomkit chưa transactional.
+- Migration không drop/truncate, bảo toàn và xác minh row count, cột, index, charset/collation; partial conversion không tăng schema version và có thể tiếp tục ở lần chạy sau.
+- Fresh install tạo rõ cả sáu bảng với `ENGINE=InnoDB`; Database Runtime Diagnostics hiển thị engine/transactional readiness an toàn, không lộ credential hoặc SQL.
+- Guard `ECOMKIT_NON_TRANSACTIONAL_TABLE` vẫn hoạt động; provider calls vẫn bằng 0 và parser production-shape không thay đổi.
+
+Exit gate cuối: sau khi cập nhật plugin trên WordPress thật, xác nhận cả sáu bảng là `InnoDB — OK`, rồi import File C đạt 8 Order/18 Item/4 SHOPEE/4 LAZADA/0 lỗi. Không bắt đầu WP.3 trước khi kiểm thử này đạt.
+
 ## WP.3 — Shopee Provider Configuration + OAuth + Encrypted Credential Storage
 
 - Cấu hình provider server-side, OAuth state/callback và credential envelope được mã hóa.

@@ -6,8 +6,8 @@
 declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
-define('ECOMKIT_VUIKHOE_DB_VERSION', 2);
-define('ECOMKIT_VUIKHOE_VERSION', '0.2.3');
+define('ECOMKIT_VUIKHOE_DB_VERSION', 3);
+define('ECOMKIT_VUIKHOE_VERSION', '0.2.4');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -41,6 +41,7 @@ foreach ($sql as $statement) {
     check(str_contains($statement, 'PRIMARY KEY  (id)'), 'dbDelta primary-key format is missing.');
     check(str_contains($statement, 'utf8mb4'), 'Charset/collation was not propagated.');
     check(!str_contains($statement, 'wp_ecomkit_'), 'A hard-coded wp_ prefix was found.');
+	check(str_contains($statement, ') ENGINE=InnoDB DEFAULT CHARACTER SET'), 'Fresh-install table is not explicitly InnoDB.');
 }
 
 $orders = $sql[2];
@@ -55,6 +56,7 @@ $activator = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-eco
 $uninstall = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/uninstall.php');
 $admin = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-admin.php');
 $import = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-import-service.php');
+$db = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-db.php');
 $runtime = implode("\n", array_map(
     static fn(string $path): string => (string) file_get_contents($path),
     array_merge(
@@ -64,6 +66,9 @@ $runtime = implode("\n", array_map(
 ));
 
 check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE/i', (string) $activator), 'Lifecycle contains destructive SQL.');
+check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE/i', (string) $db), 'Database migration contains destructive SQL.');
+check(str_contains((string) $db, 'ALTER TABLE `$identifier` ENGINE=InnoDB'), 'Explicit existing-table InnoDB migration is missing.');
+check(strpos((string) $db, 'self::migrate_tables_to_innodb();') < strpos((string) $db, 'update_option( self::SCHEMA_OPTION'), 'Schema version may advance before engine migration succeeds.');
 check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE|delete_option\s*\(/i', (string) $uninstall), 'Uninstall is destructive.');
 check(str_contains((string) $uninstall, "defined( 'WP_UNINSTALL_PLUGIN' ) || exit;"), 'Uninstall guard is missing.');
 check(str_contains((string) $admin, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Admin render authorization is missing.');

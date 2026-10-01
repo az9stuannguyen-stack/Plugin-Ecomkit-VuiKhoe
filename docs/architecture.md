@@ -152,3 +152,12 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Batch metadata hiện có giữ failure stage/classification, safe exception class/message, worksheet/row nếu biết, PHP và trạng thái PhpSpreadsheet. Batch detail chỉ hiển thị tập dữ liệu an toàn này, không stack trace, raw SQL, source path hoặc Excel PII.
 - Memory exhaustion ở mức fatal có thể xảy ra trước khi PHP catch được exception; `memory_limit` được hiển thị để chẩn đoán nhưng không tự kết luận memory root cause khi thiếu bằng chứng.
 
+## 14. Transactional database migration WP.2D
+
+- Runtime `0.2.4`, schema `3`. Cả sáu bảng vận hành Ecomkit phải dùng InnoDB để Batch, Order, OrderItem, Error, Marketplace Connection và Sync Run có thể tham gia workflow atomic; trạng thái engine hỗn hợp không được coi là sẵn sàng.
+- Fresh install khai báo rõ `ENGINE=InnoDB` trong từng câu lệnh `CREATE TABLE`; `$wpdb->get_charset_collate()` vẫn là nguồn charset/collation. `dbDelta()` tạo/cập nhật cấu trúc, còn migration engine cho installation hiện hữu dùng `ALTER TABLE <tên-bảng-Ecomkit> ENGINE=InnoDB` riêng biệt.
+- Upgrade `2 → 3` kiểm tra `SHOW ENGINES` trước, chỉ dùng sáu tên bảng sinh từ `$wpdb->prefix`, và không nhận table identifier từ request. Nếu InnoDB không được hỗ trợ, migration dừng an toàn và không tăng schema version.
+- Trước lần chuyển đầu tiên, migration lưu fingerprint không chứa nội dung hàng: row count, column/index hash và collation. Sau mỗi lần chạy, toàn bộ engine, số dòng, cột, index và collation được kiểm tra lại. Chỉ khi cả sáu bảng đạt yêu cầu mới xóa checkpoint và ghi schema `3`.
+- `ALTER TABLE` có thể implicit commit, vì vậy migration được thiết kế resumable: bảng đã là InnoDB được bỏ qua; nếu một bảng sau đó thất bại, schema vẫn ở `2` và request kế tiếp tiếp tục các bảng còn lại. Không drop, truncate, rename hoặc tạo bảng thay thế.
+- Runtime guard `ECOMKIT_NON_TRANSACTIONAL_TABLE` được giữ nguyên và nay kiểm tra cả sáu bảng. Import chỉ bắt đầu transaction khi Database Runtime Diagnostics xác nhận mọi bảng đều là InnoDB.
+

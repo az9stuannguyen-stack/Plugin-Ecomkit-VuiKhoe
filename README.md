@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Stage **WP.2C — Production Hosting Diagnostics + Excel Load Root Cause** đã triển khai plugin phiên bản `0.2.3`: giữ nguyên parser production đã kiểm chứng và bổ sung kiểm tra runtime, self-test XLSX, source-file preflight cùng failure diagnostics an toàn. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
+Stage **WP.2D — Database Transaction Compatibility / InnoDB Migration** đã triển khai plugin phiên bản `0.2.4`, schema `3`: giữ nguyên parser production đã kiểm chứng, yêu cầu sáu bảng Ecomkit dùng InnoDB và cung cấp migration `2 → 3` có thể tiếp tục an toàn sau lỗi. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
 
 Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
 
@@ -20,7 +20,7 @@ Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-onl
 
 - PHP **8.1** trở lên.
 - WordPress **6.6** trở lên.
-- MySQL/MariaDB theo yêu cầu của phiên bản WordPress đang dùng, với quyền tạo/cập nhật bảng khi kích hoạt.
+- MySQL/MariaDB theo yêu cầu của phiên bản WordPress đang dùng, có hỗ trợ InnoDB và quyền tạo/cập nhật/đổi storage engine cho riêng sáu bảng Ecomkit.
 - Các PHP extension runtime được PhpSpreadsheet `5.8.1` khai báo: `ctype`, `dom`, `fileinfo`, `filter`, `gd`, `iconv`, `libxml`, `mbstring`, `simplexml`, `xml`, `xmlreader`, `xmlwriter`, `zip` và `zlib`.
 
 Đây là baseline được chốt ở WP.1 vì WP.0 chưa chỉ định phiên bản tối thiểu. Plugin kiểm tra compatibility trước khi tải runtime và hiển thị notice an toàn cho quản trị viên nếu môi trường không đạt.
@@ -30,20 +30,22 @@ Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-onl
 1. Không thử trên production trước; sao lưu database và plugin hiện tại của staging/local.
 2. Cập nhật toàn bộ thư mục plugin `ecomkit-vuikhoe`, bao gồm `vendor/`, bằng quy trình triển khai do người vận hành quản lý.
 3. Không cần deactivate, xóa plugin hoặc cài lại. Lần tải runtime kế tiếp sẽ phát hiện schema cũ và chạy migration tăng dần.
-4. Mở **WordPress Admin → Ecomkit**, xác nhận Dashboard báo schema `2` và các bảng sẵn sàng.
-5. Mở **Xử lý đơn hàng** và thử bằng bản sao file Excel, không dùng trực tiếp file nghiệp vụ gốc.
+4. Mở **WordPress Admin → Ecomkit → Cài đặt → Database Runtime Diagnostics**, xác nhận schema `3`, InnoDB được hỗ trợ và cả sáu bảng báo `InnoDB — OK`.
+5. Chỉ sau khi Transactional database readiness báo `PASS`, mở **Xử lý đơn hàng** và thử bằng bản sao file Excel, không dùng trực tiếp file nghiệp vụ gốc.
 
 Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và không tạo dữ liệu mẫu. Deactivate hoặc uninstall không xóa bảng hay dữ liệu.
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.2.3`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.2.4`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
-- Sáu bảng custom có prefix động, schema version `2` và nâng cấp tại chỗ không cần deactivate/reactivate.
+- Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
+- Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
 - Activation idempotent; deactivation và uninstall mặc định không phá hủy dữ liệu.
 - Menu Ecomkit với Tổng quan, Xử lý đơn hàng, Kết quả, Lỗi, Lịch sử, Marketplace và Cài đặt.
 - Tất cả page callback kiểm tra `manage_options`; output động được escape.
 - Dashboard/Settings chỉ hiển thị diagnostic an toàn, không hiển thị secret.
+- Database Runtime Diagnostics hiển thị loại máy chủ, hỗ trợ InnoDB, engine/transactional status của sáu bảng Ecomkit và trạng thái sẵn sàng tổng thể; không hiển thị DB host, tài khoản, mật khẩu hay SQL.
 - Upload một file `.xlsx` qua form `manage_options` + nonce; file tạm có tên ngẫu nhiên và được xóa sau parse.
 - PhpSpreadsheet `5.8.1`; đúng một worksheet; header được tìm trong 20 hàng vật lý không trống đầu tiên và cột production là `Sàn & Mã Đơn`.
 - Tạo Batch Excel, lưu các order identity hợp lệ, raw row metadata an toàn, preview, lịch sử và lỗi thao tác bằng tiếng Việt.
