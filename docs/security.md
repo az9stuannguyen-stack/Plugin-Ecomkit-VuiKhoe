@@ -69,6 +69,14 @@ Lỗi trả `error_code` ổn định, message người dùng an toàn, severity
 
 - Endpoint dùng `admin-post.php`, yêu cầu session WordPress, `manage_options` và nonce `ecomkit_vuikhoe_import_excel`.
 - Chỉ một `.xlsx`; kiểm tra upload error, extension, WordPress filetype/content và giới hạn thấp hơn giữa 10 MB với giới hạn WordPress/PHP.
+
+## 10. Excel runtime diagnostics WP.2C
+
+- Self-test runtime là `admin-post.php` riêng, bắt buộc `manage_options` và nonce `ecomkit_vuikhoe_test_excel_runtime`; không nhận workbook công ty và không ghi dữ liệu nghiệp vụ.
+- Trang chẩn đoán không hiển thị absolute temp/upload path, stack trace, raw SQL, php.ini đầy đủ, database credential, salt hoặc provider secret.
+- Failure metadata chỉ giữ stage, classification, safe exception class/message, worksheet/physical row nếu có, entity/operation, PHP version và trạng thái load PhpSpreadsheet. Message được giới hạn độ dài và redact path/giá trị DB đã quote.
+- Workbook upload chỉ tồn tại trong temp lifecycle và bị xóa trong `finally`; không giữ source workbook để debug.
+- Plugin không tự sửa permission, không `chmod 777`, không cài extension/polyfill và không nới nhận arbitrary binary thành XLSX.
 - Chỉ xử lý tối đa 2.000 dòng đồng bộ. Workbook khác đúng một worksheet hoặc thiếu header exact bị từ chối có cấu trúc.
 - Tên gốc chỉ là metadata đã sanitize. Nội dung được chuyển sang file tạm tên ngẫu nhiên, không lưu path/URL và luôn xóa sau parse.
 - Order identity là text trim-only. Numeric cell không nguyên, dạng scientific, quá 15 chữ số có thể tin cậy hoặc format không chỉ gồm chữ số bị từ chối bằng `EXCEL_UNSAFE_NUMERIC_ORDER_CODE`.

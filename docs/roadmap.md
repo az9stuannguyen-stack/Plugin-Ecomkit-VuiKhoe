@@ -54,6 +54,17 @@ Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
 
 Exit gate cuối: chạy lại ba workbook trên WordPress thật, ưu tiên file shape 8/18. Không bắt đầu WP.3 trước khi File C import thành công.
 
+### WP.2C — Production Hosting Diagnostics + Excel Load Root Cause
+
+Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
+
+- Thêm Excel Runtime Diagnostics và administrator-only synthetic XLSX roundtrip self-test.
+- Phân loại chính xác missing vendor/class/extension/temp/source và persist stage/classification an toàn vào metadata Batch.
+- Xác thực source file tồn tại, readable và size > 0 ngay trước workbook load; cleanup vẫn ở `finally`.
+- Document toàn bộ `vendor/` là runtime bắt buộc khi cập nhật thủ công. Runtime `0.2.3`, schema giữ `2`, provider calls bằng 0.
+
+Batch #6 đã được tạo bởi build trước khi diagnostics đầy đủ được triển khai; nếu metadata hiện hữu không có stage/classification thì exact historical cause không thể phục hồi. Exit gate cuối là self-test PASS rồi import File C đạt 8 Order/18 Item trên WordPress thật.
+
 ## WP.3 — Shopee Provider Configuration + OAuth + Encrypted Credential Storage
 
 - Cấu hình provider server-side, OAuth state/callback và credential envelope được mã hóa.

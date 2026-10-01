@@ -16,6 +16,19 @@
 		<tr><th><?php echo esc_html__( 'Dòng nghiệp vụ đã xử lý', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $batch['metadata']['total_rows'] ?? 0 ) ); ?></td></tr><tr><th><?php echo esc_html__( 'Đơn hợp lệ', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['order_count'] ); ?></td></tr><tr><th><?php echo esc_html__( 'Dòng sản phẩm', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $batch['metadata']['item_rows'] ?? 0 ) ); ?></td></tr>
 		<tr><th><?php echo esc_html__( 'Sàn đã phát hiện', 'ecomkit-vuikhoe' ); ?></th><td><?php $counts = array(); foreach ( (array) ( $batch['metadata']['platform_counts'] ?? array() ) as $platform => $count ) { $counts[] = $platform . ': ' . (int) $count; } echo esc_html( implode( ', ', $counts ) ); ?></td></tr><tr><th><?php echo esc_html__( 'Lỗi', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['error_count'] ); ?></td></tr><tr><th><?php echo esc_html__( 'Thời điểm tạo', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $local_time ); ?></td></tr>
 		</tbody></table>
+		<?php $failure = $batch['metadata']['failure_diagnostic'] ?? null; if ( is_array( $failure ) && ! empty( $failure['stage'] ) ) : ?>
+		<h2><?php echo esc_html__( 'Chi tiết chẩn đoán', 'ecomkit-vuikhoe' ); ?></h2>
+		<table class="widefat striped" style="max-width:900px"><tbody>
+		<tr><th><?php echo esc_html__( 'Giai đoạn', 'ecomkit-vuikhoe' ); ?></th><td><code><?php echo esc_html( (string) $failure['stage'] ); ?></code></td></tr>
+		<tr><th><?php echo esc_html__( 'Phân loại', 'ecomkit-vuikhoe' ); ?></th><td><code><?php echo esc_html( (string) ( $failure['classification'] ?? 'EXCEL_IMPORT_FAILED' ) ); ?></code></td></tr>
+		<tr><th><?php echo esc_html__( 'Exception class', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $failure['exception_class'] ?? 'N/A' ) ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Thông báo kỹ thuật an toàn', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $failure['exception_message'] ?? 'N/A' ) ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Worksheet', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $failure['sheet'] ?? 'N/A' ) ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Dòng vật lý', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( isset( $failure['row'] ) ? (string) $failure['row'] : 'N/A' ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'PHP', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $failure['php_version'] ?? PHP_VERSION ) ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'PhpSpreadsheet', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $failure['phpspreadsheet'] ?? 'N/A' ) ); ?></td></tr>
+		</tbody></table>
+		<?php endif; ?>
 		<h2><?php echo esc_html__( 'Đơn Excel hợp lệ (tối đa 100 dòng xem trước)', 'ecomkit-vuikhoe' ); ?></h2>
 		<?php if ( empty( $batch['orders'] ) ) : ?><p><?php echo esc_html__( 'Không có đơn hợp lệ để xem trước.', 'ecomkit-vuikhoe' ); ?></p><?php else : ?><table class="widefat striped"><thead><tr><th><?php echo esc_html__( 'Sàn', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Mã đơn sàn', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Worksheet', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Dòng', 'ecomkit-vuikhoe' ); ?></th></tr></thead><tbody><?php foreach ( $batch['orders'] as $order ) : $source = json_decode( (string) $order['source_refs'], true ) ?: array(); ?><tr><td><?php echo esc_html( (string) $order['platform'] ); ?></td><td><code><?php echo esc_html( (string) $order['raw_order_code'] ); ?></code></td><td><?php echo esc_html( (string) ( $source['sheet'] ?? '' ) ); ?></td><td><?php echo esc_html( (string) ( $source['row'] ?? '' ) ); ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?>
 		<h2><?php echo esc_html__( 'Lỗi import (tối đa 100 dòng xem trước)', 'ecomkit-vuikhoe' ); ?></h2>

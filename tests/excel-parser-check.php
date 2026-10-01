@@ -47,7 +47,7 @@ function production_shape( int $last_data_row, array $order_rows, array $platfor
 	};
 }
 
-$parser = new Ecomkit_Vuikhoe_Excel_Service();
+$parser = new Ecomkit_Vuikhoe_Excel_Service( true );
 $paths = array();
 try {
 	$paths[] = $production = fixture( static function ( Spreadsheet $book ): void {

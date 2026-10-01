@@ -15,6 +15,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_notices', array( $this, 'database_notice' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
+		add_action( 'admin_post_ecomkit_vuikhoe_test_excel_runtime', array( $this, 'handle_excel_runtime_test' ) );
 	}
 
 	public function add_menu(): void {
@@ -67,7 +68,31 @@ final class Ecomkit_Vuikhoe_Admin {
 	}
 
 	public function settings_page(): void {
-		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose() ) );
+		$test = null;
+		if ( isset( $_GET['runtime_result'], $_GET['runtime_stage'], $_GET['runtime_code'] ) ) {
+			$result = sanitize_key( wp_unslash( $_GET['runtime_result'] ) );
+			$stage = sanitize_key( wp_unslash( $_GET['runtime_stage'] ) );
+			$code = sanitize_key( wp_unslash( $_GET['runtime_code'] ) );
+			$test = array( 'ok' => 'pass' === $result, 'stage' => strtoupper( $stage ), 'classification' => strtoupper( $code ) );
+		}
+		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose(), 'excel_runtime' => ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->snapshot(), 'runtime_test' => $test ) );
+	}
+
+	public function handle_excel_runtime_test(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_vuikhoe_test_excel_runtime', 'ecomkit_runtime_nonce' );
+		$result = ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->self_test();
+		$url = add_query_arg(
+			array(
+				'page'           => 'ecomkit-vuikhoe-settings',
+				'runtime_result' => $result['ok'] ? 'pass' : 'fail',
+				'runtime_stage'  => strtolower( $result['stage'] ),
+				'runtime_code'   => strtolower( $result['classification'] ),
+			),
+			admin_url( 'admin.php' )
+		);
+		wp_safe_redirect( $url );
+		exit;
 	}
 
 	/**

@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Stage **WP.2B — Production Excel Regression + Import Root Cause** đã triển khai plugin phiên bản `0.2.2`: nhận cấu trúc Excel Vui Khỏe thực tế, phân loại Order/continuation/blank/footer/invalid theo cấu trúc, tách sàn và mã đơn từ `Sàn & Mã Đơn`, và lưu nhiều dòng sản phẩm cho một Order. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
+Stage **WP.2C — Production Hosting Diagnostics + Excel Load Root Cause** đã triển khai plugin phiên bản `0.2.3`: giữ nguyên parser production đã kiểm chứng và bổ sung kiểm tra runtime, self-test XLSX, source-file preflight cùng failure diagnostics an toàn. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
 
 Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
 
@@ -21,7 +21,7 @@ Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-onl
 - PHP **8.1** trở lên.
 - WordPress **6.6** trở lên.
 - MySQL/MariaDB theo yêu cầu của phiên bản WordPress đang dùng, với quyền tạo/cập nhật bảng khi kích hoạt.
-- Các PHP extension do PhpSpreadsheet yêu cầu, gồm `dom`, `fileinfo`, `gd`, `iconv`, `libxml`, `mbstring`, `simplexml`, `xml`, `xmlreader`, `xmlwriter` và `zip`.
+- Các PHP extension runtime được PhpSpreadsheet `5.8.1` khai báo: `ctype`, `dom`, `fileinfo`, `filter`, `gd`, `iconv`, `libxml`, `mbstring`, `simplexml`, `xml`, `xmlreader`, `xmlwriter`, `zip` và `zlib`.
 
 Đây là baseline được chốt ở WP.1 vì WP.0 chưa chỉ định phiên bản tối thiểu. Plugin kiểm tra compatibility trước khi tải runtime và hiển thị notice an toàn cho quản trị viên nếu môi trường không đạt.
 
@@ -37,7 +37,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.2.2`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.2.3`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `2` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Activation idempotent; deactivation và uninstall mặc định không phá hủy dữ liệu.
@@ -60,6 +60,9 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 - Hàng nghiệp vụ phải có cấu trúc item gồm `Mã hàng hóa` và `Tên hàng hóa`. Hàng chữ ký/footer không có identity, mã hàng và số lượng được bỏ qua; không nhận diện chỉ dựa vào chuỗi `Thủ Kho`.
 - “Dòng nghiệp vụ đã xử lý” chỉ đếm Order row và continuation item row; không đếm title, header, blank hoặc footer.
 - Ba fixture production-shape khóa các kết quả 3/3, 16/23 và 8/18 cho Order/OrderItem. Công cụ development `tests/diagnose-xlsx.php` chỉ xuất sheet, header row, số đếm, error code và failing stage, không xuất PII.
+- **Triển khai thủ công phải sao chép toàn bộ thư mục `ecomkit-vuikhoe/`, bao gồm `vendor/` và `vendor/autoload.php`.** Chỉ cập nhật các file PHP của plugin là không đủ.
+- Trước khi upload file công ty, vào **Ecomkit → Cài đặt → Excel Runtime Diagnostics → Kiểm tra môi trường Excel**. Self-test tạo workbook tổng hợp không PII, ghi/đọc qua PhpSpreadsheet rồi xóa file tạm trong `finally`.
+- Upload lifecycle: xác thực extension/kích thước, di chuyển vào file tạm ngẫu nhiên, xác nhận file tồn tại/readable/có kích thước, đọc cấu trúc XLSX, persist dữ liệu nội bộ và xóa workbook tạm. Workbook nguồn không được lưu lâu dài.
 - Mã nên được định dạng Text để giữ leading zero và ID dài. Numeric cell không thể phục hồi chính xác sẽ bị từ chối, không đoán chữ số.
 - Dòng trống hoàn toàn bị bỏ qua. Dòng thiếu mã và occurrence duplicate sau lần đầu tạo lỗi; lần xuất hiện hợp lệ đầu tiên được giữ.
 

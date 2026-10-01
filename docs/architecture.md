@@ -142,3 +142,13 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Trước khi ghi business data, runtime xác nhận bốn bảng import dùng engine transactional. Mọi `$wpdb->insert()`/`update()` bắt buộc kiểm tra `false`; Order/OrderItem/Error/Batch finalize failure gây `ROLLBACK`, sau đó một transaction mới đánh dấu Batch `ERROR` và ghi lỗi an toàn.
 - Schema vẫn là version `2`: mọi cột được ghi đã tồn tại và nullable đúng yêu cầu; không có migration phá hủy.
 
+## 13. Production runtime diagnostics WP.2C
+
+- Runtime `0.2.3`, schema vẫn `2`. Deployment bắt buộc gồm toàn bộ `vendor/`; bootstrap cảnh báo quản trị viên nếu `vendor/autoload.php` không đọc được.
+- `Excel Runtime Diagnostics` báo version, autoload/classes, PHP extensions theo Composer metadata của PhpSpreadsheet `5.8.1`, trạng thái temp/upload directory và ba giới hạn PHP liên quan. Không hiển thị absolute path, php.ini đầy đủ, secret hay credential.
+- Self-test administrator-only dùng `manage_options` + nonce: tạo workbook tổng hợp trong memory, ghi ra temp XLSX, kiểm tra tồn tại/readable/size, đọc lại bằng `IOFactory`, xác nhận cell cố định và xóa trong `finally`. Không ghi Order/Batch và không gọi provider.
+- Workbook upload được preflight ngay trước `IOFactory`: dependency readiness, file tồn tại, readable và size > 0. Known failures dùng classification riêng như `EXCEL_RUNTIME_DEPENDENCY_MISSING`, `EXCEL_RUNTIME_EXTENSION_MISSING`, `EXCEL_RUNTIME_TEMP_UNWRITABLE`, `EXCEL_WORKBOOK_SOURCE_MISSING` và `EXCEL_WORKBOOK_SOURCE_UNREADABLE`.
+- Extension `.xlsx` là bắt buộc. MIME WordPress được tham khảo nhưng không còn là điều kiện duy nhất vì hosting có thể nhận diện ZIP-based XLSX khác nhau; cấu trúc thực tế vẫn phải được PhpSpreadsheet Xlsx reader tải thành công, nếu không trả `EXCEL_READ_ERROR`.
+- Batch metadata hiện có giữ failure stage/classification, safe exception class/message, worksheet/row nếu biết, PHP và trạng thái PhpSpreadsheet. Batch detail chỉ hiển thị tập dữ liệu an toàn này, không stack trace, raw SQL, source path hoặc Excel PII.
+- Memory exhaustion ở mức fatal có thể xảy ra trước khi PHP catch được exception; `memory_limit` được hiển thị để chẩn đoán nhưng không tự kết luận memory root cause khi thiếu bằng chứng.
+

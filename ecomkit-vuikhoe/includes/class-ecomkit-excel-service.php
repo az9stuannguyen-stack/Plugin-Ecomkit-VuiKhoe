@@ -18,8 +18,21 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	private const PRODUCT_NAME_HEADER = 'Tên hàng hóa';
 	private const QUANTITY_HEADER = 'Số lg';
 
+	public function __construct( private bool $skip_runtime_check = false ) {}
+
 	/** @return array<string,mixed> */
 	public function parse( string $path ): array {
+		if ( ! $this->skip_runtime_check ) {
+			$runtime = new Ecomkit_Vuikhoe_Runtime_Diagnostics();
+			$dependency = $runtime->dependency_check();
+			if ( ! $dependency['ok'] ) {
+				return $this->structural_error( $dependency['classification'], 'Môi trường Excel trên máy chủ chưa sẵn sàng.', 'Kiểm tra Excel Runtime Diagnostics trong trang Cài đặt.', null, 'WORKBOOK_LOAD', $dependency['classification'] );
+			}
+			$source = $runtime->source_check( $path );
+			if ( ! $source['ok'] ) {
+				return $this->structural_error( $source['classification'], 'Không thể truy cập file Excel tạm để xử lý.', 'Tải lại file; nếu lỗi lặp lại, kiểm tra quyền thư mục tạm.', null, 'WORKBOOK_LOAD', $source['classification'] );
+			}
+		}
 		try {
 			$reader = IOFactory::createReader( 'Xlsx' );
 			$reader->setReadDataOnly( false );
@@ -299,7 +312,8 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	}
 
 	/** @return array<string,mixed> */
-	private function structural_error( string $code, string $message, string $suggestion, ?string $sheet = null, string $stage = 'WORKBOOK_LOAD' ): array {
-		return array( 'status' => 'ERROR', 'total_rows' => 0, 'valid_rows' => 0, 'orders' => array(), 'errors' => array( array( 'error_code' => $code, 'stage' => $stage, 'message' => $message, 'suggestion' => $suggestion, 'sheet' => $sheet ) ), 'raw' => array( 'parser_version' => self::PARSER_VERSION ), 'diagnostic' => array( 'stage' => $stage ) );
+	private function structural_error( string $code, string $message, string $suggestion, ?string $sheet = null, string $stage = 'WORKBOOK_LOAD', ?string $classification = null ): array {
+		$classification = $classification ?? $code;
+		return array( 'status' => 'ERROR', 'total_rows' => 0, 'valid_rows' => 0, 'orders' => array(), 'errors' => array( array( 'error_code' => $code, 'stage' => $stage, 'message' => $message, 'suggestion' => $suggestion, 'sheet' => $sheet ) ), 'raw' => array( 'parser_version' => self::PARSER_VERSION ), 'diagnostic' => array( 'stage' => $stage, 'classification' => $classification, 'exception_class' => null, 'exception_message' => null, 'sheet' => $sheet, 'row' => null ) );
 	}
 }

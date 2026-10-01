@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
 define('ECOMKIT_VUIKHOE_DB_VERSION', 2);
-define('ECOMKIT_VUIKHOE_VERSION', '0.2.2');
+define('ECOMKIT_VUIKHOE_VERSION', '0.2.3');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -69,6 +69,8 @@ check(str_contains((string) $uninstall, "defined( 'WP_UNINSTALL_PLUGIN' ) || exi
 check(str_contains((string) $admin, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Admin render authorization is missing.');
 check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_import_excel', 'ecomkit_nonce' )"), 'Excel action nonce validation is missing.');
 check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_import_excel'), 'Authenticated Excel action is missing.');
+check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_test_excel_runtime'), 'Authenticated Excel runtime-test action is missing.');
+check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_test_excel_runtime', 'ecomkit_runtime_nonce' )"), 'Excel runtime-test nonce validation is missing.');
 check(str_contains((string) $import, "'xlsx' !== strtolower"), 'XLSX-only extension validation is missing.');
 check(str_contains((string) $import, 'wp_check_filetype_and_ext'), 'WordPress content/type validation is missing.');
 check(str_contains((string) $import, 'is_uploaded_file'), 'PHP upload provenance validation is missing.');

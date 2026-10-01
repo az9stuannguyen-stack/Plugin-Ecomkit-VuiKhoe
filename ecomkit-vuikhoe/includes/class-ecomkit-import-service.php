@@ -120,7 +120,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 		}
 
 		$checked = wp_check_filetype_and_ext( (string) $file['tmp_name'], $filename, array( 'xlsx' => self::XLSX_MIME ) );
-		if ( 'xlsx' !== ( $checked['ext'] ?? null ) || self::XLSX_MIME !== ( $checked['type'] ?? null ) ) {
+		if ( ! empty( $checked['ext'] ) && 'xlsx' !== $checked['ext'] ) {
 			return $this->upload_error( 'EXCEL_UNSUPPORTED_FILE_TYPE', 'Nội dung file không khớp định dạng .xlsx được hỗ trợ.', 'Mở file trong Excel hoặc LibreOffice, lưu lại thành .xlsx rồi thử lại.' );
 		}
 
@@ -201,6 +201,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 				'header_row'     => (int) ( $result['raw']['header_row'] ?? 0 ),
 				'item_rows'      => (int) ( $result['raw']['item_rows'] ?? 0 ),
 				'platform_counts'=> $result['raw']['platform_counts'] ?? array(),
+				'failure_diagnostic' => $result['diagnostic'] ?? null,
 			);
 			$stage = 'BATCH_FINALIZE';
 			$context = array( 'entity' => 'batches', 'operation' => 'update', 'row' => null, 'sheet' => $result['raw']['sheet'] ?? null );
@@ -286,10 +287,15 @@ final class Ecomkit_Vuikhoe_Import_Service {
 
 	/** @param array<string,mixed> $context @return array<string,mixed> */
 	private function failure_diagnostic( string $stage, Throwable $exception, array $context = array(), string $db_error = '' ): array {
+		$message = $exception->getMessage();
+		$classification = str_contains( $message, ':' ) ? strstr( $message, ':', true ) : $message;
 		return array(
 			'stage'             => $stage,
+			'classification'    => mb_substr( preg_replace( '/[^A-Z0-9_]/', '', strtoupper( (string) $classification ) ), 0, 100 ) ?: 'EXCEL_IMPORT_FAILED',
 			'exception_class'   => get_class( $exception ),
-			'exception_message' => $this->sanitize_diagnostic_message( $exception->getMessage() ),
+			'exception_message' => $this->sanitize_diagnostic_message( $message ),
+			'php_version'       => PHP_VERSION,
+			'phpspreadsheet'    => class_exists( \PhpOffice\PhpSpreadsheet\IOFactory::class ) ? 'Loaded' : 'Not loaded',
 			'db_error'          => $this->sanitized_db_error( $db_error ),
 			'sheet'             => $context['sheet'] ?? null,
 			'row'               => $context['row'] ?? null,
@@ -300,6 +306,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 	}
 
 	private function sanitize_diagnostic_message( string $message ): string {
+		$message = preg_replace( '~(?:[A-Za-z]:)?[\\/](?:[^\s\\/]+[\\/])+[^\s]+~', '[path]', $message );
 		$message = preg_replace( '/[\r\n\t]+/', ' ', $message );
 		$message = preg_replace( '/[\x00-\x1F\x7F]/', '', (string) $message );
 		return mb_substr( trim( (string) $message ), 0, 240 );
