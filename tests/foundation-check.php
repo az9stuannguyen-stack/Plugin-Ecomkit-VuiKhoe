@@ -6,8 +6,8 @@
 declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
-define('ECOMKIT_VUIKHOE_DB_VERSION', 1);
-define('ECOMKIT_VUIKHOE_VERSION', '0.1.0');
+define('ECOMKIT_VUIKHOE_DB_VERSION', 2);
+define('ECOMKIT_VUIKHOE_VERSION', '0.2.0');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -45,10 +45,12 @@ foreach ($sql as $statement) {
 
 $orders = $sql[2];
 check(str_contains($orders, 'UNIQUE KEY connection_order (connection_id,marketplace_order_id)'), 'Multi-shop uniqueness is missing.');
+check(str_contains($orders, 'matching_status varchar(32) DEFAULT NULL'), 'Pre-matching order status must remain nullable.');
 
 $activator = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-activator.php');
 $uninstall = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/uninstall.php');
 $admin = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-admin.php');
+$import = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-import-service.php');
 $runtime = implode("\n", array_map(
     static fn(string $path): string => (string) file_get_contents($path),
     array_merge(
@@ -61,6 +63,15 @@ check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE/i', (string) $activator)
 check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE|delete_option\s*\(/i', (string) $uninstall), 'Uninstall is destructive.');
 check(str_contains((string) $uninstall, "defined( 'WP_UNINSTALL_PLUGIN' ) || exit;"), 'Uninstall guard is missing.');
 check(str_contains((string) $admin, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Admin render authorization is missing.');
+check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_import_excel', 'ecomkit_nonce' )"), 'Excel action nonce validation is missing.');
+check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_import_excel'), 'Authenticated Excel action is missing.');
+check(str_contains((string) $import, "'xlsx' !== strtolower"), 'XLSX-only extension validation is missing.');
+check(str_contains((string) $import, 'wp_check_filetype_and_ext'), 'WordPress content/type validation is missing.');
+check(str_contains((string) $import, 'is_uploaded_file'), 'PHP upload provenance validation is missing.');
+check(str_contains((string) $import, 'wp_delete_file'), 'Temporary upload cleanup is missing.');
+check(str_contains((string) $import, "'connection_id'           => null"), 'Excel import must not create a fake connection.');
+check(str_contains((string) $import, "'platform'                => 'UNKNOWN'"), 'Excel import must not assign a fake Shopee platform.');
+check(str_contains((string) $import, "\$wpdb->query( 'START TRANSACTION' )"), 'Import transaction is missing.');
 check(substr_count((string) $admin, 'add_submenu_page(') === 7, 'Exactly seven submenu registrations are required.');
 check(!preg_match('/wp_remote_(get|post|request)|curl_(init|exec)|\/api\/v2\//i', $runtime), 'Provider/network call detected.');
 check(!preg_match('/partner[_ -]?key\s*[=:]\s*[\'\"][A-Za-z0-9]{12,}|access[_ -]?token\s*[=:]\s*[\'\"][A-Za-z0-9]{12,}/i', $runtime), 'Real-looking provider secret detected.');

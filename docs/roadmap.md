@@ -24,20 +24,20 @@ Exit gate: static/package/schema checks pass; ZIP cài đặt có đúng plugin 
 
 ## WP.2 — Excel Upload + Batch + Internal Order Identity
 
-- Upload Excel an toàn và tạo Batch thực.
-- Internal order identity/repository trên schema foundation.
-- Chưa thay đổi contract 24 cột hoặc rule `Mã đơn sàn`.
+Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
 
-Exit gate: upload/Batch/identity tests trên WordPress staging; không tự động bắt đầu stage này từ WP.1.
+- Upload `.xlsx` an toàn, parser PhpSpreadsheet, Batch thực và order identity trim-only.
+- Lỗi có vị trí/suggestion, import summary, preview, History và Error pages.
+- Schema `2` chỉ cho phép trạng thái matching nullable trước reconciliation; giữ contract 24 cột và rule `Mã đơn sàn`.
 
-## WP.3 — File ingestion và parser
+Exit gate tự động: PASS bằng synthetic fixtures/static tests. Manual WordPress staging với bản sao Excel thực tế vẫn bắt buộc; production Golden chưa được xác nhận.
 
-- Secure upload limits/type/signature checks.
-- Excel contract (`Mã đơn sàn`, trim-only, duplicate/formula semantics).
-- PDF text-layer parser và platform detection; OCR vẫn ngoài scope trừ khi phê duyệt.
-- Structured errors và parser re-run isolation.
+## WP.3 — Shopee Provider Configuration + OAuth + Encrypted Credential Storage
 
-Exit gate: fixture/golden tests; production Excel golden vẫn phải được cung cấp và phê duyệt.
+- Cấu hình provider server-side, OAuth state/callback và credential envelope được mã hóa.
+- Không hiển thị master key/secret; không tuyên bố live validation nếu chưa có bằng chứng.
+
+Không tự động bắt đầu WP.3 sau WP.2.
 
 ## WP.4 — Matching engine
 

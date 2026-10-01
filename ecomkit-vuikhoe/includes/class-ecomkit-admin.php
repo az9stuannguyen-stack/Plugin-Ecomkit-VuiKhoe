@@ -14,6 +14,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_notices', array( $this, 'database_notice' ) );
+		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
 	}
 
 	public function add_menu(): void {
@@ -34,19 +35,31 @@ final class Ecomkit_Vuikhoe_Admin {
 	}
 
 	public function process_page(): void {
-		$this->render( 'process' );
+		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
+		$imports  = new Ecomkit_Vuikhoe_Import_Service();
+		$this->render(
+			'process',
+			array(
+				'batch'           => $batch_id ? $imports->get_batch_summary( $batch_id ) : null,
+				'max_upload_size' => $imports->max_upload_bytes(),
+				'max_rows'        => Ecomkit_Vuikhoe_Excel_Service::MAX_ROWS,
+			)
+		);
 	}
 
 	public function results_page(): void {
-		$this->render( 'results' );
+		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
+		$this->render( 'results', array( 'batch_id' => $batch_id ) );
 	}
 
 	public function errors_page(): void {
-		$this->render( 'errors' );
+		$imports = new Ecomkit_Vuikhoe_Import_Service();
+		$this->render( 'errors', array( 'errors' => $imports->list_errors() ) );
 	}
 
 	public function history_page(): void {
-		$this->render( 'history' );
+		$imports = new Ecomkit_Vuikhoe_Import_Service();
+		$this->render( 'history', array( 'batches' => $imports->list_batches() ) );
 	}
 
 	public function marketplace_page(): void {
@@ -55,6 +68,38 @@ final class Ecomkit_Vuikhoe_Admin {
 
 	public function settings_page(): void {
 		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose() ) );
+	}
+
+	/**
+	 * Handles the only mutating WP.2 administrator action.
+	 */
+	public function handle_excel_import(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_vuikhoe_import_excel', 'ecomkit_nonce' );
+
+		$file = isset( $_FILES['excel_file'] ) && is_array( $_FILES['excel_file'] ) ? $_FILES['excel_file'] : array();
+
+		try {
+			$batch_id = ( new Ecomkit_Vuikhoe_Import_Service() )->import_upload( $file, get_current_user_id() );
+			$url      = add_query_arg(
+				array(
+					'page'     => 'ecomkit-vuikhoe-process',
+					'batch_id' => $batch_id,
+				),
+				admin_url( 'admin.php' )
+			);
+		} catch ( Throwable $exception ) {
+			$url = add_query_arg(
+				array(
+					'page'           => 'ecomkit-vuikhoe-process',
+					'import_failure' => 1,
+				),
+				admin_url( 'admin.php' )
+			);
+		}
+
+		wp_safe_redirect( $url );
+		exit;
 	}
 
 	public function database_notice(): void {

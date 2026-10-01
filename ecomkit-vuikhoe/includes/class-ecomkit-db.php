@@ -153,7 +153,7 @@ final class Ecomkit_Vuikhoe_DB {
 	marketplace_order_id varchar(191) DEFAULT NULL,
 	raw_order_code varchar(191) DEFAULT NULL,
 	normalized_order_code varchar(191) DEFAULT NULL,
-	matching_status varchar(32) NOT NULL DEFAULT 'PARSE_ERROR',
+	matching_status varchar(32) DEFAULT NULL,
 	order_date datetime DEFAULT NULL,
 	eshop_order_code varchar(191) DEFAULT NULL,
 	sales_channel varchar(64) DEFAULT NULL,

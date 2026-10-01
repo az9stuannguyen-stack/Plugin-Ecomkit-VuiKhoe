@@ -65,3 +65,13 @@ Lỗi trả `error_code` ổn định, message người dùng an toàn, severity
 - Backup/restore phải bao gồm custom tables và encryption-key runbook; mất key đồng nghĩa credential không giải mã được.
 - Uninstall không tự xóa dữ liệu/credential nếu chưa có xác nhận và retention policy rõ ràng.
 
+## 10. Upload Excel WP.2
+
+- Endpoint dùng `admin-post.php`, yêu cầu session WordPress, `manage_options` và nonce `ecomkit_vuikhoe_import_excel`.
+- Chỉ một `.xlsx`; kiểm tra upload error, extension, WordPress filetype/content và giới hạn thấp hơn giữa 10 MB với giới hạn WordPress/PHP.
+- Chỉ xử lý tối đa 2.000 dòng đồng bộ. Workbook khác đúng một worksheet hoặc thiếu header exact bị từ chối có cấu trúc.
+- Tên gốc chỉ là metadata đã sanitize. Nội dung được chuyển sang file tạm tên ngẫu nhiên, không lưu path/URL và luôn xóa sau parse.
+- Order identity là text trim-only. Numeric cell không nguyên, dạng scientific, quá 15 chữ số có thể tin cậy hoặc format không chỉ gồm chữ số bị từ chối bằng `EXCEL_UNSAFE_NUMERIC_ORDER_CODE`.
+- Formula không được tính; chỉ cached scalar result mới được đọc. Raw metadata không lưu object thực thi hoặc công thức.
+- Output admin được escape; SQL value dùng `$wpdb->insert`, `$wpdb->update` hoặc prepared query. Không có provider/network call.
+

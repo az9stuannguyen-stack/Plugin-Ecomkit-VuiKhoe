@@ -1,3 +1,43 @@
 <?php defined( 'ABSPATH' ) || exit; ?>
-<div class="wrap"><h1><?php echo esc_html__( 'Xử lý đơn hàng', 'ecomkit-vuikhoe' ); ?></h1><p><?php echo esc_html__( 'Chức năng upload Excel sẽ được triển khai ở Stage WP.2.', 'ecomkit-vuikhoe' ); ?></p></div>
+<div class="wrap">
+	<h1><?php echo esc_html__( 'Xử lý đơn hàng', 'ecomkit-vuikhoe' ); ?></h1>
+	<?php if ( isset( $_GET['import_failure'] ) ) : ?>
+		<div class="notice notice-error inline"><p><?php echo esc_html__( 'Không thể hoàn tất yêu cầu nhập Excel an toàn.', 'ecomkit-vuikhoe' ); ?></p></div>
+	<?php endif; ?>
+	<h2><?php echo esc_html__( 'Nhập Excel nội bộ', 'ecomkit-vuikhoe' ); ?></h2>
+	<p><?php echo esc_html( sprintf( __( 'Chấp nhận một file .xlsx, tối đa %1$s và %2$s dòng dữ liệu. File phải có đúng một worksheet và cột “Mã đơn sàn” ở dòng 1.', 'ecomkit-vuikhoe' ), size_format( (int) $data['max_upload_size'] ), number_format_i18n( (int) $data['max_rows'] ) ) ); ?></p>
+	<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="ecomkit_vuikhoe_import_excel">
+		<?php wp_nonce_field( 'ecomkit_vuikhoe_import_excel', 'ecomkit_nonce' ); ?>
+		<table class="form-table" role="presentation">
+			<tr><th scope="row"><label for="ecomkit-excel-file"><?php echo esc_html__( 'File Excel', 'ecomkit-vuikhoe' ); ?></label></th><td><input id="ecomkit-excel-file" name="excel_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></td></tr>
+			<tr><th scope="row"><?php echo esc_html__( 'Nguồn xử lý', 'ecomkit-vuikhoe' ); ?></th><td><strong><?php echo esc_html__( 'Excel nội bộ', 'ecomkit-vuikhoe' ); ?></strong></td></tr>
+		</table>
+		<?php submit_button( __( 'Tải lên và kiểm tra', 'ecomkit-vuikhoe' ) ); ?>
+	</form>
 
+	<?php if ( is_array( $data['batch'] ) ) : $batch = $data['batch']; ?>
+		<hr><h2><?php echo esc_html__( 'Tóm tắt Batch', 'ecomkit-vuikhoe' ); ?></h2>
+		<table class="widefat striped" style="max-width:900px"><tbody>
+		<tr><th><?php echo esc_html__( 'Batch ID', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['id'] ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Tên file', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['source_filename'] ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Trạng thái', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['status'] ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Dòng đã xét', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $batch['metadata']['total_rows'] ?? 0 ) ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Đơn hợp lệ', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['order_count'] ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Lỗi', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['error_count'] ); ?></td></tr>
+		<tr><th><?php echo esc_html__( 'Thời điểm tạo (UTC)', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['created_at'] ); ?></td></tr>
+		</tbody></table>
+
+		<h2><?php echo esc_html__( 'Đơn Excel hợp lệ (tối đa 100 dòng xem trước)', 'ecomkit-vuikhoe' ); ?></h2>
+		<?php if ( empty( $batch['orders'] ) ) : ?><p><?php echo esc_html__( 'Không có đơn hợp lệ để xem trước.', 'ecomkit-vuikhoe' ); ?></p><?php else : ?>
+		<table class="widefat striped"><thead><tr><th><?php echo esc_html__( 'Mã đơn sàn', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Worksheet', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Dòng', 'ecomkit-vuikhoe' ); ?></th></tr></thead><tbody>
+		<?php foreach ( $batch['orders'] as $order ) : $source = json_decode( (string) $order['source_refs'], true ) ?: array(); ?><tr><td><code><?php echo esc_html( (string) $order['raw_order_code'] ); ?></code></td><td><?php echo esc_html( (string) ( $source['sheet'] ?? '' ) ); ?></td><td><?php echo esc_html( (string) ( $source['row'] ?? '' ) ); ?></td></tr><?php endforeach; ?>
+		</tbody></table><?php endif; ?>
+
+		<h2><?php echo esc_html__( 'Lỗi import (tối đa 100 dòng xem trước)', 'ecomkit-vuikhoe' ); ?></h2>
+		<?php if ( empty( $batch['errors'] ) ) : ?><p><?php echo esc_html__( 'Không phát hiện lỗi Excel.', 'ecomkit-vuikhoe' ); ?></p><?php else : ?>
+		<table class="widefat striped"><thead><tr><th><?php echo esc_html__( 'Vị trí', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Mã lỗi', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Thông báo', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Cách xử lý', 'ecomkit-vuikhoe' ); ?></th></tr></thead><tbody>
+		<?php foreach ( $batch['errors'] as $error ) : ?><tr><td><?php echo esc_html( trim( (string) $error['sheet_name'] . ( $error['row_number'] ? ' — dòng ' . $error['row_number'] : '' ) ) ); ?></td><td><code><?php echo esc_html( (string) $error['error_code'] ); ?></code></td><td><?php echo esc_html( (string) $error['friendly_message'] ); ?></td><td><?php echo esc_html( (string) $error['suggestion'] ); ?></td></tr><?php endforeach; ?>
+		</tbody></table><?php endif; ?>
+	<?php endif; ?>
+</div>

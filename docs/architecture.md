@@ -111,3 +111,14 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Deactivation và uninstall mặc định giữ nguyên toàn bộ dữ liệu. Destructive uninstall chỉ có thể được bổ sung bằng opt-in rõ ràng ở stage sau.
 - Admin dùng `manage_options`, page callback kiểm tra lại capability; không có public route hoặc mutating form ở WP.1.
 
+## 10. Quyết định triển khai WP.2
+
+- Runtime `0.2.0`, schema `2`; migration duy nhất đổi `orders.matching_status` thành nullable để Order vừa nhập chưa bị gắn trạng thái đối chiếu giả. Không drop/recreate bảng và không xóa dữ liệu WP.1.
+- PhpSpreadsheet `5.8.1`; chỉ `.xlsx`, đúng một worksheet, header dòng 1, `Mã đơn sàn` exact sau trim khoảng trắng ngoài.
+- Import đồng bộ giới hạn 10 MB (hoặc WordPress/PHP thấp hơn) và 2.000 dòng. File được chuyển sang tên tạm ngẫu nhiên, parse trong request rồi xóa trong `finally`; không lưu URL/path công khai.
+- Parser thuần không ghi DB. Import service tạo Batch, sau đó ghi Order/Error và cập nhật số đếm trong transaction.
+- Batch lifecycle: `PROCESSING → SUCCESS` nếu sạch; `PROCESSING → WARNING` nếu có ít nhất một Order hợp lệ và lỗi dòng; `PROCESSING → ERROR` nếu lỗi cấu trúc/upload hoặc không có Order hợp lệ.
+- Duplicate trim-only, phân biệt hoa/thường: occurrence đầu tiên hợp lệ được giữ; occurrence sau tạo `EXCEL_DUPLICATE_ORDER_CODE` với dòng đầu và dòng trùng.
+- Order Excel có `platform=UNKNOWN`, `connection_id=NULL`, `matching_status=NULL`; không tạo connection giả và không coi dữ liệu Excel là kết quả reconciliation.
+- `raw_source_metadata` giữ các cell scalar an toàn; `source_refs` giữ worksheet/dòng. Formula không được thực thi và chỉ cached scalar value mới có thể được đọc.
+
