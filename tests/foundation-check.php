@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
 define('ECOMKIT_VUIKHOE_DB_VERSION', 2);
-define('ECOMKIT_VUIKHOE_VERSION', '0.2.0');
+define('ECOMKIT_VUIKHOE_VERSION', '0.2.1');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -70,7 +70,7 @@ check(str_contains((string) $import, 'wp_check_filetype_and_ext'), 'WordPress co
 check(str_contains((string) $import, 'is_uploaded_file'), 'PHP upload provenance validation is missing.');
 check(str_contains((string) $import, 'wp_delete_file'), 'Temporary upload cleanup is missing.');
 check(str_contains((string) $import, "'connection_id'           => null"), 'Excel import must not create a fake connection.');
-check(str_contains((string) $import, "'platform'                => 'UNKNOWN'"), 'Excel import must not assign a fake Shopee platform.');
+check(str_contains((string) $import, "'platform'                => (string) \$order['platform']"), 'Excel import must persist only the parser-derived platform.');
 check(str_contains((string) $import, "\$wpdb->query( 'START TRANSACTION' )"), 'Import transaction is missing.');
 check(substr_count((string) $admin, 'add_submenu_page(') === 7, 'Exactly seven submenu registrations are required.');
 check(!preg_match('/wp_remote_(get|post|request)|curl_(init|exec)|\/api\/v2\//i', $runtime), 'Provider/network call detected.');

@@ -85,3 +85,13 @@ Mỗi Master Order giữ tham chiếu gọn: file ID, loại nguồn Excel/PDF/M
 - Export filter không chỉ xuất trang Result đang xem.
 - Trường tài chính không có nguồn vẫn blank.
 
+## 7. Hiệu chỉnh nguồn Excel production đã xác minh
+
+Hợp đồng canonical vẫn có đúng 24 cột với thứ tự không đổi. Cột canonical số 3 vẫn là **Mã Đơn sàn** (`raw_order_code`) và là khóa đối chiếu marketplace.
+
+- Nguồn Excel production là cột `Sàn & Mã Đơn`, không phải một cột literal tên `Mã đơn sàn`.
+- Ô nguồn chứa nhãn sàn ở dòng có nghĩa đầu tiên và mã đơn marketplace ở dòng có nghĩa thứ hai. Ví dụ `Shopee` + `TEST-SHP-001` tạo `platform=SHOPEE` và `raw_order_code=TEST-SHP-001`; `Lazada` + `000123456789` giữ nguyên leading zero.
+- `Mã đơn hàng eShop` **không bằng** `Mã đơn sàn`, không phải marketplace identity và không được dùng làm fallback.
+- Với Shopee ở stage sau, invariant vẫn là `Mã đơn sàn = order_sn`.
+- Dòng sản phẩm continuation không tạo thêm Order và không làm thay đổi sequence 24 cột; chúng được lưu dưới dạng OrderItem.
+

@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Stage **WP.2 — Excel Upload + Batch + Internal Order Identity** đã triển khai plugin phiên bản `0.2.0`: upload `.xlsx` được bảo vệ, parse đồng bộ, tạo Batch, lưu chính xác `Mã đơn sàn`, lỗi có vị trí, lịch sử Batch và preview import. Chưa có Shopee, matching Excel ↔ Marketplace, kết quả 24 cột cuối, export hoặc PDF.
+Stage **WP.2A — Production Excel Structure Support** đã triển khai plugin phiên bản `0.2.1`: nhận cấu trúc Excel Vui Khỏe thực tế, phát hiện hàng tiêu đề sau các hàng trang trí, tách sàn và mã đơn từ `Sàn & Mã Đơn`, và lưu nhiều dòng sản phẩm cho một Order. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
 
 Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
 
@@ -37,7 +37,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.2.0`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.2.1`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `2` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Activation idempotent; deactivation và uninstall mặc định không phá hủy dữ liệu.
@@ -45,7 +45,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 - Tất cả page callback kiểm tra `manage_options`; output động được escape.
 - Dashboard/Settings chỉ hiển thị diagnostic an toàn, không hiển thị secret.
 - Upload một file `.xlsx` qua form `manage_options` + nonce; file tạm có tên ngẫu nhiên và được xóa sau parse.
-- PhpSpreadsheet `5.8.1`; đúng một worksheet, header dòng 1 và header `Mã đơn sàn` exact sau khi trim khoảng trắng ngoài.
+- PhpSpreadsheet `5.8.1`; đúng một worksheet; header được tìm trong 20 hàng vật lý không trống đầu tiên và cột production là `Sàn & Mã Đơn`.
 - Tạo Batch Excel, lưu các order identity hợp lệ, raw row metadata an toàn, preview, lịch sử và lỗi thao tác bằng tiếng Việt.
 
 ## Yêu cầu file Excel WP.2
@@ -53,8 +53,10 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 - Chỉ `.xlsx`; không nhận `.xls`, CSV, PDF, ZIP, HTML hoặc XML.
 - Tối đa **10 MB** hoặc giới hạn WordPress/PHP nếu thấp hơn.
 - Tối đa **2.000 dòng dữ liệu** do WP.2 xử lý đồng bộ.
-- Workbook phải có đúng một worksheet; dòng 1 là header.
-- Cột bắt buộc là `Mã đơn sàn`; chỉ trim khoảng trắng ngoài, không dùng alias.
+- Workbook phải có đúng một worksheet; các hàng tiêu đề/trang trí phía trên bảng được bỏ qua.
+- Cột production bắt buộc là `Sàn & Mã Đơn`. Dòng đầu trong ô là `Shopee` hoặc `Lazada`; dòng tiếp theo là mã đơn sàn được giữ nguyên như text.
+- `Mã đơn hàng eShop` không phải mã đơn marketplace và không bao giờ được dùng làm `Mã đơn sàn`.
+- Dòng sản phẩm có `Sàn & Mã Đơn` trống được nối với Order hợp lệ gần nhất phía trước; dòng sản phẩm mồ côi tạo lỗi rõ ràng.
 - Mã nên được định dạng Text để giữ leading zero và ID dài. Numeric cell không thể phục hồi chính xác sẽ bị từ chối, không đoán chữ số.
 - Dòng trống hoàn toàn bị bỏ qua. Dòng thiếu mã và occurrence duplicate sau lần đầu tạo lỗi; lần xuất hiện hợp lệ đầu tiên được giữ.
 

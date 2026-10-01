@@ -122,3 +122,13 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Order Excel có `platform=UNKNOWN`, `connection_id=NULL`, `matching_status=NULL`; không tạo connection giả và không coi dữ liệu Excel là kết quả reconciliation.
 - `raw_source_metadata` giữ các cell scalar an toàn; `source_refs` giữ worksheet/dòng. Formula không được thực thi và chỉ cached scalar value mới có thể được đọc.
 
+## 11. Điều chỉnh production WP.2A
+
+- Runtime `0.2.1`, schema vẫn là `2`: bảng `order_items` hiện hữu đã đủ để lưu mã hàng hóa, tên hàng hóa, số lượng và provenance dòng nên không cần migration.
+- Parser tìm hàng tiêu đề trong tối đa 20 hàng vật lý không trống đầu tiên. Hàng tiêu đề/trang trí phía trên không phải dữ liệu và số hàng tiêu đề phát hiện được lưu trong metadata Batch.
+- Nguồn production là `Sàn & Mã Đơn`; parser tách đúng hai dòng có nghĩa thành nhãn sàn và mã đơn. `Shopee` → `SHOPEE`, `Lazada` → `LAZADA`; nhãn khác tạo `EXCEL_UNKNOWN_PLATFORM`.
+- `Mã đơn hàng eShop` chỉ được giữ trong raw metadata, không tham gia identity. Legacy `Mã đơn sàn` vẫn được nhận khi đứng một mình; nếu cả hai cột identity cùng tồn tại thì import dừng bằng lỗi ambiguity.
+- Dòng có sản phẩm nhưng trống `Sàn & Mã Đơn` kế thừa Order hợp lệ gần nhất. Dòng sản phẩm không có context tạo `EXCEL_ORPHAN_ITEM_ROW`; hàng trống hoàn toàn bị bỏ qua; hàng không phải sản phẩm làm ngắt context.
+- Duplicate chỉ xét dòng Order tường minh và dùng cặp `(platform, marketplace_order_id)`, phân biệt hoa/thường và trim ngoài. Một Order có thể có nhiều OrderItem nhưng chỉ tạo một record `orders`.
+- Timestamp vẫn lưu UTC; wp-admin hiển thị qua `wp_date()` và timezone được cấu hình trong WordPress.
+

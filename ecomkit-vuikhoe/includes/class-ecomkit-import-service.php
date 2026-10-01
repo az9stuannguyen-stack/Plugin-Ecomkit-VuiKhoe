@@ -124,18 +124,34 @@ final class Ecomkit_Vuikhoe_Import_Service {
 				$data = array(
 					'batch_id'                => $batch_id,
 					'connection_id'           => null,
-					'platform'                => 'UNKNOWN',
+					'platform'                => (string) $order['platform'],
 					'marketplace_order_id'    => $code,
 					'raw_order_code'          => $code,
 					'normalized_order_code'   => $code,
 					'matching_status'         => null,
-					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'cells' => $order['raw_cells'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
+					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'combined_identity' => $order['raw_identity'], 'platform_label' => $order['raw_platform'], 'cells' => $order['raw_cells'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'source_refs'             => wp_json_encode( array( 'source' => 'EXCEL', 'sheet' => $order['sheet'], 'row' => $order['row'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'created_at'              => $now,
 					'updated_at'              => $now,
 				);
 				if ( false === $wpdb->insert( $tables['orders'], $data ) ) {
 					throw new RuntimeException( 'ECOMKIT_ORDER_INSERT_FAILED' );
+				}
+
+				$order_id = (int) $wpdb->insert_id;
+				foreach ( $order['items'] as $item ) {
+					$item_data = array(
+						'order_id'             => $order_id,
+						'product_name'          => $item['product_name'],
+						'sku'                   => $item['sku'],
+						'quantity'              => $item['quantity'],
+						'raw_product_metadata'  => wp_json_encode( array( 'source' => 'EXCEL', 'sheet' => $item['sheet'], 'row' => $item['row'], 'raw_quantity' => $item['raw_quantity'], 'cells' => $item['raw_cells'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
+						'created_at'            => $now,
+						'updated_at'            => $now,
+					);
+					if ( false === $wpdb->insert( $tables['order_items'], $item_data ) ) {
+						throw new RuntimeException( 'ECOMKIT_ORDER_ITEM_INSERT_FAILED' );
+					}
 				}
 			}
 
@@ -149,7 +165,10 @@ final class Ecomkit_Vuikhoe_Import_Service {
 				'file_size'      => $file_size,
 				'total_rows'     => (int) $result['total_rows'],
 				'valid_rows'     => (int) $result['valid_rows'],
-				'header_rule'    => 'row-1-exact-trim',
+				'header_rule'    => 'first-20-non-empty-rows-exact-normalized',
+				'header_row'     => (int) ( $result['raw']['header_row'] ?? 0 ),
+				'item_rows'      => (int) ( $result['raw']['item_rows'] ?? 0 ),
+				'platform_counts'=> $result['raw']['platform_counts'] ?? array(),
 			);
 			$updated  = $wpdb->update(
 				$tables['batches'],
@@ -242,7 +261,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 			return null;
 		}
 		$batch['metadata'] = json_decode( (string) $batch['source_metadata'], true ) ?: array();
-		$batch['orders']   = $wpdb->get_results( $wpdb->prepare( "SELECT raw_order_code, source_refs FROM {$tables['orders']} WHERE batch_id = %d ORDER BY id ASC LIMIT 100", $batch_id ), ARRAY_A );
+		$batch['orders']   = $wpdb->get_results( $wpdb->prepare( "SELECT platform, raw_order_code, source_refs FROM {$tables['orders']} WHERE batch_id = %d ORDER BY id ASC LIMIT 100", $batch_id ), ARRAY_A );
 		$batch['errors']   = $wpdb->get_results( $wpdb->prepare( "SELECT sheet_name, row_number, column_name, error_code, friendly_message, suggestion FROM {$tables['errors']} WHERE batch_id = %d ORDER BY id ASC LIMIT 100", $batch_id ), ARRAY_A );
 		return $batch;
 	}

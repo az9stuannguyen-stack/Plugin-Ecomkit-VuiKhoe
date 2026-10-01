@@ -32,6 +32,17 @@ Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
 
 Exit gate tự động: PASS bằng synthetic fixtures/static tests. Manual WordPress staging với bản sao Excel thực tế vẫn bắt buộc; production Golden chưa được xác nhận.
 
+### WP.2A — Production Excel Structure Support
+
+Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
+
+- Hỗ trợ title rows và phát hiện header bounded; nguồn chuẩn `Sàn & Mã Đơn` tách platform + marketplace order ID.
+- Giữ `Mã đơn hàng eShop` tách biệt khỏi marketplace identity; duplicate theo platform + mã đơn.
+- Materialize nhiều dòng sản phẩm thành nhiều `order_items` của đúng một Order; xử lý continuation và orphan rõ ràng.
+- Runtime `0.2.1`, schema giữ `2`; không có provider/OAuth/API call.
+
+Exit gate cuối: người dùng phải kiểm thử lại trên WordPress staging/local bằng chính file công ty trước đây lỗi `EXCEL_REQUIRED_COLUMN_MISSING`. Không bắt đầu WP.3 trước khi kiểm thử này đạt.
+
 ## WP.3 — Shopee Provider Configuration + OAuth + Encrypted Credential Storage
 
 - Cấu hình provider server-side, OAuth state/callback và credential envelope được mã hóa.

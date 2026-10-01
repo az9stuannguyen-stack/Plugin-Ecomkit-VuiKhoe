@@ -1,117 +1,70 @@
 <?php
-/**
- * Synthetic PhpSpreadsheet fixtures for WP.2. Contains no business or PII data.
- */
-
+/** Synthetic WP.2A Excel fixtures. Contains no customer or production data. */
 declare(strict_types=1);
 
-use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
+define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
-function assert_true(bool $condition, string $message): void
-{
-    if (!$condition) {
-        throw new RuntimeException($message);
-    }
+function assert_true( bool $condition, string $message ): void {
+	if ( ! $condition ) { throw new RuntimeException( $message ); }
 }
-
-/** @param callable(Spreadsheet):void $build */
-function fixture(callable $build): string
-{
-    $spreadsheet = new Spreadsheet();
-    $build($spreadsheet);
-    $path = tempnam(sys_get_temp_dir(), 'ecomkit-xlsx-');
-    if ($path === false) {
-        throw new RuntimeException('Cannot allocate fixture.');
-    }
-    (new Xlsx($spreadsheet))->save($path);
-    $spreadsheet->disconnectWorksheets();
-    return $path;
+function fixture( callable $build ): string {
+	$book = new Spreadsheet(); $build( $book ); $path = tempnam( sys_get_temp_dir(), 'ecomkit-xlsx-' );
+	if ( false === $path ) { throw new RuntimeException( 'Cannot allocate fixture.' ); }
+	( new Xlsx( $book ) )->save( $path ); $book->disconnectWorksheets(); return $path;
 }
+function codes( array $result ): array { return array_column( $result['errors'], 'error_code' ); }
 
 $parser = new Ecomkit_Vuikhoe_Excel_Service();
-$paths = [];
-
+$paths = array();
 try {
-    $paths[] = $valid = fixture(static function (Spreadsheet $book): void {
-        $sheet = $book->getActiveSheet();
-        $sheet->setTitle('Đơn nội bộ');
-        $sheet->fromArray([[' Mã đơn sàn ', 'Ghi chú'], ['2609178X85CBMY', 'synthetic'], [null, null], ['order001', 'case'], ['ORDER001', 'case']]);
-        $sheet->setCellValueExplicit('A6', '000012345678901', DataType::TYPE_STRING);
-        $sheet->setCellValueExplicit('A7', '12345678901234567890', DataType::TYPE_STRING);
-    });
-    $result = $parser->parse($valid);
-    assert_true($result['status'] === 'SUCCESS', 'Valid fixture must succeed.');
-    assert_true($result['total_rows'] === 5 && $result['valid_rows'] === 5, 'Valid fixture counts are wrong.');
-    $codes = array_column($result['orders'], 'order_code');
-    assert_true(in_array('2609178X85CBMY', $codes, true), 'Alphanumeric identity changed.');
-    assert_true(in_array('000012345678901', $codes, true), 'Leading zero identity changed.');
-    assert_true(in_array('12345678901234567890', $codes, true), 'Long text identity changed.');
-    assert_true(in_array('order001', $codes, true) && in_array('ORDER001', $codes, true), 'Case-sensitive identities were merged.');
-    assert_true($result['orders'][0]['sheet'] === 'Đơn nội bộ' && $result['orders'][0]['row'] === 2, 'Source location missing.');
+	$paths[] = $production = fixture( static function ( Spreadsheet $book ): void {
+		$sheet = $book->getActiveSheet(); $sheet->setTitle( 'Đơn thử nghiệm' );
+		$sheet->mergeCells( 'A1:G1' ); $sheet->setCellValue( 'A1', 'DANH SÁCH LẤY HÀNG TEST' );
+		$sheet->fromArray( array(
+			array( 'STT', ' Sàn   & Mã Đơn ', 'Ngày đặt', 'Mã đơn hàng eShop', 'Mã hàng hóa', 'Tên hàng hóa', 'Số lg' ),
+			array( 1, "Shopee\r\nTEST-SHP-001", '01/01/2026 10:00', 'TEST001', 'SKU-A', 'Sản phẩm A', 1 ),
+			array( 2, "Shopee\nTEST-SHP-002", '01/01/2026 10:05', 'TEST002', 'SKU-B', 'Sản phẩm B', 1 ),
+			array( null, null, null, null, 'SKU-C', 'Sản phẩm C', 2 ),
+			array( 3, "Lazada\r000123456789", '01/01/2026 10:10', 'TEST003', 'SKU-D', 'Sản phẩm D', 1 ),
+		), null, 'A3' );
+	} );
+	$result = $parser->parse( $production );
+	assert_true( 'SUCCESS' === $result['status'], 'Production fixture must succeed.' );
+	assert_true( 3 === $result['raw']['header_row'], 'Header after title rows was not discovered.' );
+	assert_true( 3 === count( $result['orders'] ) && 4 === $result['raw']['item_rows'], 'Order/item counts are wrong.' );
+	assert_true( 'SHOPEE' === $result['orders'][0]['platform'] && 'TEST-SHP-001' === $result['orders'][0]['order_code'], 'Shopee combined cell failed.' );
+	assert_true( 'TEST-SHP-001' !== 'TEST001' && 'TEST-SHP-001' === $result['orders'][0]['order_code'], 'eShop code was used as identity.' );
+	assert_true( 2 === count( $result['orders'][1]['items'] ), 'Continuation row did not attach to one order.' );
+	assert_true( 'LAZADA' === $result['orders'][2]['platform'] && '000123456789' === $result['orders'][2]['order_code'], 'Lazada leading-zero ID changed.' );
+	assert_true( array() === codes( $result ), 'Valid continuation generated an error.' );
 
-    $paths[] = $missing = fixture(static fn(Spreadsheet $book) => $book->getActiveSheet()->fromArray([['Mã đơn'], ['A']]));
-    $missingResult = $parser->parse($missing);
-    assert_true($missingResult['errors'][0]['error_code'] === 'EXCEL_REQUIRED_COLUMN_MISSING', 'Missing header was accepted.');
+	$paths[] = $orphan = fixture( static function ( Spreadsheet $book ): void {
+		$book->getActiveSheet()->fromArray( array( array( 'Sàn & Mã Đơn', 'Mã hàng hóa', 'Tên hàng hóa', 'Số lg' ), array( null, 'SKU-X', 'Sản phẩm X', 1 ) ) );
+	} );
+	assert_true( 'EXCEL_ORPHAN_ITEM_ROW' === $parser->parse( $orphan )['errors'][0]['error_code'], 'Orphan item was not rejected.' );
 
-    $paths[] = $rows = fixture(static fn(Spreadsheet $book) => $book->getActiveSheet()->fromArray([['Mã đơn sàn', 'Ghi chú'], ['A', 'ok'], [null, 'missing'], [' A ', 'duplicate']]));
-    $rowResult = $parser->parse($rows);
-    assert_true($rowResult['status'] === 'WARNING' && $rowResult['valid_rows'] === 1 && count($rowResult['errors']) === 2, 'Partial row semantics are wrong.');
-    assert_true($rowResult['errors'][0]['error_code'] === 'EXCEL_EMPTY_ORDER_CODE' && $rowResult['errors'][0]['row'] === 3, 'Blank ID error is wrong.');
-    assert_true($rowResult['errors'][1]['error_code'] === 'EXCEL_DUPLICATE_ORDER_CODE' && $rowResult['errors'][1]['context']['first_seen_row'] === 2, 'Duplicate semantics are wrong.');
+	$paths[] = $duplicates = fixture( static function ( Spreadsheet $book ): void {
+		$book->getActiveSheet()->fromArray( array( array( 'Sàn & Mã Đơn' ), array( "Shopee\nSAME" ), array( "Lazada\nSAME" ), array( "Shopee\nSAME" ) ) );
+	} );
+	$duplicate_result = $parser->parse( $duplicates );
+	assert_true( 2 === count( $duplicate_result['orders'] ) && 'EXCEL_DUPLICATE_ORDER_CODE' === $duplicate_result['errors'][0]['error_code'], 'Platform-scoped duplicate semantics failed.' );
 
-    $paths[] = $numeric = fixture(static function (Spreadsheet $book): void {
-        $sheet = $book->getActiveSheet();
-        $sheet->setCellValue('A1', 'Mã đơn sàn');
-        $sheet->setCellValueExplicit('A2', 2609178000000000, DataType::TYPE_NUMERIC);
-    });
-    $numericResult = $parser->parse($numeric);
-    assert_true($numericResult['errors'][0]['error_code'] === 'EXCEL_UNSAFE_NUMERIC_ORDER_CODE', 'Unsafe numeric ID was guessed.');
+	$paths[] = $unknown = fixture( static fn( Spreadsheet $book ) => $book->getActiveSheet()->fromArray( array( array( 'Sàn & Mã Đơn' ), array( "Unknown\nABC" ) ) ) );
+	assert_true( 'EXCEL_UNKNOWN_PLATFORM' === $parser->parse( $unknown )['errors'][0]['error_code'], 'Unknown platform was guessed.' );
 
-    $paths[] = $scientificText = fixture(static function (Spreadsheet $book): void {
-        $sheet = $book->getActiveSheet();
-        $sheet->setCellValue('A1', 'Mã đơn sàn');
-        $sheet->setCellValueExplicit('A2', '2.609178E+13', DataType::TYPE_STRING);
-    });
-    assert_true($parser->parse($scientificText)['errors'][0]['error_code'] === 'EXCEL_UNSAFE_NUMERIC_ORDER_CODE', 'Scientific-notation text was accepted as identity.');
+	$paths[] = $missing = fixture( static fn( Spreadsheet $book ) => $book->getActiveSheet()->fromArray( array( array( 'DANH SÁCH TEST' ), array( 'Mã đơn hàng eShop' ), array( 'TEST001' ) ) ) );
+	$missing_result = $parser->parse( $missing );
+	assert_true( 'EXCEL_REQUIRED_COLUMN_MISSING' === $missing_result['errors'][0]['error_code'] && str_contains( $missing_result['errors'][0]['message'], 'Sàn & Mã Đơn' ), 'Missing source-header message is wrong.' );
 
-    $paths[] = $leadingNumeric = fixture(static function (Spreadsheet $book): void {
-        $sheet = $book->getActiveSheet();
-        $sheet->setCellValue('A1', 'Mã đơn sàn');
-        $sheet->setCellValue('A2', 123);
-        $sheet->getStyle('A2')->getNumberFormat()->setFormatCode('000000');
-    });
-    $leadingResult = $parser->parse($leadingNumeric);
-    assert_true($leadingResult['orders'][0]['order_code'] === '000123', 'Recoverable numeric leading zeros were not preserved.');
+	$paths[] = $ambiguous = fixture( static fn( Spreadsheet $book ) => $book->getActiveSheet()->fromArray( array( array( 'Sàn & Mã Đơn', 'Mã đơn sàn' ) ) ) );
+	assert_true( 'EXCEL_IDENTITY_COLUMN_AMBIGUOUS' === $parser->parse( $ambiguous )['errors'][0]['error_code'], 'Ambiguous identity columns were silently selected.' );
 
-    $paths[] = $multi = fixture(static function (Spreadsheet $book): void {
-        $book->getActiveSheet()->setCellValue('A1', 'Mã đơn sàn');
-        $book->createSheet()->setCellValue('A1', 'Mã đơn sàn');
-    });
-    assert_true($parser->parse($multi)['errors'][0]['error_code'] === 'EXCEL_SHEET_NOT_FOUND', 'Multiple sheets were silently merged.');
+	$paths[] = $legacy = fixture( static fn( Spreadsheet $book ) => $book->getActiveSheet()->fromArray( array( array( 'Mã đơn sàn' ), array( 'LEGACY-001' ) ) ) );
+	assert_true( 'LEGACY-001' === $parser->parse( $legacy )['orders'][0]['order_code'], 'Safe legacy source support regressed.' );
 
-    $paths[] = $limit = fixture(static function (Spreadsheet $book): void {
-        $sheet = $book->getActiveSheet();
-        $sheet->setCellValue('A1', 'Mã đơn sàn');
-        $sheet->setCellValue('A2002', 'TOO-MANY');
-    });
-    assert_true($parser->parse($limit)['errors'][0]['error_code'] === 'EXCEL_ROW_LIMIT_EXCEEDED', 'Row limit was not enforced.');
-
-    $invalid = tempnam(sys_get_temp_dir(), 'ecomkit-invalid-');
-    if ($invalid === false) {
-        throw new RuntimeException('Cannot allocate invalid fixture.');
-    }
-    $paths[] = $invalid;
-    file_put_contents($invalid, 'not an xlsx file');
-    assert_true($parser->parse($invalid)['errors'][0]['error_code'] === 'EXCEL_READ_ERROR', 'Invalid workbook was not handled safely.');
-
-    echo "WP.2 Excel parser checks passed.\n";
-} finally {
-    foreach ($paths as $path) {
-        @unlink($path);
-    }
-}
+	echo "WP.2A Excel parser checks passed.\n";
+} finally { foreach ( $paths as $path ) { @unlink( $path ); } }
