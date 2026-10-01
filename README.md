@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Stage **WP.2D — Database Transaction Compatibility / InnoDB Migration** đã triển khai plugin phiên bản `0.2.4`, schema `3`: giữ nguyên parser production đã kiểm chứng, yêu cầu sáu bảng Ecomkit dùng InnoDB và cung cấp migration `2 → 3` có thể tiếp tục an toàn sau lỗi. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
+Stage **WP.2E — Orders Schema Contract Repair** triển khai plugin phiên bản `0.2.5`, schema `4`: sửa explicit `orders.matching_status` thành nullable cho giai đoạn trước reconciliation, giữ `connection_id=NULL`, và kiểm tra schema readiness an toàn. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
 
 Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
 
@@ -37,7 +37,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.2.4`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.2.5`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

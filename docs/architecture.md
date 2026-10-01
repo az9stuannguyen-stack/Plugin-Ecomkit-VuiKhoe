@@ -161,3 +161,9 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - `ALTER TABLE` có thể implicit commit, vì vậy migration được thiết kế resumable: bảng đã là InnoDB được bỏ qua; nếu một bảng sau đó thất bại, schema vẫn ở `2` và request kế tiếp tiếp tục các bảng còn lại. Không drop, truncate, rename hoặc tạo bảng thay thế.
 - Runtime guard `ECOMKIT_NON_TRANSACTIONAL_TABLE` được giữ nguyên và nay kiểm tra cả sáu bảng. Import chỉ bắt đầu transaction khi Database Runtime Diagnostics xác nhận mọi bảng đều là InnoDB.
 
+## 14. WP.2E — Orders schema contract repair
+
+- Runtime `0.2.5`, schema `4`; migration `3 → 4` đọc metadata cột thực tế và dùng explicit `ALTER TABLE ... MODIFY` để cho phép `connection_id` và `matching_status` là `NULL`, chỉ khi cột cũ chưa tương thích.
+- Migration giữ nguyên kiểu cột đang cài đặt, kiểm tra số dòng `orders`, `order_items`, `batches`, `errors` trước/sau, xác minh contract rồi mới tăng schema version.
+- WP.2 yêu cầu identity Order ở tầng ứng dụng; `connection_id` và `matching_status` vẫn `NULL` cho đến reconciliation. Admin chỉ hiển thị tên cột lỗi và trạng thái contract, không hiển thị SQL hoặc giá trị Order.
+

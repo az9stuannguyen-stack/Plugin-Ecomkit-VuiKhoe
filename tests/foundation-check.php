@@ -6,8 +6,8 @@
 declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
-define('ECOMKIT_VUIKHOE_DB_VERSION', 3);
-define('ECOMKIT_VUIKHOE_VERSION', '0.2.4');
+define('ECOMKIT_VUIKHOE_DB_VERSION', 4);
+define('ECOMKIT_VUIKHOE_VERSION', '0.2.5');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -68,6 +68,8 @@ $runtime = implode("\n", array_map(
 check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE/i', (string) $activator), 'Lifecycle contains destructive SQL.');
 check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE/i', (string) $db), 'Database migration contains destructive SQL.');
 check(str_contains((string) $db, 'ALTER TABLE `$identifier` ENGINE=InnoDB'), 'Explicit existing-table InnoDB migration is missing.');
+check(str_contains((string) $db, 'MODIFY `$name` $type NULL DEFAULT NULL'), 'Explicit Order nullability migration is missing.');
+check(str_contains((string) $db, 'SHOW FULL COLUMNS FROM'), 'Order schema metadata inspection is missing.');
 check(strpos((string) $db, 'self::migrate_tables_to_innodb();') < strpos((string) $db, 'update_option( self::SCHEMA_OPTION'), 'Schema version may advance before engine migration succeeds.');
 check(!preg_match('/DROP\s+TABLE|DELETE\s+FROM|TRUNCATE|delete_option\s*\(/i', (string) $uninstall), 'Uninstall is destructive.');
 check(str_contains((string) $uninstall, "defined( 'WP_UNINSTALL_PLUGIN' ) || exit;"), 'Uninstall guard is missing.');

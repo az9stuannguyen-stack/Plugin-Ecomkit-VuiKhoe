@@ -162,6 +162,11 @@ final class Ecomkit_Vuikhoe_Import_Service {
 					'created_at'              => $now,
 					'updated_at'              => $now,
 				);
+				$invalid_field = $this->invalid_order_contract_field( $data );
+				if ( null !== $invalid_field ) {
+					$context['field'] = $invalid_field;
+					throw new RuntimeException( 'ECOMKIT_ORDER_CONTRACT_INVALID' );
+				}
 				if ( false === $wpdb->insert( $tables['orders'], $data ) ) {
 					throw new RuntimeException( 'ECOMKIT_ORDER_INSERT_FAILED:' . $this->sanitized_db_error( (string) $wpdb->last_error ) );
 				}
@@ -301,8 +306,27 @@ final class Ecomkit_Vuikhoe_Import_Service {
 			'row'               => $context['row'] ?? null,
 			'entity'            => $context['entity'] ?? null,
 			'operation'         => $context['operation'] ?? null,
+			'field'             => $context['field'] ?? null,
+			'db_column'         => $this->db_error_column( $db_error ),
 			'rollback'          => in_array( $stage, array( 'ORDER_PERSIST', 'ITEM_PERSIST', 'ERROR_PERSIST', 'BATCH_FINALIZE' ), true ),
 		);
+	}
+
+	/** @param array<string,mixed> $data */
+	private function invalid_order_contract_field( array $data ): ?string {
+		foreach ( array( 'batch_id', 'platform', 'marketplace_order_id', 'raw_order_code', 'normalized_order_code', 'source_refs', 'created_at', 'updated_at' ) as $field ) {
+			if ( ! array_key_exists( $field, $data ) || null === $data[ $field ] || ( is_string( $data[ $field ] ) && '' === trim( $data[ $field ] ) ) ) {
+				return $field;
+			}
+		}
+		return null;
+	}
+
+	private function db_error_column( string $message ): ?string {
+		if ( preg_match( "/Column ['`]([A-Za-z0-9_]+)['`] cannot be null/i", $message, $match ) ) {
+			return $match[1];
+		}
+		return null;
 	}
 
 	private function sanitize_diagnostic_message( string $message ): string {

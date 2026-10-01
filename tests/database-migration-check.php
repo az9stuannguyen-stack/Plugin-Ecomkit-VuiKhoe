@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ARRAY_A', 'ARRAY_A' );
-define( 'ECOMKIT_VUIKHOE_DB_VERSION', 3 );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.2.4' );
+define( 'ECOMKIT_VUIKHOE_DB_VERSION', 4 );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.2.5' );
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 $GLOBALS['migration_options'] = array();
 function get_option( string $key, mixed $default = false ): mixed { return $GLOBALS['migration_options'][ $key ] ?? $default; }
@@ -23,6 +23,7 @@ final class MigrationWpdb {
 	public array $queries = array();
 	public array $engines = array();
 	public array $counts = array();
+	public array $order_columns = array();
 	private array $altered = array();
 
 	public function __construct( string $default_engine = 'InnoDB' ) {
@@ -31,12 +32,18 @@ final class MigrationWpdb {
 			$this->engines[ $table ] = $default_engine;
 			$this->counts[ $table ] = strlen( $key );
 		}
+		foreach ( array( 'batch_id', 'platform', 'marketplace_order_id', 'raw_order_code', 'normalized_order_code', 'source_refs', 'created_at', 'updated_at' ) as $name ) {
+			$this->order_columns[ $name ] = array( 'Field' => $name, 'Type' => 'varchar(191)', 'Null' => 'NO', 'Default' => null, 'Extra' => '' );
+		}
+		$this->order_columns['connection_id'] = array( 'Field' => 'connection_id', 'Type' => 'bigint(20) unsigned', 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
+		$this->order_columns['matching_status'] = array( 'Field' => 'matching_status', 'Type' => 'varchar(32)', 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
 	}
 	public function db_server_info(): string { return '10.11-MariaDB'; }
 	public function esc_like( string $value ): string { return $value; }
 	public function prepare( string $query, mixed ...$args ): string { return vsprintf( str_replace( '%s', "'%s'", $query ), $args ); }
 	public function get_results( string $query, string $output ): array {
 		if ( 'SHOW ENGINES' === $query ) { return array( array( 'Engine' => 'InnoDB', 'Support' => $this->innodb_supported ? 'DEFAULT' : 'NO' ) ); }
+		if ( preg_match( '/SHOW FULL COLUMNS FROM `([^`]+ecomkit_orders)`/', $query ) ) { return array_values( $this->order_columns ); }
 		if ( preg_match( '/SHOW COLUMNS FROM `([^`]+)`/', $query, $match ) ) { return array( array( 'Field' => 'id', 'Type' => 'bigint(20) unsigned', 'Null' => 'NO', 'Key' => 'PRI' ) ); }
 		if ( preg_match( '/SHOW INDEX FROM `([^`]+)`/', $query, $match ) ) { return array( array( 'Key_name' => 'PRIMARY', 'Column_name' => 'id', 'Non_unique' => '0', 'Seq_in_index' => '1' ) ); }
 		return array();
@@ -60,6 +67,10 @@ final class MigrationWpdb {
 			if ( $match[1] === $this->fail_table ) { return false; }
 			$this->engines[ $match[1] ] = 'InnoDB';
 			$this->altered[ $match[1] ] = true;
+		}
+		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` MODIFY `(connection_id|matching_status)` .* NULL DEFAULT NULL$/', $query, $match ) ) {
+			$this->order_columns[ $match[2] ]['Null'] = 'YES';
+			$this->order_columns[ $match[2] ]['Default'] = null;
 		}
 		return 1;
 	}
@@ -109,5 +120,20 @@ $GLOBALS['migration_options'] = array();
 migration_check( ! Ecomkit_Vuikhoe_DB::supports_import_transactions(), 'Runtime guard accepted a non-transactional Ecomkit table.' );
 Ecomkit_Vuikhoe_DB::migrate_tables_to_innodb();
 migration_check( Ecomkit_Vuikhoe_DB::supports_import_transactions(), 'Runtime guard did not pass after migration.' );
+
+$legacy = new MigrationWpdb( 'InnoDB' );
+$legacy->order_columns['matching_status']['Null'] = 'NO';
+$legacy->order_columns['matching_status']['Default'] = 'PARSE_ERROR';
+$legacy_counts = array();
+foreach ( array( 'orders', 'order_items', 'batches', 'errors' ) as $key ) { $legacy_counts[ $key ] = $legacy->counts[ 'tenant_9_ecomkit_' . $key ]; }
+$GLOBALS['wpdb'] = $legacy;
+$contract_result = Ecomkit_Vuikhoe_DB::migrate_orders_contract();
+migration_check( array( 'matching_status' ) === $contract_result['altered'], 'Legacy matching_status was not explicitly repaired.' );
+$legacy_after = array();
+foreach ( array( 'orders', 'order_items', 'batches', 'errors' ) as $key ) { $legacy_after[ $key ] = $legacy->counts[ 'tenant_9_ecomkit_' . $key ]; }
+migration_check( $legacy_counts === $legacy_after && $legacy_counts === $contract_result['counts'], 'Order contract migration changed business row counts.' );
+migration_check( Ecomkit_Vuikhoe_DB::orders_schema_diagnostic()['ready'], 'Order schema readiness did not pass after repair.' );
+$query_count = count( $legacy->queries );
+migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_orders_contract()['altered'] && $query_count === count( $legacy->queries ), 'Order contract migration is not idempotent.' );
 
 echo "WP.2D database migration checks passed.\n";

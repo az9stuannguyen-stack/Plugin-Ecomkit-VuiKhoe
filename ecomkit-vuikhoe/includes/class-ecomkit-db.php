@@ -10,6 +10,18 @@ final class Ecomkit_Vuikhoe_DB {
 	public const PLUGIN_VERSION_OPTION = 'ecomkit_vuikhoe_plugin_version';
 	public const INSTALL_ERROR_OPTION = 'ecomkit_vuikhoe_install_error';
 	public const INNODB_MIGRATION_OPTION = 'ecomkit_vuikhoe_innodb_migration_state';
+	private const ORDER_CONTRACT = array(
+		'batch_id'              => array( 'nullable' => false, 'required' => true ),
+		'connection_id'         => array( 'nullable' => true, 'required' => false ),
+		'platform'              => array( 'nullable' => false, 'required' => true ),
+		'marketplace_order_id'  => array( 'nullable' => false, 'required' => true ),
+		'raw_order_code'        => array( 'nullable' => false, 'required' => true ),
+		'normalized_order_code' => array( 'nullable' => false, 'required' => true ),
+		'matching_status'       => array( 'nullable' => true, 'required' => false ),
+		'source_refs'           => array( 'nullable' => false, 'required' => true ),
+		'created_at'            => array( 'nullable' => false, 'required' => true ),
+		'updated_at'            => array( 'nullable' => false, 'required' => true ),
+	);
 
 	/**
 	 * Returns table names for the current WordPress site prefix.
@@ -41,6 +53,7 @@ final class Ecomkit_Vuikhoe_DB {
 		$before  = self::diagnose();
 		if ( $before['tables_ok'] ) {
 			self::migrate_tables_to_innodb();
+			self::migrate_orders_contract();
 		}
 		$collate = $wpdb->get_charset_collate();
 		$sql     = self::schema_sql( $tables, $collate );
@@ -59,6 +72,10 @@ final class Ecomkit_Vuikhoe_DB {
 		if ( ! self::database_runtime_diagnostic()['ready'] ) {
 			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_DB_INNODB_MIGRATION_FAILED', false );
 			throw new RuntimeException( 'ECOMKIT_DB_INNODB_MIGRATION_FAILED' );
+		}
+		if ( ! self::orders_schema_diagnostic()['ready'] ) {
+			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_ORDER_SCHEMA_INCOMPATIBLE', false );
+			throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_INCOMPATIBLE' );
 		}
 
 		update_option( self::SCHEMA_OPTION, ECOMKIT_VUIKHOE_DB_VERSION, false );
@@ -141,6 +158,103 @@ final class Ecomkit_Vuikhoe_DB {
 			'tables'           => $table_status,
 			'ready'            => $innodb_supported && ! in_array( false, array_column( $table_status, 'transactional' ), true ),
 		);
+	}
+
+	/**
+	 * Reports the safe, metadata-only WP.2 Order persistence contract.
+	 *
+	 * @return array{ready:bool,fields:array<string,array<string,mixed>>}
+	 */
+	public static function orders_schema_diagnostic(): array {
+		$columns = self::orders_columns();
+		$fields  = array();
+		foreach ( self::ORDER_CONTRACT as $name => $expected ) {
+			$column = $columns[ $name ] ?? null;
+			$actual_nullable = is_array( $column ) && 'YES' === strtoupper( (string) ( $column['Null'] ?? '' ) );
+			$compatible = is_array( $column ) && ( $expected['required'] || $actual_nullable );
+			$fields[ $name ] = array(
+				'required'   => $expected['required'],
+				'nullable'   => $actual_nullable,
+				'compatible' => $compatible,
+				'type'       => is_array( $column ) ? (string) ( $column['Type'] ?? '' ) : '',
+				'default'    => is_array( $column ) ? ( $column['Default'] ?? null ) : null,
+				'auto_increment' => is_array( $column ) && false !== stripos( (string) ( $column['Extra'] ?? '' ), 'auto_increment' ),
+			);
+		}
+
+		return array( 'ready' => ! in_array( false, array_column( $fields, 'compatible' ), true ), 'fields' => $fields );
+	}
+
+	/**
+	 * Explicitly repairs legacy WP.1 nullability without replacing tables or rows.
+	 * Types are taken from server metadata rather than hard-coded.
+	 *
+	 * @return array{altered:string[],counts:array<string,int>}
+	 */
+	public static function migrate_orders_contract(): array {
+		global $wpdb;
+
+		$tables = self::table_names();
+		$orders = self::safe_table_identifier( $tables['orders'], $tables );
+		$count_keys = array( 'orders', 'order_items', 'batches', 'errors' );
+		$before = array();
+		foreach ( $count_keys as $key ) {
+			$identifier = self::safe_table_identifier( $tables[ $key ], $tables );
+			$before[ $key ] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$identifier`" );
+		}
+
+		$columns = self::orders_columns();
+		$altered = array();
+		foreach ( array( 'connection_id', 'matching_status' ) as $name ) {
+			$column = $columns[ $name ] ?? null;
+			if ( ! is_array( $column ) ) {
+				throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_COLUMN_MISSING_' . strtoupper( $name ) );
+			}
+			if ( 'YES' === strtoupper( (string) ( $column['Null'] ?? '' ) ) ) {
+				continue;
+			}
+			$type = (string) ( $column['Type'] ?? '' );
+			if ( 1 !== preg_match( '/^[a-zA-Z0-9(), ]+(?: unsigned)?$/', $type ) ) {
+				throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_TYPE_UNSAFE_' . strtoupper( $name ) );
+			}
+			if ( false === $wpdb->query( "ALTER TABLE `$orders` MODIFY `$name` $type NULL DEFAULT NULL" ) ) {
+				throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_ALTER_FAILED_' . strtoupper( $name ) );
+			}
+			$altered[] = $name;
+			$columns = self::orders_columns();
+			if ( 'YES' !== strtoupper( (string) ( $columns[ $name ]['Null'] ?? '' ) ) ) {
+				throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_VERIFY_FAILED_' . strtoupper( $name ) );
+			}
+		}
+
+		$after = array();
+		foreach ( $count_keys as $key ) {
+			$identifier = self::safe_table_identifier( $tables[ $key ], $tables );
+			$after[ $key ] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$identifier`" );
+		}
+		if ( $before !== $after ) {
+			throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_ROW_COUNT_MISMATCH' );
+		}
+		if ( ! self::orders_schema_diagnostic()['ready'] ) {
+			throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_INCOMPATIBLE' );
+		}
+
+		return array( 'altered' => $altered, 'counts' => $after );
+	}
+
+	/** @return array<string,array<string,mixed>> */
+	private static function orders_columns(): array {
+		global $wpdb;
+		$tables = self::table_names();
+		$table  = self::safe_table_identifier( $tables['orders'], $tables );
+		$rows   = $wpdb->get_results( "SHOW FULL COLUMNS FROM `$table`", ARRAY_A );
+		$columns = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			if ( isset( $row['Field'] ) ) {
+				$columns[ (string) $row['Field'] ] = $row;
+			}
+		}
+		return $columns;
 	}
 
 	/**

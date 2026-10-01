@@ -27,6 +27,7 @@
 		<tr><th><?php echo esc_html__( 'Dòng vật lý', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( isset( $failure['row'] ) ? (string) $failure['row'] : 'N/A' ); ?></td></tr>
 		<tr><th><?php echo esc_html__( 'PHP', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $failure['php_version'] ?? PHP_VERSION ) ); ?></td></tr>
 		<tr><th><?php echo esc_html__( 'PhpSpreadsheet', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $failure['phpspreadsheet'] ?? 'N/A' ) ); ?></td></tr>
+		<?php if ( ! empty( $failure['db_column'] ) ) : ?><tr><th><?php echo esc_html__( 'Failing DB column', 'ecomkit-vuikhoe' ); ?></th><td><code><?php echo esc_html( (string) $failure['db_column'] ); ?></code></td></tr><?php endif; ?>
 		</tbody></table>
 		<?php endif; ?>
 		<h2><?php echo esc_html__( 'Đơn Excel hợp lệ (tối đa 100 dòng xem trước)', 'ecomkit-vuikhoe' ); ?></h2>

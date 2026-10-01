@@ -11,6 +11,12 @@
 	<?php foreach ( $labels as $key => $label ) : $table = $database['tables'][ $key ]; ?><tr><th><?php echo esc_html( $label ); ?></th><td><?php echo esc_html( $table['engine'] . ' — ' . ( $table['transactional'] ? 'OK' : 'FAIL' ) ); ?></td></tr><?php endforeach; ?>
 	<tr><th><?php echo esc_html__( 'Transactional database readiness', 'ecomkit-vuikhoe' ); ?></th><td><strong><?php echo esc_html( $database['ready'] ? 'PASS' : 'FAIL' ); ?></strong></td></tr>
 	</tbody></table>
+	<?php $orders_schema = $data['orders_schema']; ?>
+	<h2><?php echo esc_html__( 'Orders schema readiness', 'ecomkit-vuikhoe' ); ?></h2>
+	<p><strong><?php echo esc_html( $orders_schema['ready'] ? 'PASS' : 'FAIL' ); ?></strong></p>
+	<table class="widefat striped" style="max-width:900px"><thead><tr><th><?php echo esc_html__( 'Field', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Application contract', 'ecomkit-vuikhoe' ); ?></th><th><?php echo esc_html__( 'Database status', 'ecomkit-vuikhoe' ); ?></th></tr></thead><tbody>
+	<?php foreach ( $orders_schema['fields'] as $field => $status ) : ?><tr><th><code><?php echo esc_html( $field ); ?></code></th><td><?php echo esc_html( $status['required'] ? 'required' : 'nullable before reconciliation' ); ?></td><td><?php echo esc_html( $status['compatible'] ? ( $status['nullable'] ? 'nullable / OK' : 'required / OK' ) : 'incompatible' ); ?></td></tr><?php endforeach; ?>
+	</tbody></table>
 	<h2><?php echo esc_html__( 'Excel Runtime Diagnostics', 'ecomkit-vuikhoe' ); ?></h2>
 	<?php if ( is_array( $data['runtime_test'] ) ) : ?>
 		<div class="notice <?php echo $data['runtime_test']['ok'] ? 'notice-success' : 'notice-error'; ?> inline"><p>
