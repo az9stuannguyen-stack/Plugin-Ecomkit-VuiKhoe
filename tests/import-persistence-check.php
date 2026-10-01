@@ -2,7 +2,7 @@
 /** WP.2A persistence checks with an in-memory wpdb double. */
 declare(strict_types=1);
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.2.1' );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.2.2' );
 define( 'ECOMKIT_VUIKHOE_DB_VERSION', 2 );
 define( 'ARRAY_A', 'ARRAY_A' );
 function wp_max_upload_size(): int { return 20 * 1024 * 1024; }
@@ -11,10 +11,13 @@ function current_time( string $type, bool $gmt = false ): string { return '2026-
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 
 final class FakeWpdb {
-	public string $prefix = 'tenant_2_'; public int $insert_id = 0; public array $inserts = array(); public array $updates = array(); public array $queries = array();
-	public function insert( string $table, array $data ): int { $this->inserts[] = compact( 'table', 'data' ); $this->insert_id++; return 1; }
+	public string $prefix = 'tenant_2_'; public int $insert_id = 0; public string $last_error = ''; public ?string $fail_table = null; public array $inserts = array(); public array $updates = array(); public array $queries = array();
+	public function insert( string $table, array $data ): int|false { if ( $table === $this->fail_table ) { $this->last_error = "Synthetic insert failure containing 'private-value'"; return false; } $this->inserts[] = compact( 'table', 'data' ); $this->insert_id++; return 1; }
 	public function update( string $table, array $data, array $where ): int { $this->updates[] = compact( 'table', 'data', 'where' ); return 1; }
 	public function query( string $sql ): int { $this->queries[] = $sql; return 1; }
+	public function esc_like( string $value ): string { return $value; }
+	public function prepare( string $query, mixed ...$args ): string { return vsprintf( str_replace( '%s', "'%s'", $query ), $args ); }
+	public function get_row( string $query, string $output ): array { return array( 'Engine' => 'InnoDB' ); }
 }
 function check_import( bool $condition, string $message ): void { if ( ! $condition ) { throw new RuntimeException( $message ); } }
 
@@ -44,4 +47,26 @@ check_import( 'tenant_2_ecomkit_order_items' === $wpdb->inserts[2]['table'] && 2
 check_import( 1 === count( $wpdb->updates ) && 1 === $wpdb->updates[0]['data']['order_count'], 'Batch order count is wrong.' );
 $metadata = json_decode( (string) $wpdb->updates[0]['data']['source_metadata'], true );
 check_import( 3 === $metadata['header_row'] && 2 === $metadata['item_rows'] && 1 === $metadata['platform_counts']['SHOPEE'], 'WP.2A metadata was not persisted.' );
-echo "WP.2A import persistence checks passed.\n";
+
+$failing_db = new FakeWpdb();
+$failing_db->fail_table = 'tenant_2_ecomkit_order_items';
+$GLOBALS['wpdb'] = $failing_db;
+try {
+	$persist->invoke( $service, 43, 'synthetic.xlsx', 1000, array(
+		'status' => 'SUCCESS', 'total_rows' => 1, 'valid_rows' => 1,
+		'orders' => array( array( 'order_code' => 'SAFE-ID', 'platform' => 'SHOPEE', 'raw_platform' => 'Shopee', 'raw_identity' => "Shopee\nSAFE-ID", 'sheet' => 'Orders', 'row' => 4, 'raw_cells' => array(), 'items' => array( array( 'sku' => 'SKU', 'product_name' => 'Product', 'quantity' => 1, 'raw_quantity' => '1', 'sheet' => 'Orders', 'row' => 4, 'raw_cells' => array() ) ) ) ),
+		'errors' => array(), 'raw' => array( 'sheet' => 'Orders' ),
+	) );
+	throw new RuntimeException( 'Expected item persistence failure.' );
+} catch ( Ecomkit_Vuikhoe_Import_Exception $exception ) {
+	$diagnostic = $exception->diagnostic();
+	check_import( 'ITEM_PERSIST' === $diagnostic['stage'] && 'order_items' === $diagnostic['entity'] && 4 === $diagnostic['row'], 'Failure stage/entity/row was not retained.' );
+	check_import( true === $diagnostic['rollback'] && array( 'START TRANSACTION', 'ROLLBACK' ) === $failing_db->queries, 'Failed persistence was not rolled back.' );
+	check_import( ! str_contains( $diagnostic['exception_message'], 'private-value' ), 'Sensitive quoted DB value was not redacted.' );
+}
+
+$validate = new ReflectionMethod( $service, 'validate_upload' );
+$unsupported = $validate->invoke( $service, array( 'error' => UPLOAD_ERR_OK, 'tmp_name' => 'x', 'size' => 100 ), 'fixture.csv' );
+check_import( 'EXCEL_UNSUPPORTED_FILE_TYPE' === $unsupported['error_code'], 'Unsupported upload type was not blocked.' );
+
+echo "WP.2B import persistence checks passed.\n";

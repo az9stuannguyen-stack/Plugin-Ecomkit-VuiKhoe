@@ -13,7 +13,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	public const LEGACY_HEADER = 'Mã đơn sàn';
 	public const MAX_ROWS = 2000;
 	private const HEADER_SCAN_NON_EMPTY_ROWS = 20;
-	private const PARSER_VERSION = 'wp2a-v1';
+	private const PARSER_VERSION = 'wp2b-v1';
 	private const PRODUCT_CODE_HEADER = 'Mã hàng hóa';
 	private const PRODUCT_NAME_HEADER = 'Tên hàng hóa';
 	private const QUANTITY_HEADER = 'Số lg';
@@ -25,11 +25,11 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			$reader->setReadDataOnly( false );
 			$workbook = $reader->load( $path );
 		} catch ( Throwable $exception ) {
-			return $this->structural_error( 'EXCEL_READ_ERROR', 'Không thể đọc file Excel.', 'Hãy lưu lại file ở định dạng .xlsx hợp lệ rồi tải lên lại.' );
+			return $this->structural_error( 'EXCEL_READ_ERROR', 'Không thể đọc file Excel.', 'Hãy lưu lại file ở định dạng .xlsx hợp lệ rồi tải lên lại.', null, 'WORKBOOK_LOAD' );
 		}
 		try {
 			if ( 1 !== $workbook->getSheetCount() ) {
-				return $this->structural_error( 'EXCEL_SHEET_NOT_FOUND', 'File Excel phải có đúng một worksheet.', 'Hãy giữ đúng một worksheet chứa dữ liệu cần nhập.' );
+				return $this->structural_error( 'EXCEL_SHEET_NOT_FOUND', 'File Excel phải có đúng một worksheet.', 'Hãy giữ đúng một worksheet chứa dữ liệu cần nhập.', null, 'SHEET_VALIDATE' );
 			}
 			return $this->parse_worksheet( $workbook->getSheet( 0 ) );
 		} finally {
@@ -43,12 +43,12 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 		$highest_column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString( $sheet->getHighestDataColumn() );
 		$header = $this->discover_header( $sheet, $highest_row, $highest_column );
 		if ( isset( $header['error'] ) ) {
-			return $this->structural_error( $header['error'], $header['message'], $header['suggestion'], $sheet->getTitle() );
+			return $this->structural_error( $header['error'], $header['message'], $header['suggestion'], $sheet->getTitle(), 'HEADER_DISCOVERY' );
 		}
 
 		$header_row = (int) $header['row'];
 		if ( $highest_row - $header_row > self::MAX_ROWS ) {
-			return $this->structural_error( 'EXCEL_ROW_LIMIT_EXCEEDED', 'File Excel vượt quá giới hạn 2.000 dòng dữ liệu.', 'Hãy chia file thành các Batch nhỏ hơn, tối đa 2.000 dòng.', $sheet->getTitle() );
+			return $this->structural_error( 'EXCEL_ROW_LIMIT_EXCEEDED', 'File Excel vượt quá giới hạn 2.000 dòng dữ liệu.', 'Hãy chia file thành các Batch nhỏ hơn, tối đa 2.000 dòng.', $sheet->getTitle(), 'ROW_CLASSIFICATION' );
 		}
 
 		$headers = $header['headers'];
@@ -63,18 +63,20 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 		$total = 0;
 		$item_rows = 0;
 		$platform_counts = array();
+		$classifications = array_fill_keys( array( 'ORDER_ROW', 'CONTINUATION_ITEM_ROW', 'BLANK_ROW', 'FOOTER_OR_NONDATA_ROW', 'INVALID_DATA_ROW' ), 0 );
 
 		for ( $row_number = $header_row + 1; $row_number <= $highest_row; $row_number++ ) {
 			$row = $this->read_row( $sheet, $row_number, $highest_column );
 			if ( ! $row['non_empty'] ) {
+				$classifications['BLANK_ROW']++;
+				$current_index = null;
 				continue;
 			}
-			$total++;
-			$rows[] = array( 'row' => $row_number, 'cells' => $row['cells'] );
 			$identity = $this->raw_identity_value( $sheet->getCell( array( $identity_column, $row_number ) ) );
-			$product_like = $this->has_product_data( $row['cells'], $columns );
+			$product_structure = $this->item_structure( $row['cells'], $columns );
 
 			if ( isset( $identity['error'] ) ) {
+				$classifications['INVALID_DATA_ROW']++;
 				$errors[] = $this->row_error( $identity['error'], $identity['message'], $identity['suggestion'], $sheet->getTitle(), $row_number, $identity['raw'] ?? null );
 				$current_index = null;
 				continue;
@@ -82,24 +84,35 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 
 			$raw_identity = $identity['value'];
 			if ( '' === $raw_identity ) {
-				if ( 'production' === $source_mode && $product_like ) {
+				if ( 'production' === $source_mode && 'VALID_ITEM' === $product_structure ) {
 					if ( null === $current_index ) {
+						$classifications['INVALID_DATA_ROW']++;
 						$errors[] = $this->row_error( 'EXCEL_ORPHAN_ITEM_ROW', sprintf( 'Dòng sản phẩm %d không có đơn hàng đứng trước để liên kết.', $row_number ), 'Kiểm tra cột “Sàn & Mã Đơn” ở dòng đơn hàng ngay trước dòng sản phẩm này.', $sheet->getTitle(), $row_number, null );
 						continue;
 					}
+					$classifications['CONTINUATION_ITEM_ROW']++;
+					$total++;
+					$rows[] = array( 'row' => $row_number, 'classification' => 'CONTINUATION_ITEM_ROW', 'cells' => $row['cells'] );
 					$orders[ $current_index ]['items'][] = $this->build_item( $row['cells'], $columns, $sheet->getTitle(), $row_number, $errors );
 					$item_rows++;
 					continue;
 				}
 				$current_index = null;
 				if ( 'legacy' === $source_mode ) {
+					$classifications['INVALID_DATA_ROW']++;
 					$errors[] = $this->row_error( 'EXCEL_EMPTY_ORDER_CODE', sprintf( 'Dòng %d chưa có Mã đơn sàn.', $row_number ), 'Hãy điền Mã đơn sàn chính xác vào ô được chỉ ra.', $sheet->getTitle(), $row_number, null );
+				} elseif ( 'PARTIAL_ITEM' === $product_structure || $this->has_business_signal( $row['cells'], $columns ) ) {
+					$classifications['INVALID_DATA_ROW']++;
+					$errors[] = $this->row_error( 'EXCEL_INVALID_DATA_ROW', sprintf( 'Dòng %d có dữ liệu nghiệp vụ nhưng không đủ cấu trúc Order hoặc OrderItem.', $row_number ), 'Kiểm tra mã hàng hóa, tên hàng hóa, số lượng và cột “Sàn & Mã Đơn”.', $sheet->getTitle(), $row_number, null );
+				} else {
+					$classifications['FOOTER_OR_NONDATA_ROW']++;
 				}
 				continue;
 			}
 
 			$parsed = 'production' === $source_mode ? $this->parse_combined_identity( $raw_identity ) : array( 'platform' => 'UNKNOWN', 'code' => $raw_identity, 'raw_platform' => null );
 			if ( isset( $parsed['error'] ) ) {
+				$classifications['INVALID_DATA_ROW']++;
 				$errors[] = $this->row_error( $parsed['error'], $parsed['message'], $parsed['suggestion'], $sheet->getTitle(), $row_number, $raw_identity );
 				$current_index = null;
 				continue;
@@ -107,18 +120,24 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 
 			$unique_key = $parsed['platform'] . "\0" . $parsed['code'];
 			if ( isset( $seen[ $unique_key ] ) ) {
+				$classifications['INVALID_DATA_ROW']++;
 				$errors[] = $this->row_error( 'EXCEL_DUPLICATE_ORDER_CODE', sprintf( 'Mã đơn sàn “%s” (%s) ở dòng %d bị trùng với dòng %d.', $parsed['code'], $parsed['platform'], $row_number, $seen[ $unique_key ] ), sprintf( 'Giữ một dòng đơn duy nhất; kiểm tra dòng %d và %d.', $seen[ $unique_key ], $row_number ), $sheet->getTitle(), $row_number, $parsed['code'], array( 'first_seen_row' => $seen[ $unique_key ], 'platform' => $parsed['platform'] ) );
 				$current_index = null;
 				continue;
 			}
 
 			$seen[ $unique_key ] = $row_number;
+			$classifications['ORDER_ROW']++;
+			$total++;
+			$rows[] = array( 'row' => $row_number, 'classification' => 'ORDER_ROW', 'cells' => $row['cells'] );
 			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
 			$current_index = array_key_last( $orders );
 			$platform_counts[ $parsed['platform'] ] = ( $platform_counts[ $parsed['platform'] ] ?? 0 ) + 1;
-			if ( $product_like ) {
+			if ( 'VALID_ITEM' === $product_structure ) {
 				$orders[ $current_index ]['items'][] = $this->build_item( $row['cells'], $columns, $sheet->getTitle(), $row_number, $errors );
 				$item_rows++;
+			} elseif ( 'PARTIAL_ITEM' === $product_structure ) {
+				$errors[] = $this->row_error( 'EXCEL_INVALID_ITEM_ROW', sprintf( 'Dòng đơn %d có thông tin sản phẩm chưa đầy đủ.', $row_number ), 'Kiểm tra mã hàng hóa và tên hàng hóa của dòng này.', $sheet->getTitle(), $row_number, null );
 			}
 		}
 
@@ -128,7 +147,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			'valid_rows' => count( $orders ),
 			'orders' => $orders,
 			'errors' => $errors,
-			'raw' => array( 'parser_version' => self::PARSER_VERSION, 'sheet' => $sheet->getTitle(), 'header_row' => $header_row, 'headers' => array_values( $headers ), 'source_mode' => $source_mode, 'item_rows' => $item_rows, 'platform_counts' => $platform_counts, 'rows' => $rows ),
+			'raw' => array( 'parser_version' => self::PARSER_VERSION, 'sheet' => $sheet->getTitle(), 'header_row' => $header_row, 'headers' => array_values( $headers ), 'source_mode' => $source_mode, 'item_rows' => $item_rows, 'platform_counts' => $platform_counts, 'classifications' => $classifications, 'rows' => $rows ),
 		);
 	}
 
@@ -183,9 +202,20 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	}
 
 	/** @param array<string,mixed> $cells @param array<string,int> $columns */
-	private function has_product_data( array $cells, array $columns ): bool {
-		foreach ( array( self::PRODUCT_CODE_HEADER, self::PRODUCT_NAME_HEADER, self::QUANTITY_HEADER ) as $header ) {
-			if ( isset( $columns[ $header ] ) && '' !== trim( (string) ( $cells[ (string) $columns[ $header ] ] ?? '' ) ) ) {
+	private function item_structure( array $cells, array $columns ): string {
+		$code = $this->column_text( $cells, $columns, self::PRODUCT_CODE_HEADER );
+		$name = $this->column_text( $cells, $columns, self::PRODUCT_NAME_HEADER );
+		$quantity = $this->column_text( $cells, $columns, self::QUANTITY_HEADER );
+		if ( '' !== $code && '' !== $name ) {
+			return 'VALID_ITEM';
+		}
+		return '' !== $code || '' !== $quantity ? 'PARTIAL_ITEM' : 'NO_ITEM';
+	}
+
+	/** @param array<string,mixed> $cells @param array<string,int> $columns */
+	private function has_business_signal( array $cells, array $columns ): bool {
+		foreach ( array( 'STT', 'Mã đơn hàng eShop', 'Ngày đặt', self::PRODUCT_CODE_HEADER, self::QUANTITY_HEADER ) as $header ) {
+			if ( '' !== $this->column_text( $cells, $columns, $header ) ) {
 				return true;
 			}
 		}
@@ -264,11 +294,12 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 
 	/** @param array<string,mixed> $context @return array<string,mixed> */
 	private function row_error( string $code, string $message, string $suggestion, string $sheet, int $row, ?string $raw, array $context = array(), string $column = self::SOURCE_HEADER ): array {
-		return array( 'error_code' => $code, 'message' => $message, 'suggestion' => $suggestion, 'sheet' => $sheet, 'row' => $row, 'column' => $column, 'field' => $column, 'safe_raw_value' => $raw, 'context' => $context );
+		$stage = in_array( $code, array( 'EXCEL_ORPHAN_ITEM_ROW', 'EXCEL_INVALID_DATA_ROW' ), true ) ? 'ROW_CLASSIFICATION' : ( str_contains( $code, 'QUANTITY' ) || str_contains( $code, 'ITEM' ) ? 'ITEM_PARSE' : 'ORDER_PARSE' );
+		return array( 'error_code' => $code, 'stage' => $stage, 'message' => $message, 'suggestion' => $suggestion, 'sheet' => $sheet, 'row' => $row, 'column' => $column, 'field' => $column, 'safe_raw_value' => $raw, 'context' => $context );
 	}
 
 	/** @return array<string,mixed> */
-	private function structural_error( string $code, string $message, string $suggestion, ?string $sheet = null ): array {
-		return array( 'status' => 'ERROR', 'total_rows' => 0, 'valid_rows' => 0, 'orders' => array(), 'errors' => array( array( 'error_code' => $code, 'message' => $message, 'suggestion' => $suggestion, 'sheet' => $sheet ) ), 'raw' => array( 'parser_version' => self::PARSER_VERSION ) );
+	private function structural_error( string $code, string $message, string $suggestion, ?string $sheet = null, string $stage = 'WORKBOOK_LOAD' ): array {
+		return array( 'status' => 'ERROR', 'total_rows' => 0, 'valid_rows' => 0, 'orders' => array(), 'errors' => array( array( 'error_code' => $code, 'stage' => $stage, 'message' => $message, 'suggestion' => $suggestion, 'sheet' => $sheet ) ), 'raw' => array( 'parser_version' => self::PARSER_VERSION ), 'diagnostic' => array( 'stage' => $stage ) );
 	}
 }

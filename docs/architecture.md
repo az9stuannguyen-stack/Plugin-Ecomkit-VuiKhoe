@@ -132,3 +132,13 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Duplicate chỉ xét dòng Order tường minh và dùng cặp `(platform, marketplace_order_id)`, phân biệt hoa/thường và trim ngoài. Một Order có thể có nhiều OrderItem nhưng chỉ tạo một record `orders`.
 - Timestamp vẫn lưu UTC; wp-admin hiển thị qua `wp_date()` và timezone được cấu hình trong WordPress.
 
+## 12. Hardening production WP.2B
+
+- Root cause parser WP.2A đã được tái hiện trên cả ba workbook thật: footer chỉ có nội dung ở cột `Tên hàng hóa` bị predicate “bất kỳ cột sản phẩm có dữ liệu” nhận nhầm thành OrderItem. Kết quả cũ lần lượt dư một item: 4, 24 và 19 thay vì 3, 23 và 18.
+- Mỗi hàng sau header được phân loại đúng một trong năm loại: `ORDER_ROW`, `CONTINUATION_ITEM_ROW`, `BLANK_ROW`, `FOOTER_OR_NONDATA_ROW`, `INVALID_DATA_ROW`. Item hợp lệ cần cả mã hàng hóa và tên hàng hóa; footer không có identity/mã hàng/số lượng bị loại theo cấu trúc, không theo literal `Thủ Kho`.
+- Blank row đóng context kế thừa hiện tại. Một item hợp lệ sau đó mà không có Order context tạo `EXCEL_ORPHAN_ITEM_ROW`; dữ liệu nghiệp vụ thiếu cấu trúc không bị nuốt mà tạo `EXCEL_INVALID_DATA_ROW`.
+- `total_rows`/“Dòng nghiệp vụ đã xử lý” chỉ đếm Order rows và continuation item rows. Title, header, blank và footer không được tính.
+- Import lưu stage an toàn từ upload/workbook/header/row/order/item tới Batch/Order/OrderItem/Error/finalize. Lỗi persistence giữ exception class, message đã sanitize, sheet, row, entity, operation và rollback flag trong metadata Batch; UI chỉ hiển thị thông báo an toàn kèm Batch ID.
+- Trước khi ghi business data, runtime xác nhận bốn bảng import dùng engine transactional. Mọi `$wpdb->insert()`/`update()` bắt buộc kiểm tra `false`; Order/OrderItem/Error/Batch finalize failure gây `ROLLBACK`, sau đó một transaction mới đánh dấu Batch `ERROR` và ghi lỗi an toàn.
+- Schema vẫn là version `2`: mọi cột được ghi đã tồn tại và nullable đúng yêu cầu; không có migration phá hủy.
+

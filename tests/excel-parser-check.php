@@ -18,6 +18,35 @@ function fixture( callable $build ): string {
 }
 function codes( array $result ): array { return array_column( $result['errors'], 'error_code' ); }
 
+/** @param int[] $order_rows @param array<int,string> $platforms */
+function production_shape( int $last_data_row, array $order_rows, array $platforms ): callable {
+	return static function ( Spreadsheet $book ) use ( $last_data_row, $order_rows, $platforms ): void {
+		$sheet = $book->getActiveSheet();
+		$sheet->setTitle( 'DANH SÁCH ĐƠN HÀNG' );
+		$sheet->mergeCells( 'A1:G1' );
+		$sheet->setCellValue( 'A1', 'DANH SÁCH LẤY HÀNG TEST' );
+		$sheet->fromArray( array( 'STT', 'Sàn & Mã Đơn', 'Ngày đặt', 'Mã đơn hàng eShop', 'Mã hàng hóa', 'Tên hàng hóa', 'Số lg' ), null, 'A3' );
+		$order_number = 0;
+		for ( $row = 4; $row <= $last_data_row; $row++ ) {
+			$is_order = in_array( $row, $order_rows, true );
+			if ( $is_order ) {
+				$order_number++;
+				$platform = $platforms[ $order_number ] ?? 'SHOPEE';
+				$label = 'LAZADA' === $platform ? 'Lazada' : 'Shopee';
+				$sheet->setCellValue( "A{$row}", $order_number );
+				$sheet->setCellValue( "B{$row}", $label . "\nTEST-" . $platform . '-' . str_pad( (string) $order_number, 3, '0', STR_PAD_LEFT ) );
+				$sheet->setCellValue( "C{$row}", '01/01/2026 10:00' );
+				$sheet->setCellValue( "D{$row}", 'ESHOP-' . $order_number );
+			}
+			$sheet->setCellValue( "E{$row}", 'SKU-' . $row );
+			$sheet->setCellValue( "F{$row}", 'Sản phẩm thử nghiệm ' . $row );
+			$sheet->setCellValue( "G{$row}", 1 );
+		}
+		$footer_row = $last_data_row + 2;
+		$sheet->setCellValue( "F{$footer_row}", 'Thủ Kho' );
+	};
+}
+
 $parser = new Ecomkit_Vuikhoe_Excel_Service();
 $paths = array();
 try {
@@ -66,5 +95,37 @@ try {
 	$paths[] = $legacy = fixture( static fn( Spreadsheet $book ) => $book->getActiveSheet()->fromArray( array( array( 'Mã đơn sàn' ), array( 'LEGACY-001' ) ) ) );
 	assert_true( 'LEGACY-001' === $parser->parse( $legacy )['orders'][0]['order_code'], 'Safe legacy source support regressed.' );
 
-	echo "WP.2A Excel parser checks passed.\n";
+	$shapes = array(
+		'A' => array( 6, array( 4, 5, 6 ), array( 1 => 'SHOPEE', 2 => 'SHOPEE', 3 => 'SHOPEE' ), 3, 3, 3, 0 ),
+		'B' => array( 26, array( 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 24, 25, 26 ), array_combine( range( 1, 16 ), array_merge( array_fill( 0, 13, 'SHOPEE' ), array_fill( 0, 3, 'LAZADA' ) ) ), 16, 23, 13, 3 ),
+		'C' => array( 21, array( 4, 5, 10, 13, 15, 18, 19, 21 ), array( 1 => 'SHOPEE', 2 => 'SHOPEE', 3 => 'LAZADA', 4 => 'LAZADA', 5 => 'LAZADA', 6 => 'LAZADA', 7 => 'SHOPEE', 8 => 'SHOPEE' ), 8, 18, 4, 4 ),
+	);
+	foreach ( $shapes as $name => $shape_definition ) {
+		list( $last_row, $order_rows, $platforms, $expected_orders, $expected_items, $expected_shopee, $expected_lazada ) = $shape_definition;
+		$paths[] = $path = fixture( production_shape( $last_row, $order_rows, $platforms ) );
+		$shape = $parser->parse( $path );
+		assert_true( 'SUCCESS' === $shape['status'], "Fixture {$name} must succeed." );
+		assert_true( $expected_orders === count( $shape['orders'] ), "Fixture {$name} order count failed." );
+		assert_true( $expected_items === $shape['raw']['item_rows'] && $expected_items === $shape['total_rows'], "Fixture {$name} item/business-row count failed." );
+		assert_true( $expected_shopee === ( $shape['raw']['platform_counts']['SHOPEE'] ?? 0 ) && $expected_lazada === ( $shape['raw']['platform_counts']['LAZADA'] ?? 0 ), "Fixture {$name} platform counts failed." );
+		assert_true( 1 === $shape['raw']['classifications']['BLANK_ROW'] && 1 === $shape['raw']['classifications']['FOOTER_OR_NONDATA_ROW'], "Fixture {$name} footer structure failed." );
+	}
+	assert_true( 5 === count( $parser->parse( $paths[ array_key_last( $paths ) ] )['orders'][1]['items'] ), 'Fixture C row 5 must have five items.' );
+	$fixture_b = $parser->parse( $paths[ count( $paths ) - 2 ] );
+	assert_true( 7 === count( $fixture_b['orders'][12]['items'] ), 'Fixture B row 17 must have seven items.' );
+
+	$paths[] = $limit = fixture( static function ( Spreadsheet $book ): void {
+		$sheet = $book->getActiveSheet();
+		$sheet->setCellValue( 'A1', 'Sàn & Mã Đơn' );
+		$sheet->setCellValue( 'A2002', "Shopee\nTOO-MANY" );
+	} );
+	assert_true( 'EXCEL_ROW_LIMIT_EXCEEDED' === $parser->parse( $limit )['errors'][0]['error_code'], 'Row limit was not enforced.' );
+
+	$invalid = tempnam( sys_get_temp_dir(), 'ecomkit-invalid-' );
+	if ( false === $invalid ) { throw new RuntimeException( 'Cannot allocate invalid fixture.' ); }
+	$paths[] = $invalid;
+	file_put_contents( $invalid, 'not an xlsx file' );
+	assert_true( 'EXCEL_READ_ERROR' === $parser->parse( $invalid )['errors'][0]['error_code'], 'Invalid workbook was not handled safely.' );
+
+	echo "WP.2B Excel parser checks passed.\n";
 } finally { foreach ( $paths as $path ) { @unlink( $path ); } }

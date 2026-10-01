@@ -5,6 +5,18 @@
 
 defined( 'ABSPATH' ) || exit;
 
+final class Ecomkit_Vuikhoe_Import_Exception extends RuntimeException {
+	/** @param array<string,mixed> $diagnostic */
+	public function __construct( private array $diagnostic, ?Throwable $previous = null ) {
+		parent::__construct( 'ECOMKIT_IMPORT_STAGE_FAILED', 0, $previous );
+	}
+
+	/** @return array<string,mixed> */
+	public function diagnostic(): array {
+		return $this->diagnostic;
+	}
+}
+
 final class Ecomkit_Vuikhoe_Import_Service {
 	public const MAX_UPLOAD_BYTES = 10485760;
 	private const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -37,7 +49,8 @@ final class Ecomkit_Vuikhoe_Import_Service {
 		);
 
 		if ( false === $wpdb->insert( $tables['batches'], $batch_data ) ) {
-			throw new RuntimeException( 'ECOMKIT_BATCH_CREATE_FAILED' );
+			$diagnostic = $this->failure_diagnostic( 'BATCH_PERSIST', new RuntimeException( 'ECOMKIT_BATCH_CREATE_FAILED' ), array( 'entity' => 'batches', 'operation' => 'insert' ), (string) $wpdb->last_error );
+			throw new Ecomkit_Vuikhoe_Import_Exception( $diagnostic );
 		}
 		$batch_id = (int) $wpdb->insert_id;
 
@@ -63,7 +76,13 @@ final class Ecomkit_Vuikhoe_Import_Service {
 			$result = ( new Ecomkit_Vuikhoe_Excel_Service() )->parse( $temp_path );
 			$this->persist_result( $batch_id, $original_filename, (int) $file['size'], $result );
 		} catch ( Throwable $exception ) {
-			$this->persist_failure( $batch_id, $original_filename, $this->upload_error( 'EXCEL_IMPORT_FAILED', 'Quá trình nhập Excel không thể hoàn tất an toàn.', 'Vui lòng kiểm tra file và thử lại; nếu lỗi lặp lại, liên hệ quản trị viên.' ) );
+			$diagnostic = $exception instanceof Ecomkit_Vuikhoe_Import_Exception
+				? $exception->diagnostic()
+				: $this->failure_diagnostic( 'WORKBOOK_LOAD', $exception );
+			$error = $this->upload_error( 'EXCEL_IMPORT_FAILED', 'Không thể hoàn tất quá trình nhập Excel.', sprintf( 'Vui lòng thử lại hoặc liên hệ quản trị viên kèm Batch ID #%d.', $batch_id ) );
+			$error['stage'] = $diagnostic['stage'];
+			$error['diagnostic'] = $diagnostic;
+			$this->persist_failure( $batch_id, $original_filename, $error );
 		} finally {
 			if ( is_file( $temp_path ) ) {
 				wp_delete_file( $temp_path );
@@ -116,10 +135,19 @@ final class Ecomkit_Vuikhoe_Import_Service {
 
 		$tables = Ecomkit_Vuikhoe_DB::table_names();
 		$now    = current_time( 'mysql', true );
-		$wpdb->query( 'START TRANSACTION' );
+		$stage = 'BATCH_PERSIST';
+		$context = array( 'entity' => 'transaction', 'operation' => 'begin', 'row' => null, 'sheet' => $result['raw']['sheet'] ?? null );
+		if ( ! Ecomkit_Vuikhoe_DB::supports_import_transactions() ) {
+			throw new Ecomkit_Vuikhoe_Import_Exception( $this->failure_diagnostic( $stage, new RuntimeException( 'ECOMKIT_NON_TRANSACTIONAL_TABLE' ), $context ) );
+		}
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
+			throw new Ecomkit_Vuikhoe_Import_Exception( $this->failure_diagnostic( $stage, new RuntimeException( 'ECOMKIT_TRANSACTION_START_FAILED' ), $context, (string) $wpdb->last_error ) );
+		}
 
 		try {
 			foreach ( $result['orders'] as $order ) {
+				$stage = 'ORDER_PERSIST';
+				$context = array( 'entity' => 'orders', 'operation' => 'insert', 'row' => $order['row'], 'sheet' => $order['sheet'] );
 				$code = (string) $order['order_code'];
 				$data = array(
 					'batch_id'                => $batch_id,
@@ -135,11 +163,13 @@ final class Ecomkit_Vuikhoe_Import_Service {
 					'updated_at'              => $now,
 				);
 				if ( false === $wpdb->insert( $tables['orders'], $data ) ) {
-					throw new RuntimeException( 'ECOMKIT_ORDER_INSERT_FAILED' );
+					throw new RuntimeException( 'ECOMKIT_ORDER_INSERT_FAILED:' . $this->sanitized_db_error( (string) $wpdb->last_error ) );
 				}
 
 				$order_id = (int) $wpdb->insert_id;
 				foreach ( $order['items'] as $item ) {
+					$stage = 'ITEM_PERSIST';
+					$context = array( 'entity' => 'order_items', 'operation' => 'insert', 'row' => $item['row'], 'sheet' => $item['sheet'] );
 					$item_data = array(
 						'order_id'             => $order_id,
 						'product_name'          => $item['product_name'],
@@ -150,12 +180,14 @@ final class Ecomkit_Vuikhoe_Import_Service {
 						'updated_at'            => $now,
 					);
 					if ( false === $wpdb->insert( $tables['order_items'], $item_data ) ) {
-						throw new RuntimeException( 'ECOMKIT_ORDER_ITEM_INSERT_FAILED' );
+						throw new RuntimeException( 'ECOMKIT_ORDER_ITEM_INSERT_FAILED:' . $this->sanitized_db_error( (string) $wpdb->last_error ) );
 					}
 				}
 			}
 
 			foreach ( $result['errors'] as $error ) {
+				$stage = 'ERROR_PERSIST';
+				$context = array( 'entity' => 'errors', 'operation' => 'insert', 'row' => $error['row'] ?? null, 'sheet' => $error['sheet'] ?? null );
 				$this->insert_error( $batch_id, $filename, $error, $now );
 			}
 
@@ -170,6 +202,8 @@ final class Ecomkit_Vuikhoe_Import_Service {
 				'item_rows'      => (int) ( $result['raw']['item_rows'] ?? 0 ),
 				'platform_counts'=> $result['raw']['platform_counts'] ?? array(),
 			);
+			$stage = 'BATCH_FINALIZE';
+			$context = array( 'entity' => 'batches', 'operation' => 'update', 'row' => null, 'sheet' => $result['raw']['sheet'] ?? null );
 			$updated  = $wpdb->update(
 				$tables['batches'],
 				array(
@@ -184,13 +218,15 @@ final class Ecomkit_Vuikhoe_Import_Service {
 				array( 'id' => $batch_id )
 			);
 			if ( false === $updated ) {
-				throw new RuntimeException( 'ECOMKIT_BATCH_UPDATE_FAILED' );
+				throw new RuntimeException( 'ECOMKIT_BATCH_UPDATE_FAILED:' . $this->sanitized_db_error( (string) $wpdb->last_error ) );
 			}
 
-			$wpdb->query( 'COMMIT' );
+			if ( false === $wpdb->query( 'COMMIT' ) ) {
+				throw new RuntimeException( 'ECOMKIT_TRANSACTION_COMMIT_FAILED:' . $this->sanitized_db_error( (string) $wpdb->last_error ) );
+			}
 		} catch ( Throwable $exception ) {
 			$wpdb->query( 'ROLLBACK' );
-			throw $exception;
+			throw new Ecomkit_Vuikhoe_Import_Exception( $this->failure_diagnostic( $stage, $exception, $context, (string) $wpdb->last_error ), $exception );
 		}
 	}
 
@@ -201,13 +237,18 @@ final class Ecomkit_Vuikhoe_Import_Service {
 		global $wpdb;
 		$tables = Ecomkit_Vuikhoe_DB::table_names();
 		$now    = current_time( 'mysql', true );
-		$wpdb->query( 'START TRANSACTION' );
+		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
+			throw new RuntimeException( 'ECOMKIT_FAILURE_TRANSACTION_START_FAILED' );
+		}
 		try {
 			$this->insert_error( $batch_id, $filename, $error, $now );
-			if ( false === $wpdb->update( $tables['batches'], array( 'status' => 'ERROR', 'error_count' => 1, 'finished_at' => $now, 'updated_at' => $now ), array( 'id' => $batch_id ) ) ) {
+			$metadata = array( 'plugin_version' => ECOMKIT_VUIKHOE_VERSION, 'failure_diagnostic' => $error['diagnostic'] ?? array( 'stage' => 'ERROR_PERSIST' ) );
+			if ( false === $wpdb->update( $tables['batches'], array( 'status' => 'ERROR', 'source_metadata' => wp_json_encode( $metadata ), 'error_count' => 1, 'finished_at' => $now, 'updated_at' => $now ), array( 'id' => $batch_id ) ) ) {
 				throw new RuntimeException( 'ECOMKIT_BATCH_FAILURE_UPDATE_FAILED' );
 			}
-			$wpdb->query( 'COMMIT' );
+			if ( false === $wpdb->query( 'COMMIT' ) ) {
+				throw new RuntimeException( 'ECOMKIT_FAILURE_TRANSACTION_COMMIT_FAILED' );
+			}
 		} catch ( Throwable $exception ) {
 			$wpdb->query( 'ROLLBACK' );
 			throw $exception;
@@ -223,7 +264,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 		$data   = array(
 			'batch_id'         => $batch_id,
 			'source'           => 'EXCEL',
-			'stage'            => 'IMPORT',
+			'stage'            => $error['stage'] ?? ( $error['diagnostic']['stage'] ?? 'IMPORT' ),
 			'marketplace'      => null,
 			'filename'         => $filename ?: null,
 			'sheet_name'       => $error['sheet'] ?? null,
@@ -239,15 +280,44 @@ final class Ecomkit_Vuikhoe_Import_Service {
 			'created_at'       => $now,
 		);
 		if ( false === $wpdb->insert( $tables['errors'], $data ) ) {
-			throw new RuntimeException( 'ECOMKIT_ERROR_INSERT_FAILED' );
+			throw new RuntimeException( 'ECOMKIT_ERROR_INSERT_FAILED:' . $this->sanitized_db_error( (string) $wpdb->last_error ) );
 		}
+	}
+
+	/** @param array<string,mixed> $context @return array<string,mixed> */
+	private function failure_diagnostic( string $stage, Throwable $exception, array $context = array(), string $db_error = '' ): array {
+		return array(
+			'stage'             => $stage,
+			'exception_class'   => get_class( $exception ),
+			'exception_message' => $this->sanitize_diagnostic_message( $exception->getMessage() ),
+			'db_error'          => $this->sanitized_db_error( $db_error ),
+			'sheet'             => $context['sheet'] ?? null,
+			'row'               => $context['row'] ?? null,
+			'entity'            => $context['entity'] ?? null,
+			'operation'         => $context['operation'] ?? null,
+			'rollback'          => in_array( $stage, array( 'ORDER_PERSIST', 'ITEM_PERSIST', 'ERROR_PERSIST', 'BATCH_FINALIZE' ), true ),
+		);
+	}
+
+	private function sanitize_diagnostic_message( string $message ): string {
+		$message = preg_replace( '/[\r\n\t]+/', ' ', $message );
+		$message = preg_replace( '/[\x00-\x1F\x7F]/', '', (string) $message );
+		return mb_substr( trim( (string) $message ), 0, 240 );
+	}
+
+	private function sanitized_db_error( string $message ): string {
+		if ( '' === trim( $message ) ) {
+			return '';
+		}
+		$message = preg_replace( "/(['\"]).*?\\1/u", '$1…$1', $message );
+		return $this->sanitize_diagnostic_message( (string) $message );
 	}
 
 	/**
 	 * @return array<string,mixed>
 	 */
 	private function upload_error( string $code, string $message, string $suggestion ): array {
-		return array( 'error_code' => $code, 'message' => $message, 'suggestion' => $suggestion );
+		return array( 'error_code' => $code, 'stage' => 'UPLOAD_VALIDATE', 'message' => $message, 'suggestion' => $suggestion );
 	}
 
 	/**

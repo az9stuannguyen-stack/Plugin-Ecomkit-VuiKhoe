@@ -43,6 +43,17 @@ Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
 
 Exit gate cuối: người dùng phải kiểm thử lại trên WordPress staging/local bằng chính file công ty trước đây lỗi `EXCEL_REQUIRED_COLUMN_MISSING`. Không bắt đầu WP.3 trước khi kiểm thử này đạt.
 
+### WP.2B — Production Excel Regression + Import Root Cause
+
+Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
+
+- Ba fixture tổng hợp tái hiện chính xác cấu trúc 3/3, 16/23 và 8/18 Order/OrderItem, gồm title merge, header row 3, continuation chains, blank row và footer.
+- Classifier cấu trúc loại footer khỏi item, giữ lỗi orphan/invalid, và định nghĩa rõ số dòng nghiệp vụ.
+- Persistence kiểm tra mọi write, xác nhận transactional engine, rollback business writes và lưu failure stage chẩn đoán an toàn.
+- Runtime `0.2.2`, schema giữ `2`; provider calls vẫn bằng 0.
+
+Exit gate cuối: chạy lại ba workbook trên WordPress thật, ưu tiên file shape 8/18. Không bắt đầu WP.3 trước khi File C import thành công.
+
 ## WP.3 — Shopee Provider Configuration + OAuth + Encrypted Credential Storage
 
 - Cấu hình provider server-side, OAuth state/callback và credential envelope được mã hóa.

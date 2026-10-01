@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
 define('ECOMKIT_VUIKHOE_DB_VERSION', 2);
-define('ECOMKIT_VUIKHOE_VERSION', '0.2.1');
+define('ECOMKIT_VUIKHOE_VERSION', '0.2.2');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -46,6 +46,10 @@ foreach ($sql as $statement) {
 $orders = $sql[2];
 check(str_contains($orders, 'UNIQUE KEY connection_order (connection_id,marketplace_order_id)'), 'Multi-shop uniqueness is missing.');
 check(str_contains($orders, 'matching_status varchar(32) DEFAULT NULL'), 'Pre-matching order status must remain nullable.');
+$items = $sql[3];
+foreach ( array( 'order_id bigint(20) unsigned NOT NULL', 'product_name varchar(255) DEFAULT NULL', 'sku varchar(191) DEFAULT NULL', 'quantity int(11) DEFAULT NULL', 'raw_product_metadata longtext DEFAULT NULL' ) as $required_item_column ) {
+    check(str_contains($items, $required_item_column), "OrderItem schema mismatch: {$required_item_column}.");
+}
 
 $activator = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-activator.php');
 $uninstall = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/uninstall.php');

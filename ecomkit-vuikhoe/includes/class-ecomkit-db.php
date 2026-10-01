@@ -95,6 +95,25 @@ final class Ecomkit_Vuikhoe_DB {
 	}
 
 	/**
+	 * Confirms that tables participating in an import transaction use a
+	 * transactional engine. Unknown or missing engines fail closed.
+	 */
+	public static function supports_import_transactions(): bool {
+		global $wpdb;
+
+		$tables = self::table_names();
+		foreach ( array( 'batches', 'orders', 'order_items', 'errors' ) as $key ) {
+			$status = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS LIKE %s', $wpdb->esc_like( $tables[ $key ] ) ), ARRAY_A );
+			$engine = is_array( $status ) ? strtoupper( (string) ( $status['Engine'] ?? '' ) ) : '';
+			if ( ! in_array( $engine, array( 'INNODB', 'NDBCLUSTER' ), true ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Returns dbDelta-compatible CREATE TABLE statements.
 	 *
 	 * @param array<string,string> $tables Table names.
