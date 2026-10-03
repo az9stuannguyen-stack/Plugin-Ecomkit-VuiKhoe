@@ -11,7 +11,11 @@ final class Ecomkit_Vuikhoe_Marketplace_Connection_Service {
 		$table = Ecomkit_Vuikhoe_DB::table_names()['marketplace_connections'];
 		$now = current_time( 'mysql', true );
 		$expires = gmdate( 'Y-m-d H:i:s', time() + (int) $tokens['expire_in'] );
-		$envelope = $this->encryption->encrypt( array( 'v' => 1, 'access_token' => $tokens['access_token'], 'refresh_token' => $tokens['refresh_token'], 'access_expires_at' => $expires, 'obtained_at' => $now ), $this->aad( $shop_id ) );
+		try {
+			$envelope = $this->encryption->encrypt( array( 'v' => 1, 'access_token' => $tokens['access_token'], 'refresh_token' => $tokens['refresh_token'], 'access_expires_at' => $expires, 'obtained_at' => $now ), $this->aad( $shop_id ) );
+		} catch ( Throwable $exception ) {
+			throw new RuntimeException( 'SHOPEE_TOKEN_ENCRYPT_FAILED', 0, $exception );
+		}
 		$metadata = wp_json_encode( array( 'refresh_ownership' => 'ECOMKIT', 'provider_config_fingerprint' => $config_fingerprint, 'access_expires_at' => $expires ) );
 		$id = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $table WHERE platform = %s AND external_shop_id = %s", 'SHOPEE', $shop_id ) );
 		$data = array( 'platform' => 'SHOPEE', 'external_shop_id' => $shop_id, 'status' => 'ACTIVE', 'credential_source' => 'OAUTH', 'credential_envelope' => $envelope, 'metadata' => $metadata, 'updated_at' => $now );

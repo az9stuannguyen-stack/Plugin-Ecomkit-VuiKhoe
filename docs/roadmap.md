@@ -148,3 +148,7 @@ Exit gate: acceptance nghiệp vụ, security review và rollback rehearsal.
 - Xóa dữ liệu tự động khi uninstall.
 - Đánh dấu Shopee production-ready dựa trên synthetic tests.
 
+# WP.3C gate
+
+Runtime `0.3.3`, database schema `4`: minimal Shopee token request body, strict integer Partner ID, callback/shop identity validation, and safe stage-specific live diagnostics. WP.4 remains blocked until a completely new live OAuth flow succeeds.
+

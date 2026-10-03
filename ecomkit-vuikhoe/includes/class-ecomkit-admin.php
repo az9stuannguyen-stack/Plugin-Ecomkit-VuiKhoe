@@ -70,7 +70,16 @@ final class Ecomkit_Vuikhoe_Admin {
 		$config_service = new Ecomkit_Vuikhoe_Shopee_Config();
 		$config = $config_service->get();
 		$encryption = new Ecomkit_Vuikhoe_Credential_Encryption();
-		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => $encryption->ready(), 'key_source' => $encryption->ready() ? $encryption->key_source_label() : '', 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ) ) );
+		$oauth_diagnostic = null;
+		if ( isset( $_GET['oauth_diag'] ) ) {
+			$reference = sanitize_key( wp_unslash( $_GET['oauth_diag'] ) );
+			$stored = get_transient( 'ecomkit_shopee_diag_' . $reference );
+			delete_transient( 'ecomkit_shopee_diag_' . $reference );
+			if ( is_array( $stored ) && (int) ( $stored['user_id'] ?? 0 ) === get_current_user_id() && is_array( $stored['diagnostic'] ?? null ) ) {
+				$oauth_diagnostic = $stored['diagnostic'];
+			}
+		}
+		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => $encryption->ready(), 'key_source' => $encryption->ready() ? $encryption->key_source_label() : '', 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ), 'oauth_diagnostic' => $oauth_diagnostic ) );
 	}
 
 	public function settings_page(): void {

@@ -99,3 +99,7 @@ Lỗi trả `error_code` ổn định, message người dùng an toàn, severity
 - UI, redirect và diagnostics chỉ chứa readiness, shop ID, expiry, safe error code/request ID; không chứa Partner Key, token, signature hoặc raw provider response.
 - Envelope chỉ ghi safe source identifier `explicit_v1` hoặc `wp_salts_v1`. Placeholder WordPress salts bị từ chối. Rotation salts không xóa ciphertext hay fallback plaintext; admin phải nhập lại Partner Key và ủy quyền lại.
 
+# WP.3C OAuth diagnostics
+
+OAuth failure details are stored for at most ten minutes in a one-time transient bound to the initiating admin. The browser URL receives only an opaque reference. Allowed fields are stage, classification, sanitized provider error/message, request ID, HTTP status, API path, and duration. Authorization codes, signatures, Partner Keys, access/refresh tokens, and raw provider responses are neither logged nor persisted in diagnostics.
+

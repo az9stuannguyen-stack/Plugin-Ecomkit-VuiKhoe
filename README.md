@@ -4,6 +4,8 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
+Hiện tại: **WP.3C — Live Shopee OAuth Token-Exchange Diagnostics**, plugin `0.3.3`, database schema `4`. WP.3B vẫn là baseline mã hóa credential; thông tin WP.3C này thay thế phiên bản/stage cũ bên dưới.
+
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
 Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
@@ -111,4 +113,8 @@ Plugin sẽ dùng API và cơ chế quyền của WordPress, WordPress Cron/Acti
 ## Nguồn chuẩn của WP.0
 
 Các quyết định trong tài liệu này được phục hồi từ README, handoff, Prisma schema, matching engine, exporter, Result/History/Error services, Shopee normalizer/adapter và marketplace worker của repo tham chiếu tại checkpoint ngày 2026-10-01. Khi tài liệu và code tham chiếu khác nhau, hành vi code và test hiện hành được ưu tiên, đồng thời khoảng trống được ghi rõ thay vì suy đoán.
+
+# WP.3C runtime note
+
+Current plugin runtime is `0.3.3` with database schema `4`. The initial Shopee token exchange sends only JSON string `code` and JSON integer `partner_id`; callback `shop_id` is retained for identity validation and is not unnecessarily sent in the request body. OAuth failures expose only stage, classification, sanitized provider error/message, request ID, HTTP status, API path, and duration through a one-time admin-bound diagnostic reference. Authorization codes, signatures, tokens, and raw provider responses are never displayed or logged.
 

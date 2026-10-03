@@ -89,3 +89,9 @@ Tổng số bằng nhau nhưng tập ID khác nhau vẫn là FAIL. Mismatch ph�
 
 Không đánh dấu PASS từ mock, fixture, synthetic E2E hoặc khi thiếu legacy artifact chính xác.
 
+# WP.3C token exchange contract
+
+Each one-time authorization code is exchanged at most once with `POST /api/v2/auth/token/get`. Production uses `https://partner.shopeemobile.com`; Sandbox uses `https://partner.test-stable.shopeemobile.com`. Query parameters are integer `partner_id`, Unix `timestamp`, and lowercase HMAC-SHA256 `sign` over `partner_id + api_path + timestamp`. The initial JSON body contains only string `code` and integer `partner_id`. Callback `shop_id` is retained and compared safely with `shop_id_list` when the response supplies that optional list.
+
+Callback stages run from `CALLBACK_RECEIVED` through `OAUTH_COMPLETE`. Admin diagnostics contain only stage, classification, sanitized provider error/message, request ID, HTTP status, API path, and duration in a one-time user-bound transient. The redirect carries only an opaque reference. It never contains the code, signature, Partner Key, access/refresh token, or raw response. Historical failures that stored only the generic error and request ID cannot be reconstructed into an exact provider cause.
+

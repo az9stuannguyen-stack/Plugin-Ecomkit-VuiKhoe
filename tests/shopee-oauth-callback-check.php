@@ -17,7 +17,9 @@ function admin_url( string $p ): string { return 'https://example.test/wp-admin/
 function is_ssl(): bool { return true; }
 function get_current_user_id(): int { return 7; }
 function get_transient( string $k ): mixed { return $GLOBALS['transients'][ $k ] ?? false; }
+function set_transient( string $k, mixed $v, int $ttl ): bool { $GLOBALS['transients'][ $k ] = $v; return true; }
 function delete_transient( string $k ): bool { unset( $GLOBALS['transients'][ $k ] ); return true; }
+function absint( mixed $v ): int { return abs( (int) $v ); }
 function is_wp_error( mixed $v ): bool { return false; }
 function wp_remote_post( string $url, array $args ): array { $GLOBALS['calls'][] = compact( 'url', 'args' ); return $GLOBALS['response']; }
 function wp_remote_retrieve_response_code( array $r ): int { return $r['status']; }
@@ -53,4 +55,12 @@ oauth_check(302===$success->status&&1===count($GLOBALS['calls'])&&1===count($GLO
 oauth_check(!str_contains(json_encode($GLOBALS['wpdb']->rows),'obviously-fake-access')&&!str_contains(json_encode($GLOBALS['wpdb']->rows),'obviously-fake-refresh'),'Callback persisted plaintext tokens.');
 $replay=$oauth->callback(new WP_REST_Request(array('code'=>'obviously-fake-code','shop_id'=>'456'))); oauth_check(400===$replay->status&&1===count($GLOBALS['calls']),'Replay performed a second token exchange.');
 oauth_check(str_contains($GLOBALS['calls'][0]['url'],'/api/v2/auth/token/get')&&!str_contains($GLOBALS['calls'][0]['url'],'order')&&!str_contains($GLOBALS['calls'][0]['url'],'escrow'),'Unauthorized provider endpoint called.');
+$body=json_decode($GLOBALS['calls'][0]['args']['body'],true); oauth_check(array('code','partner_id')===array_keys($body)&&!isset($body['shop_id'])&&is_int($body['partner_id']),'Callback token request body is not minimal or typed.');
+
+$GLOBALS['response']=array('status'=>200,'body'=>json_encode(array('error'=>'invalid_code','message'=>'The code is expired or used or invalid','request_id'=>'fake-request-id')));
+arm_flow( $config ); $failure=$oauth->callback(new WP_REST_Request(array('code'=>'one-time-fake-code','shop_id'=>'456')));
+$failure_query=array(); parse_str((string)parse_url($failure->headers['Location'],PHP_URL_QUERY),$failure_query); $diag_ref=$failure_query['oauth_diag']??''; $stored=$GLOBALS['transients']['ecomkit_shopee_diag_'.$diag_ref]??array();
+oauth_check(302===$failure->status&&'shopee_oauth_failed'===($failure_query['shopee_error']??'')&&!isset($failure_query['request_id'])&&!str_contains($failure->headers['Location'],'one-time-fake-code'),'Failure redirect exposed details or code.');
+oauth_check('TOKEN_PROVIDER_RESPONSE'===($stored['diagnostic']['stage']??'')&&'SHOPEE_AUTH_CODE_INVALID'===($stored['diagnostic']['classification']??'')&&'invalid_code'===($stored['diagnostic']['provider_error']??'')&&'fake-request-id'===($stored['diagnostic']['request_id']??''),'Safe callback diagnostic was not preserved.');
+oauth_check(1===count($GLOBALS['wpdb']->rows),'Provider failure activated a connection.');
 echo "WP.3 OAuth callback checks passed.\n";

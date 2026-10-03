@@ -81,11 +81,24 @@ $GLOBALS['http_calls'] = array();
 $GLOBALS['http_response'] = array( 'status' => 200, 'body' => json_encode( array( 'error' => '', 'access_token' => 'obviously-fake-access', 'refresh_token' => 'obviously-fake-refresh', 'expire_in' => 14400, 'shop_id_list' => array( 456 ) ) ) );
 $tokens = ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'obviously-fake-code', '456' );
 wp3_check( 1 === count( $GLOBALS['http_calls'] ) && 15 === $GLOBALS['http_calls'][0]['args']['timeout'] && true === $GLOBALS['http_calls'][0]['args']['sslverify'], 'Token transport contract failed.' );
+$request_body = json_decode( $GLOBALS['http_calls'][0]['args']['body'], true );
+wp3_check( array( 'code', 'partner_id' ) === array_keys( $request_body ) && is_string( $request_body['code'] ) && is_int( $request_body['partner_id'] ) && 0 === $GLOBALS['http_calls'][0]['args']['redirection'], 'Initial token body types or redirect policy are wrong.' );
+wp3_check( ! array_key_exists( 'shop_id', $request_body ), 'Initial token exchange unnecessarily sent shop_id.' );
 wp3_check( ! str_contains( $GLOBALS['http_calls'][0]['args']['body'], 'replacement-key' ), 'Partner Key leaked into request body.' );
 wp3_check( 14400 === $tokens['expire_in'], 'Provider expire_in was not retained.' );
 $GLOBALS['http_response']['body'] = json_encode( array( 'error' => 'invalid_code', 'request_id' => 'safe-request-1' ) );
-try { ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'bad', '456' ); throw new RuntimeException( 'Provider error accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Provider_Exception $e ) { wp3_check( 'SHOPEE_AUTH_CODE_INVALID' === $e->getMessage() && 'safe-request-1' === $e->request_id, 'Provider error mapping failed.' ); }
+try { ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'bad', '456' ); throw new RuntimeException( 'Provider error accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Provider_Exception $e ) { wp3_check( 'SHOPEE_AUTH_CODE_INVALID' === $e->getMessage() && 'safe-request-1' === $e->request_id() && 'TOKEN_PROVIDER_RESPONSE' === $e->diagnostic['stage'], 'Provider error mapping failed.' ); }
+foreach ( array( 'error_param' => 'SHOPEE_TOKEN_PARAMETER_INVALID', 'error_sign' => 'SHOPEE_SIGNATURE_INVALID', 'invalid_shop_id' => 'SHOPEE_AUTH_SHOP_INVALID', 'invalid_partner_id' => 'SHOPEE_INVALID_PARTNER_ID', 'error_server' => 'SHOPEE_PROVIDER_ERROR' ) as $provider_error => $classification ) {
+	$GLOBALS['http_response']['body'] = json_encode( array( 'error' => $provider_error, 'message' => 'safe provider message', 'request_id' => 'safe-request-map' ) );
+	try { ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'bad', '456' ); throw new RuntimeException( 'Mapped provider error accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Provider_Exception $e ) { wp3_check( $classification === $e->getMessage() && 'safe provider message' === $e->diagnostic['provider_message'], 'Provider error classification failed.' ); }
+}
 $GLOBALS['http_response']['body'] = json_encode( array( 'error' => '', 'access_token' => 'a', 'refresh_token' => 'r', 'expire_in' => 1, 'shop_id_list' => array( 999 ) ) );
 try { ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'code', '456' ); throw new RuntimeException( 'Shop mismatch accepted.' ); } catch ( RuntimeException $e ) { wp3_check( 'SHOPEE_OAUTH_SHOP_MISMATCH' === $e->getMessage(), 'Shop mismatch classification failed.' ); }
+$GLOBALS['http_response'] = array( 'status' => 200, 'body' => json_encode( array( 'error' => '', 'access_token' => 'a', 'refresh_token' => 'r', 'expire_in' => 60 ) ) );
+wp3_check( 60 === ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'code', '456' )['expire_in'], 'Optional shop_id_list was incorrectly required.' );
+$GLOBALS['http_response'] = array( 'status' => 502, 'body' => json_encode( array( 'error' => '', 'message' => 'gateway failure' ) ) );
+try { ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'code', '456' ); throw new RuntimeException( 'HTTP error accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Provider_Exception $e ) { wp3_check( 'SHOPEE_TOKEN_HTTP_ERROR' === $e->getMessage(), 'HTTP error classification failed.' ); }
+$GLOBALS['http_response'] = array( 'status' => 200, 'body' => '{invalid-json' );
+try { ( new Ecomkit_Vuikhoe_Shopee_HTTP_Client() )->exchange( $saved3, 'obviously-fake-replacement-key', 'code', '456' ); throw new RuntimeException( 'Invalid JSON accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Provider_Exception $e ) { wp3_check( 'SHOPEE_TOKEN_INVALID_JSON' === $e->getMessage(), 'Invalid JSON classification failed.' ); }
 
 echo "WP.3 Shopee encryption, config, signing and token checks passed.\n";
