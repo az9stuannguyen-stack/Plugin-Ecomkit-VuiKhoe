@@ -69,7 +69,8 @@ final class Ecomkit_Vuikhoe_Admin {
 	public function marketplace_page(): void {
 		$config_service = new Ecomkit_Vuikhoe_Shopee_Config();
 		$config = $config_service->get();
-		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => ( new Ecomkit_Vuikhoe_Credential_Encryption() )->ready(), 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ) ) );
+		$encryption = new Ecomkit_Vuikhoe_Credential_Encryption();
+		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => $encryption->ready(), 'key_source' => $encryption->ready() ? $encryption->key_source_label() : '', 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ) ) );
 	}
 
 	public function settings_page(): void {
@@ -81,7 +82,8 @@ final class Ecomkit_Vuikhoe_Admin {
 			$test = array( 'ok' => 'pass' === $result, 'stage' => strtoupper( $stage ), 'classification' => strtoupper( $code ) );
 		}
 		$shopee = new Ecomkit_Vuikhoe_Shopee_Config();
-		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose(), 'database_runtime' => Ecomkit_Vuikhoe_DB::database_runtime_diagnostic(), 'orders_schema' => Ecomkit_Vuikhoe_DB::orders_schema_diagnostic(), 'excel_runtime' => ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->snapshot(), 'runtime_test' => $test, 'marketplace_security' => array( 'encryption' => ( new Ecomkit_Vuikhoe_Credential_Encryption() )->ready(), 'shopee' => $shopee->readiness(), 'callback_https' => 'https' === strtolower( (string) wp_parse_url( $shopee->callback_url(), PHP_URL_SCHEME ) ) ) ) );
+		$encryption = new Ecomkit_Vuikhoe_Credential_Encryption();
+		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose(), 'database_runtime' => Ecomkit_Vuikhoe_DB::database_runtime_diagnostic(), 'orders_schema' => Ecomkit_Vuikhoe_DB::orders_schema_diagnostic(), 'excel_runtime' => ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->snapshot(), 'runtime_test' => $test, 'marketplace_security' => array( 'encryption' => $encryption->ready(), 'key_source' => $encryption->ready() ? $encryption->key_source_label() : '', 'shopee' => $shopee->readiness(), 'callback_https' => 'https' === strtolower( (string) wp_parse_url( $shopee->callback_url(), PHP_URL_SCHEME ) ) ) ) );
 	}
 
 	public function handle_shopee_save_config(): void {

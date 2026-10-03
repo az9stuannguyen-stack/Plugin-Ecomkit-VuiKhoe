@@ -22,6 +22,7 @@
 	<h2><?php echo esc_html__( 'Marketplace Security Diagnostics', 'ecomkit-vuikhoe' ); ?></h2>
 	<table class="widefat striped" style="max-width:900px"><tbody>
 	<tr><th><?php echo esc_html__( 'Credential master key', 'ecomkit-vuikhoe' ); ?></th><td><strong><?php echo esc_html( $marketplace['encryption'] ? 'READY' : 'NOT CONFIGURED' ); ?></strong></td></tr>
+	<tr><th><?php echo esc_html__( 'Key source', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $marketplace['encryption'] ? $marketplace['key_source'] : 'UNAVAILABLE' ); ?></td></tr>
 	<tr><th><?php echo esc_html__( 'Encryption', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $marketplace['encryption'] ? 'READY' : 'FAIL' ); ?></td></tr>
 	<tr><th><?php echo esc_html__( 'Shopee provider config', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $marketplace['shopee']['ready'] ? 'READY' : 'INCOMPLETE' ); ?></td></tr>
 	<tr><th><?php echo esc_html__( 'Callback HTTPS', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $marketplace['callback_https'] ? 'YES' : 'NO' ); ?></td></tr>

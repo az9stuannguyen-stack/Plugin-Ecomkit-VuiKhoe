@@ -15,6 +15,7 @@ final class ConnectionWpdb {
 }
 $GLOBALS['wpdb'] = new ConnectionWpdb();
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-db.php';
+require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-credential-key-resolver.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-credential-encryption.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-marketplace-connection-service.php';
 $service = new Ecomkit_Vuikhoe_Marketplace_Connection_Service();

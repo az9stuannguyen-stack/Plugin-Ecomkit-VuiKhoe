@@ -4,6 +4,8 @@
 
 Plugin WordPress đã có provider config, signer, OAuth start/callback, token exchange và encrypted MarketplaceConnection. Live authorization vẫn là `VALIDATION_PENDING`; automated tests không thay thế Shopee Console và shop authorization thật. WP.3 không triển khai Order API, escrow hoặc refresh execution.
 
+Credential encryption ưu tiên explicit `ECOMKIT_CREDENTIAL_KEY` khi được cấu hình hợp lệ; mặc định dùng `wp_salts_v1` dẫn xuất từ WordPress Security Keys. Salt rotation yêu cầu nhập lại Partner Key và reauthorize shop; ciphertext cũ không bị tự động xóa hay chuyển thành plaintext.
+
 Authorization dùng `/api/v2/shop/auth_partner`; token exchange dùng `/api/v2/auth/token/get`. Production host là `https://partner.shopeemobile.com`, Sandbox là `https://partner.test-stable.shopeemobile.com`. Callback động là `rest_url('ecomkit/v1/shopee/callback')` và Production bắt buộc HTTPS.
 
 Authorization code là single-use, short-lived (thường khoảng 10 phút). Access token thường khoảng 4 giờ nhưng runtime luôn dùng `expire_in`; refresh token thường khoảng 30 ngày và chỉ được lưu cho lifecycle tương lai. Khi refresh được triển khai, refresh token mới phải thay thế token cũ.

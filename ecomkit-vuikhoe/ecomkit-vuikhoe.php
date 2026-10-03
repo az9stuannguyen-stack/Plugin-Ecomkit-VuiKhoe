@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Ecomkit - Vui Khỏe
  * Description: Nền tảng quản lý và đối chiếu đơn hàng thương mại điện tử cho Vui Khỏe.
- * Version: 0.3.1
+ * Version: 0.3.2
  * Requires at least: 6.6
  * Requires PHP: 8.1
  * Author: Vui Khỏe
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.3.1' );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.3.2' );
 define( 'ECOMKIT_VUIKHOE_DB_VERSION', 4 );
 define( 'ECOMKIT_VUIKHOE_MIN_PHP', '8.1' );
 define( 'ECOMKIT_VUIKHOE_MIN_WP', '6.6' );
@@ -68,7 +68,7 @@ if ( ! is_readable( $ecomkit_vuikhoe_autoload ) ) {
 }
 
 require_once $ecomkit_vuikhoe_autoload;
-foreach ( array( 'class-ecomkit-credential-encryption.php', 'class-ecomkit-shopee-environment.php', 'class-ecomkit-shopee-signer.php', 'class-ecomkit-shopee-config.php', 'class-ecomkit-shopee-http-client.php', 'class-ecomkit-marketplace-connection-service.php', 'class-ecomkit-shopee-oauth.php' ) as $ecomkit_vuikhoe_class ) {
+foreach ( array( 'class-ecomkit-credential-key-resolver.php', 'class-ecomkit-credential-encryption.php', 'class-ecomkit-shopee-environment.php', 'class-ecomkit-shopee-signer.php', 'class-ecomkit-shopee-config.php', 'class-ecomkit-shopee-http-client.php', 'class-ecomkit-marketplace-connection-service.php', 'class-ecomkit-shopee-oauth.php' ) as $ecomkit_vuikhoe_class ) {
 	require_once ECOMKIT_VUIKHOE_DIR . 'includes/' . $ecomkit_vuikhoe_class;
 }
 

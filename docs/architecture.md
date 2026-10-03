@@ -174,3 +174,10 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - OAuth start là admin-post có capability + nonce; flow nonce 32 byte nằm trong transient 10 phút và cookie HttpOnly/Secure/SameSite=Lax. Callback REST public nhưng flow được consume một lần và ràng buộc admin, environment, Partner ID fingerprint và callback URL.
 - Provider key và token được mã hóa AES-256-GCM bằng master key ngoài database. OAuth chỉ upsert connection `(SHOPEE, external_shop_id)` sau khi response và encryption hợp lệ; không chạm Batch, Order, OrderItem hay SyncRun.
 
+## 16. WP.3B — Credential key resolution
+
+- Runtime `0.3.2`, schema vẫn `4`. Resolver ưu tiên explicit `ECOMKIT_CREDENTIAL_KEY` hợp lệ (`explicit_v1`), nếu constant không tồn tại thì dẫn xuất `wp_salts_v1` từ tám WordPress keys/salts theo thứ tự cố định.
+- KDF là HKDF-SHA256, info `ecomkit-vuikhoe|credential-master|v1`, output 32 byte. Domain, filesystem, database credential và table prefix không tham gia derivation.
+- Envelope ghi identifier `key_source` nhưng không chứa key. Legacy envelope không có identifier tiếp tục dùng resolution ưu tiên cũ để giữ explicit-key compatibility.
+- Không lưu master key/derived key vào option, table, transient, cookie hay cache. Rotation WordPress salts làm credential cũ fail closed và yêu cầu nhập lại/ủy quyền lại.
+

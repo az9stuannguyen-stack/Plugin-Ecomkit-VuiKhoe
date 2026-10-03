@@ -29,6 +29,7 @@ class WP_REST_Request { public function __construct( private array $p = array() 
 class WP_REST_Response { public function __construct( public mixed $data = null, public int $status = 200, public array $headers = array() ) {} }
 function wp3_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 
+require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-credential-key-resolver.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-credential-encryption.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-shopee-environment.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-shopee-signer.php';
@@ -40,6 +41,9 @@ $one = $crypto->encrypt( array( 'secret' => 'obviously-fake-secret' ), 'test-aad
 $two = $crypto->encrypt( array( 'secret' => 'obviously-fake-secret' ), 'test-aad' );
 wp3_check( $one !== $two, 'Random IV did not vary ciphertext.' );
 wp3_check( 'obviously-fake-secret' === $crypto->decrypt( $one, 'test-aad' )['secret'], 'Encryption round trip failed.' );
+wp3_check( 'explicit_v1' === json_decode( $one, true )['key_source'], 'Explicit envelope key source missing.' );
+$legacy = json_decode( $one, true ); unset( $legacy['key_source'] );
+wp3_check( 'obviously-fake-secret' === $crypto->decrypt( json_encode( $legacy ), 'test-aad' )['secret'], 'Legacy explicit envelope compatibility failed.' );
 foreach ( array( 'ciphertext', 'tag' ) as $field ) {
 	$bad = json_decode( $one, true ); $bad[ $field ] = base64_encode( str_repeat( 'X', strlen( base64_decode( $bad[ $field] ) ) ) );
 	try { $crypto->decrypt( json_encode( $bad ), 'test-aad' ); throw new RuntimeException( 'Tamper accepted.' ); } catch ( RuntimeException $e ) { wp3_check( 'ECOMKIT_CREDENTIAL_DECRYPT_FAILED' === $e->getMessage(), 'Tamper classification wrong.' ); }

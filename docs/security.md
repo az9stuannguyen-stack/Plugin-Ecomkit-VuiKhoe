@@ -93,8 +93,9 @@ Lỗi trả `error_code` ổn định, message người dùng an toàn, severity
 
 ## 12. Shopee credential security WP.3
 
-- `ECOMKIT_CREDENTIAL_KEY` phải là Base64 của đúng 32 byte, cấu hình trong `wp-config.php`; plugin không sinh, lưu database hay hiển thị master key.
+- Advanced mode dùng `ECOMKIT_CREDENTIAL_KEY` là Base64 của đúng 32 byte. Default mode dùng HKDF-SHA256 trên tám WordPress Security Keys theo thứ tự cố định; không cần sửa `wp-config.php` và không lưu derived master key trong database.
 - Partner Key và per-shop access/refresh token dùng envelope version 1, AES-256-GCM, IV ngẫu nhiên 12 byte, tag 16 byte và AAD theo loại credential. Envelope sai, key sai hoặc bị sửa đều fail closed.
 - OAuth state là opaque nonce 32 byte, transient 10 phút, one-time consume và cookie HttpOnly/Secure/SameSite=Lax. Callback không log hoặc lưu authorization code.
 - UI, redirect và diagnostics chỉ chứa readiness, shop ID, expiry, safe error code/request ID; không chứa Partner Key, token, signature hoặc raw provider response.
+- Envelope chỉ ghi safe source identifier `explicit_v1` hoặc `wp_salts_v1`. Placeholder WordPress salts bị từ chối. Rotation salts không xóa ciphertext hay fallback plaintext; admin phải nhập lại Partner Key và ủy quyền lại.
 

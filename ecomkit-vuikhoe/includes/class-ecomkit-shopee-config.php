@@ -50,6 +50,9 @@ final class Ecomkit_Vuikhoe_Shopee_Config {
 			$this->partner_key( $config );
 			return array( 'state' => 'configured', 'mask' => self::FIXED_SECRET_MASK, 'status' => 'Đã lưu an toàn' );
 		} catch ( Throwable $exception ) {
+			if ( Ecomkit_Vuikhoe_Credential_Key_Resolver::WP_SALTS === $this->encryption->envelope_key_source( (string) $config['encrypted_partner_key'] ) ) {
+				return array( 'state' => 'rotation_required', 'mask' => '', 'status' => 'Khóa bảo mật WordPress đã thay đổi. Credential cũ không thể giải mã.' );
+			}
 			return array( 'state' => 'decrypt_failed', 'mask' => '', 'status' => 'Không thể đọc credential đã mã hóa' );
 		}
 	}
