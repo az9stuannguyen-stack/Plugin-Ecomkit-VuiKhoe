@@ -160,3 +160,7 @@ Runtime `0.4.0`, schema `4`: locked single-use Shopee refresh rotation, `ensure_
 
 Runtime `0.4.1`, schema `4`: read-only GetOrderList/GetOrderDetail foundation, shop signing, token lifecycle integration, bounded pagination/detail batching, strict identity completeness, safe diagnostics, and an admin live test capped at two provider calls. Excel reconciliation and provider normalization remain blocked until live Order API validation passes; Payment/Escrow remains out of scope.
 
+# WP.4B.1 gate
+
+Runtime `0.4.2`, schema `4`: live GetOrderList alignment makes `order_status` optional, requests it explicitly, adds safe response-shape diagnostics, and replaces manual time entry with a WordPress-timezone full-day selector. WP.5 remains unimplemented; its future bounded windows should be derived from Excel business dates rather than manual dates or unbounded history scans.
+

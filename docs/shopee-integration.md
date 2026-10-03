@@ -109,3 +109,9 @@ GetOrderList accepts only `create_time` or `update_time`, positive ordered Unix 
 
 GetOrderDetail accepts exact safe `order_sn` strings and explicit optional-field names. A low-level call is capped at 50; the batched client chunks larger sets and reports requested/returned counts, missing, extra, and duplicate identities without fabricating data. The live admin test converts `datetime-local` values with `wp_timezone()`, makes at most one five-order list call and one detail call, and persists no provider orders or PII.
 
+# WP.4B.1 live response alignment
+
+GetOrderList explicitly sends `response_optional_fields=order_status` as a business query filter; it is excluded from the shop-level signature base. Each list item requires only a non-empty string `order_sn`. `order_status` is preserved when returned and otherwise remains `null`. A final page may use an empty or omitted `next_cursor` when `more=false`.
+
+The default admin test accepts one date and converts its WordPress-timezone boundaries to Unix seconds using `DateTimeImmutable`: local `00:00:00` to local `23:59:59`. No timezone offset is hardcoded. Failure diagnostics contain shape metadata only. WP.5 should later derive bounded query windows from imported Excel order dates; no all-history crawler or reconciliation is introduced here.
+

@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.4B — Shopee Order API Foundation**, plugin `0.4.1`, database schema `4`. GetOrderList/GetOrderDetail chỉ đọc, dùng shop-level signing và luôn lấy token qua WP.4A; chưa persist, reconcile hoặc gọi Payment/Escrow.
+Hiện tại: **WP.4B.1 — Shopee Order List Live Response Alignment**, plugin `0.4.2`, database schema `4`. List parser chỉ bắt buộc `order_sn`; `order_status` là tùy chọn và được yêu cầu rõ bằng `response_optional_fields=order_status`.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.4.1`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.4.2`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
@@ -127,4 +127,10 @@ WP.3C runtime was `0.3.3` with database schema `4`. The initial Shopee token exc
 The plugin supports read-only `GET /api/v2/order/get_order_list` and `GET /api/v2/order/get_order_detail`. List windows are limited to 15 days, page size to 1-100, cursors remain opaque, pagination stalls/cycles are rejected, and synchronous all-page reads stop at 100 pages as an Ecomkit safety guard. Detail calls accept at most 50 exact `order_sn` values; the higher-level client batches larger sets and reports missing, extra, and duplicate identities.
 
 Every provider request calls `ensure_usable_access_token(connectionId)` first and uses shop-level signing. The admin live test reads at most five orders with one list call and, when non-empty, one detail call. It stores only a short-lived PII-free preview. WP.4B performs no Batch/Order/SyncRun persistence, Excel reconciliation, Payment/Escrow request, PDF work, retry loop, cron, or background sync.
+
+# WP.4B.1 live alignment
+
+The admin Order API test now accepts one WordPress-local calendar date. The server maps that date to local `00:00:00` through `23:59:59` with `wp_timezone()` and `DateTimeImmutable`; operators do not enter hours manually. GetOrderList requests explicitly include `response_optional_fields=order_status`, without changing the shop signature base. A missing list `order_status` is represented as `null`, while a missing/empty `order_sn` remains invalid.
+
+On structural failures, diagnostics record only top-level/response/first-item key names, JSON/PHP types, and list count—never raw JSON, order values, PII, signed URLs, or tokens. Future WP.5 reconciliation should derive bounded Shopee windows from imported Excel order dates and exact `Mã đơn sàn = order_sn`; it must not perform an unbounded historical fetch. That automation is not implemented in WP.4B.1.
 
