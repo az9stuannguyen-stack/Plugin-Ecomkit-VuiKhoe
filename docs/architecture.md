@@ -167,3 +167,10 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Migration giữ nguyên kiểu cột đang cài đặt, kiểm tra số dòng `orders`, `order_items`, `batches`, `errors` trước/sau, xác minh contract rồi mới tăng schema version.
 - WP.2 yêu cầu identity Order ở tầng ứng dụng; `connection_id` và `matching_status` vẫn `NULL` cho đến reconciliation. Admin chỉ hiển thị tên cột lỗi và trạng thái contract, không hiển thị SQL hoặc giá trị Order.
 
+## 15. WP.3 — Shopee OAuth foundation
+
+- Runtime `0.3.0`, schema vẫn `4`: provider config nằm trong WordPress option; từng shop dùng bảng `marketplace_connections` hiện hữu nên không cần migration.
+- Resolver tập trung hai host Sandbox/Production. Signer dùng HMAC-SHA256 trên `partner_id + api_path + Unix timestamp`. HTTP client WP.3 chỉ có token exchange `/api/v2/auth/token/get`.
+- OAuth start là admin-post có capability + nonce; flow nonce 32 byte nằm trong transient 10 phút và cookie HttpOnly/Secure/SameSite=Lax. Callback REST public nhưng flow được consume một lần và ràng buộc admin, environment, Partner ID fingerprint và callback URL.
+- Provider key và token được mã hóa AES-256-GCM bằng master key ngoài database. OAuth chỉ upsert connection `(SHOPEE, external_shop_id)` sau khi response và encryption hợp lệ; không chạm Batch, Order, OrderItem hay SyncRun.
+

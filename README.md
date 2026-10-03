@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Stage **WP.2E — Orders Schema Contract Repair** triển khai plugin phiên bản `0.2.5`, schema `4`: sửa explicit `orders.matching_status` thành nullable cho giai đoạn trước reconciliation, giữ `connection_id=NULL`, và kiểm tra schema readiness an toàn. Chưa có Shopee/Lazada API, matching, kết quả 24 cột cuối, export hoặc PDF.
+Stage **WP.3 — Shopee Provider Configuration + OAuth** triển khai plugin phiên bản `0.3.0`, schema `4`: cấu hình ứng dụng Shopee, OAuth shop, AES-256-GCM credential storage và UI connection an toàn. Chưa có Shopee Order API, refresh tự động, escrow, matching, kết quả 24 cột cuối, export hoặc PDF.
 
 Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
 
@@ -37,7 +37,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.2.5`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.3.0`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
@@ -72,7 +72,21 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 - Parse PDF, matching và sinh kết quả 24 cột cuối.
 - Result reconciliation và export XLSX/CSV thực tế.
-- Shopee OAuth, signing, API, token/credential storage runtime hoặc provider calls.
+- Shopee Order API, Payment/Escrow, token refresh tự động hoặc provider business calls.
+
+## Cấu hình Shopee WP.3
+
+Tạo khóa 32 byte Base64 ngoài plugin và thêm thủ công vào `wp-config.php`:
+
+```bash
+php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
+```
+
+```php
+define('ECOMKIT_CREDENTIAL_KEY', '<generated-base64-value>');
+```
+
+Không commit khóa thật. Sau đó vào **Ecomkit → Cài đặt** xác nhận Marketplace Security Diagnostics, rồi vào **Ecomkit → Marketplace** chọn Sandbox/Production, nhập đúng Test/Live Partner ID và Partner Key. Callback được tạo động bằng `rest_url('ecomkit/v1/shopee/callback')`; đăng ký URL/domain này trong Shopee Open Platform trước khi kết nối.
 - Background jobs/Action Scheduler.
 
 WP.2 cần được kiểm thử thủ công trên staging bằng **bản sao** file Excel thực tế. Synthetic tests không thay thế production Golden validation và việc import Excel thành công không đồng nghĩa Shopee đã sẵn sàng.

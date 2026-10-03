@@ -18,6 +18,14 @@
 	<?php foreach ( $orders_schema['fields'] as $field => $status ) : ?><tr><th><code><?php echo esc_html( $field ); ?></code></th><td><?php echo esc_html( $status['required'] ? 'required' : 'nullable before reconciliation' ); ?></td><td><?php echo esc_html( $status['compatible'] ? ( $status['nullable'] ? 'nullable / OK' : 'required / OK' ) : 'incompatible' ); ?></td></tr><?php endforeach; ?>
 	</tbody></table>
 	<h2><?php echo esc_html__( 'Excel Runtime Diagnostics', 'ecomkit-vuikhoe' ); ?></h2>
+	<?php $marketplace = $data['marketplace_security']; ?>
+	<h2><?php echo esc_html__( 'Marketplace Security Diagnostics', 'ecomkit-vuikhoe' ); ?></h2>
+	<table class="widefat striped" style="max-width:900px"><tbody>
+	<tr><th><?php echo esc_html__( 'Credential master key', 'ecomkit-vuikhoe' ); ?></th><td><strong><?php echo esc_html( $marketplace['encryption'] ? 'READY' : 'NOT CONFIGURED' ); ?></strong></td></tr>
+	<tr><th><?php echo esc_html__( 'Encryption', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $marketplace['encryption'] ? 'READY' : 'FAIL' ); ?></td></tr>
+	<tr><th><?php echo esc_html__( 'Shopee provider config', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $marketplace['shopee']['ready'] ? 'READY' : 'INCOMPLETE' ); ?></td></tr>
+	<tr><th><?php echo esc_html__( 'Callback HTTPS', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $marketplace['callback_https'] ? 'YES' : 'NO' ); ?></td></tr>
+	</tbody></table>
 	<?php if ( is_array( $data['runtime_test'] ) ) : ?>
 		<div class="notice <?php echo $data['runtime_test']['ok'] ? 'notice-success' : 'notice-error'; ?> inline"><p>
 			<?php echo esc_html( $data['runtime_test']['ok'] ? __( 'PASS — Ghi và đọc workbook XLSX tổng hợp thành công.', 'ecomkit-vuikhoe' ) : __( 'FAIL — Môi trường Excel chưa sẵn sàng.', 'ecomkit-vuikhoe' ) ); ?>

@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
 define('ECOMKIT_VUIKHOE_DB_VERSION', 4);
-define('ECOMKIT_VUIKHOE_VERSION', '0.2.5');
+define('ECOMKIT_VUIKHOE_VERSION', '0.3.0');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -57,6 +57,8 @@ $uninstall = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/uninstall.php');
 $admin = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-admin.php');
 $import = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-import-service.php');
 $db = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-db.php');
+$oauth = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-shopee-oauth.php');
+$plugin_file = file_get_contents(__DIR__ . '/../ecomkit-vuikhoe/ecomkit-vuikhoe.php');
 $runtime = implode("\n", array_map(
     static fn(string $path): string => (string) file_get_contents($path),
     array_merge(
@@ -78,6 +80,13 @@ check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_impor
 check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_import_excel'), 'Authenticated Excel action is missing.');
 check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_test_excel_runtime'), 'Authenticated Excel runtime-test action is missing.');
 check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_test_excel_runtime', 'ecomkit_runtime_nonce' )"), 'Excel runtime-test nonce validation is missing.');
+check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_shopee_save_config', 'ecomkit_shopee_nonce' )"), 'Shopee config nonce validation is missing.');
+check(str_contains((string) $admin, 'handle_shopee_save_config'), 'Shopee provider config handler is missing.');
+check(str_contains((string) $oauth, "check_admin_referer( 'ecomkit_shopee_oauth_start', 'ecomkit_shopee_nonce' )"), 'Shopee OAuth start nonce validation is missing.');
+check(str_contains((string) $oauth, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Shopee OAuth start capability validation is missing.');
+check(str_contains((string) $oauth, "'permission_callback' => '__return_true'"), 'Public Shopee callback route is missing.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.3.0' )"), 'WP.3 plugin version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 4 )"), 'WP.3 must retain DB schema 4.');
 check(str_contains((string) $import, "'xlsx' !== strtolower"), 'XLSX-only extension validation is missing.');
 check(str_contains((string) $import, 'wp_check_filetype_and_ext'), 'WordPress content/type validation is missing.');
 check(str_contains((string) $import, 'is_uploaded_file'), 'PHP upload provenance validation is missing.');
@@ -86,7 +95,7 @@ check(str_contains((string) $import, "'connection_id'           => null"), 'Exce
 check(str_contains((string) $import, "'platform'                => (string) \$order['platform']"), 'Excel import must persist only the parser-derived platform.');
 check(str_contains((string) $import, "\$wpdb->query( 'START TRANSACTION' )"), 'Import transaction is missing.');
 check(substr_count((string) $admin, 'add_submenu_page(') === 7, 'Exactly seven submenu registrations are required.');
-check(!preg_match('/wp_remote_(get|post|request)|curl_(init|exec)|\/api\/v2\//i', $runtime), 'Provider/network call detected.');
+check(!preg_match('/curl_(init|exec)|\/api\/v2\/(?:order|payment|auth\/access_token)/i', $runtime), 'Forbidden provider/business call detected.');
 check(!preg_match('/partner[_ -]?key\s*[=:]\s*[\'\"][A-Za-z0-9]{12,}|access[_ -]?token\s*[=:]\s*[\'\"][A-Za-z0-9]{12,}/i', $runtime), 'Real-looking provider secret detected.');
 
 echo "WP.1 foundation checks passed.\n";

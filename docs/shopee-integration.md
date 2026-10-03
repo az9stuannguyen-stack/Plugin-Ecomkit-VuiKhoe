@@ -1,8 +1,12 @@
 # Tích hợp Shopee
 
-## 1. Trạng thái phục hồi
+## 1. Trạng thái WP.3
 
-Hệ thống tham chiếu đã có signer chính thức, OAuth foundation, refresh lifecycle, Order APIs, normalizer, adapter, synthetic E2E và chế độ external read-only. Tuy nhiên trạng thái live vẫn là `VALIDATION_PENDING`; `SHOPEE_LEGACY_DATA_MATCH = PENDING`. Plugin WordPress chưa triển khai bất kỳ phần runtime nào và không được coi synthetic evidence của repo cũ là nghiệm thu live cho plugin mới.
+Plugin WordPress đã có provider config, signer, OAuth start/callback, token exchange và encrypted MarketplaceConnection. Live authorization vẫn là `VALIDATION_PENDING`; automated tests không thay thế Shopee Console và shop authorization thật. WP.3 không triển khai Order API, escrow hoặc refresh execution.
+
+Authorization dùng `/api/v2/shop/auth_partner`; token exchange dùng `/api/v2/auth/token/get`. Production host là `https://partner.shopeemobile.com`, Sandbox là `https://partner.test-stable.shopeemobile.com`. Callback động là `rest_url('ecomkit/v1/shopee/callback')` và Production bắt buộc HTTPS.
+
+Authorization code là single-use, short-lived (thường khoảng 10 phút). Access token thường khoảng 4 giờ nhưng runtime luôn dùng `expire_in`; refresh token thường khoảng 30 ngày và chỉ được lưu cho lifecycle tương lai. Khi refresh được triển khai, refresh token mới phải thay thế token cũ.
 
 ## 2. Identity và mapping
 

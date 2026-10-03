@@ -91,3 +91,10 @@ Lỗi trả `error_code` ổn định, message người dùng an toàn, severity
 - Checkpoint migration chỉ lưu số dòng cùng hash cấu trúc/index và collation, không lưu nội dung hàng hoặc PII. Database Runtime Diagnostics chỉ hiển thị loại DB, hỗ trợ InnoDB, logical table name, engine và transactional status; không hiển thị host, username, password hoặc SQL.
 - Migration có thể tiếp tục sau partial implicit commit: bảng đã đạt InnoDB không bị ALTER lại; lỗi còn lại giữ schema cũ và chặn import cho đến khi tất cả bảng đạt yêu cầu.
 
+## 12. Shopee credential security WP.3
+
+- `ECOMKIT_CREDENTIAL_KEY` phải là Base64 của đúng 32 byte, cấu hình trong `wp-config.php`; plugin không sinh, lưu database hay hiển thị master key.
+- Partner Key và per-shop access/refresh token dùng envelope version 1, AES-256-GCM, IV ngẫu nhiên 12 byte, tag 16 byte và AAD theo loại credential. Envelope sai, key sai hoặc bị sửa đều fail closed.
+- OAuth state là opaque nonce 32 byte, transient 10 phút, one-time consume và cookie HttpOnly/Secure/SameSite=Lax. Callback không log hoặc lưu authorization code.
+- UI, redirect và diagnostics chỉ chứa readiness, shop ID, expiry, safe error code/request ID; không chứa Partner Key, token, signature hoặc raw provider response.
+

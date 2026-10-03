@@ -16,6 +16,8 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_notices', array( $this, 'database_notice' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_test_excel_runtime', array( $this, 'handle_excel_runtime_test' ) );
+		add_action( 'admin_post_ecomkit_shopee_save_config', array( $this, 'handle_shopee_save_config' ) );
+		add_action( 'admin_post_ecomkit_shopee_test_config', array( $this, 'handle_shopee_test_config' ) );
 	}
 
 	public function add_menu(): void {
@@ -64,7 +66,9 @@ final class Ecomkit_Vuikhoe_Admin {
 	}
 
 	public function marketplace_page(): void {
-		$this->render( 'marketplace' );
+		$config_service = new Ecomkit_Vuikhoe_Shopee_Config();
+		$config = $config_service->get();
+		$this->render( 'marketplace', array( 'shopee_config' => $config, 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => ( new Ecomkit_Vuikhoe_Credential_Encryption() )->ready(), 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ) ) );
 	}
 
 	public function settings_page(): void {
@@ -75,7 +79,27 @@ final class Ecomkit_Vuikhoe_Admin {
 			$code = sanitize_key( wp_unslash( $_GET['runtime_code'] ) );
 			$test = array( 'ok' => 'pass' === $result, 'stage' => strtoupper( $stage ), 'classification' => strtoupper( $code ) );
 		}
-		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose(), 'database_runtime' => Ecomkit_Vuikhoe_DB::database_runtime_diagnostic(), 'orders_schema' => Ecomkit_Vuikhoe_DB::orders_schema_diagnostic(), 'excel_runtime' => ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->snapshot(), 'runtime_test' => $test ) );
+		$shopee = new Ecomkit_Vuikhoe_Shopee_Config();
+		$this->render( 'settings', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose(), 'database_runtime' => Ecomkit_Vuikhoe_DB::database_runtime_diagnostic(), 'orders_schema' => Ecomkit_Vuikhoe_DB::orders_schema_diagnostic(), 'excel_runtime' => ( new Ecomkit_Vuikhoe_Runtime_Diagnostics() )->snapshot(), 'runtime_test' => $test, 'marketplace_security' => array( 'encryption' => ( new Ecomkit_Vuikhoe_Credential_Encryption() )->ready(), 'shopee' => $shopee->readiness(), 'callback_https' => 'https' === strtolower( (string) wp_parse_url( $shopee->callback_url(), PHP_URL_SCHEME ) ) ) ) );
+	}
+
+	public function handle_shopee_save_config(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_shopee_save_config', 'ecomkit_shopee_nonce' );
+		try {
+			( new Ecomkit_Vuikhoe_Shopee_Config() )->save( sanitize_key( wp_unslash( $_POST['environment'] ?? '' ) ), trim( sanitize_text_field( wp_unslash( $_POST['partner_id'] ?? '' ) ) ), (string) wp_unslash( $_POST['partner_key'] ?? '' ) );
+			$args = array( 'shopee_notice' => 'config_saved' );
+		} catch ( Throwable $exception ) { $args = array( 'shopee_error' => strtolower( sanitize_key( $exception->getMessage() ) ) ); }
+		wp_safe_redirect( add_query_arg( array_merge( array( 'page' => 'ecomkit-vuikhoe-marketplace' ), $args ), admin_url( 'admin.php' ) ) ); exit;
+	}
+
+	public function handle_shopee_test_config(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_shopee_test_config', 'ecomkit_shopee_nonce' );
+		$result = ( new Ecomkit_Vuikhoe_Shopee_Config() )->readiness();
+		$args = array( 'page' => 'ecomkit-vuikhoe-marketplace' );
+		$args[ $result['ready'] ? 'shopee_notice' : 'shopee_error' ] = strtolower( $result['code'] );
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) ); exit;
 	}
 
 	public function handle_excel_runtime_test(): void {

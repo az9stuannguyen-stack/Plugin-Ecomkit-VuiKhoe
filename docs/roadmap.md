@@ -72,6 +72,7 @@ Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
 - Batch #7 xác nhận blocker tại `BATCH_PERSIST` với `ECOMKIT_NON_TRANSACTIONAL_TABLE`; Excel runtime và parser không phải nguyên nhân hiện tại.
 - Runtime `0.2.4`, schema `3`; migration `2 → 3` kiểm tra hỗ trợ InnoDB rồi chỉ chuyển các bảng Ecomkit chưa transactional.
 - WP.2E dùng runtime `0.2.5`, schema `4`; migration `3 → 4` sửa explicit nullability của Order trước reconciliation và không dựa riêng vào dbDelta.
+- WP.3 dùng runtime `0.3.0`, schema `4`: cấu hình Shopee, OAuth callback, token exchange và encrypted MarketplaceConnection. Order API, refresh execution và reconciliation vẫn bị hoãn sang stage sau.
 - Migration không drop/truncate, bảo toàn và xác minh row count, cột, index, charset/collation; partial conversion không tăng schema version và có thể tiếp tục ở lần chạy sau.
 - Fresh install tạo rõ cả sáu bảng với `ENGINE=InnoDB`; Database Runtime Diagnostics hiển thị engine/transactional readiness an toàn, không lộ credential hoặc SQL.
 - Guard `ECOMKIT_NON_TRANSACTIONAL_TABLE` vẫn hoạt động; provider calls vẫn bằng 0 và parser production-shape không thay đổi.

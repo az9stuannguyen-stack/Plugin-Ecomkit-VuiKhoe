@@ -90,6 +90,9 @@ final class Ecomkit_Vuikhoe_DB {
 		$stored = (int) get_option( self::SCHEMA_OPTION, 0 );
 
 		if ( $stored >= ECOMKIT_VUIKHOE_DB_VERSION ) {
+			if ( ECOMKIT_VUIKHOE_VERSION !== (string) get_option( self::PLUGIN_VERSION_OPTION, '' ) ) {
+				update_option( self::PLUGIN_VERSION_OPTION, ECOMKIT_VUIKHOE_VERSION, false );
+			}
 			return;
 		}
 
