@@ -30,12 +30,12 @@ function oauth_check( bool $v, string $m ): void { if ( ! $v ) throw new Runtime
 final class OAuthWpdb {
 	public string $prefix = 'oauth_'; public int $insert_id = 0; public array $rows = array();
 	public function prepare( string $q, mixed ...$a ): string { return json_encode( $a ); }
-	public function get_var( string $q ): int { $a=json_decode($q,true); foreach($this->rows as $id=>$r) if($r['platform']===$a[0]&&$r['external_shop_id']===$a[1]) return $id; return 0; }
+	public function get_var( string $q ): int { $a=json_decode($q,true); if(isset($a[0])&&str_starts_with((string)$a[0],'ecomkit_shopee_credential_')) return 1; foreach($this->rows as $id=>$r) if($r['platform']===$a[0]&&$r['external_shop_id']===$a[1]) return $id; return 0; }
 	public function insert( string $t, array $d ): int { $this->insert_id++; $this->rows[$this->insert_id]=$d+array('id'=>$this->insert_id); return 1; }
 	public function update( string $t, array $d, array $w ): int { $this->rows[$w['id']]=$d+array('id'=>$w['id']); return 1; }
 }
 $GLOBALS['wpdb'] = new OAuthWpdb(); $GLOBALS['opts']=array(); $GLOBALS['transients']=array(); $GLOBALS['calls']=array();
-foreach ( array( 'class-ecomkit-db.php', 'class-ecomkit-credential-key-resolver.php', 'class-ecomkit-credential-encryption.php', 'class-ecomkit-shopee-environment.php', 'class-ecomkit-shopee-signer.php', 'class-ecomkit-shopee-config.php', 'class-ecomkit-shopee-http-client.php', 'class-ecomkit-marketplace-connection-service.php', 'class-ecomkit-shopee-oauth.php' ) as $file ) require __DIR__ . '/../ecomkit-vuikhoe/includes/' . $file;
+foreach ( array( 'class-ecomkit-db.php', 'class-ecomkit-credential-key-resolver.php', 'class-ecomkit-credential-encryption.php', 'class-ecomkit-credential-mutation-lock.php', 'class-ecomkit-shopee-environment.php', 'class-ecomkit-shopee-signer.php', 'class-ecomkit-shopee-config.php', 'class-ecomkit-shopee-http-client.php', 'class-ecomkit-marketplace-connection-service.php', 'class-ecomkit-shopee-oauth.php' ) as $file ) require __DIR__ . '/../ecomkit-vuikhoe/includes/' . $file;
 $config_service = new Ecomkit_Vuikhoe_Shopee_Config(); $config = $config_service->save( 'sandbox', '123', 'obviously-fake-key' );
 $oauth = new Ecomkit_Vuikhoe_Shopee_OAuth();
 $nonce_a=$oauth->new_flow_nonce(); $nonce_b=$oauth->new_flow_nonce(); oauth_check($nonce_a!==$nonce_b&&43===strlen($nonce_a),'OAuth flow nonce entropy/uniqueness failed.');

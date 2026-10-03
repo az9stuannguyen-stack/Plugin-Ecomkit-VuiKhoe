@@ -103,3 +103,7 @@ Lỗi trả `error_code` ổn định, message người dùng an toàn, severity
 
 OAuth failure details are stored for at most ten minutes in a one-time transient bound to the initiating admin. The browser URL receives only an opaque reference. Allowed fields are stage, classification, sanitized provider error/message, request ID, HTTP status, API path, and duration. Authorization codes, signatures, Partner Keys, access/refresh tokens, and raw provider responses are neither logged nor persisted in diagnostics.
 
+# WP.4A refresh safety
+
+Shopee refresh tokens are treated as rotating single-use state. The refresh endpoint is never retried automatically. Network/timeout ambiguity, or encryption/persistence failure after provider success, moves the safe lifecycle toward `REFRESH_UNCERTAIN` and requires reauthorization while preserving old ciphertext. Definitive expired/invalid refresh authorization becomes `REAUTH_REQUIRED`. Tokens appear only in encrypted envelopes and ephemeral server-side memory, never in URLs, HTML, diagnostics, logs, or options plaintext.
+

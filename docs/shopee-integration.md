@@ -95,3 +95,9 @@ Each one-time authorization code is exchanged at most once with `POST /api/v2/au
 
 Callback stages run from `CALLBACK_RECEIVED` through `OAUTH_COMPLETE`. Admin diagnostics contain only stage, classification, sanitized provider error/message, request ID, HTTP status, API path, and duration in a one-time user-bound transient. The redirect carries only an opaque reference. It never contains the code, signature, Partner Key, access/refresh token, or raw response. Historical failures that stored only the generic error and request ID cannot be reconstructed into an exact provider cause.
 
+# WP.4A refresh contract
+
+Refresh uses one `POST /api/v2/auth/access_token/get` call. Production host is `https://partner.shopeemobile.com`; Sandbox is `https://partner.test-stable.shopeemobile.com`. Public signing query fields are `partner_id`, `timestamp`, and lowercase HMAC-SHA256 `sign` over `partner_id + api_path + timestamp`. JSON contains string `refresh_token` plus integer `partner_id` and integer `shop_id`; no merchant/supplier/user/principal identity is added.
+
+The current refresh token is single-use. Under the shared connection advisory lock, Ecomkit reloads the credential, skips refresh when the access token is usable beyond its 300-second application-policy skew, or validates and atomically encrypts/persists both returned tokens and provider `expire_in`. The 30-day refresh expiry shown in UI is explicitly an estimate, not provider-returned authority. There are zero automatic retries after an ambiguous send, no cron scheduler, and recovery is manual reauthorization. Future WP.4B code must call `ensure_usable_access_token(connectionId)` rather than decrypt credentials directly.
+

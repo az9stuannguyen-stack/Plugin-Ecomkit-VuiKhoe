@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.3C — Live Shopee OAuth Token-Exchange Diagnostics**, plugin `0.3.3`, database schema `4`. WP.3B vẫn là baseline mã hóa credential; thông tin WP.3C này thay thế phiên bản/stage cũ bên dưới.
+Hiện tại: **WP.4A — Shopee Token Refresh Lifecycle**, plugin `0.4.0`, database schema `4`. Refresh token được coi là single-use; access/refresh pair được thay thế trong một encrypted envelope dưới per-connection lock.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.3.2`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.4.0`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
@@ -116,5 +116,9 @@ Các quyết định trong tài liệu này được phục hồi từ README, h
 
 # WP.3C runtime note
 
-Current plugin runtime is `0.3.3` with database schema `4`. The initial Shopee token exchange sends only JSON string `code` and JSON integer `partner_id`; callback `shop_id` is retained for identity validation and is not unnecessarily sent in the request body. OAuth failures expose only stage, classification, sanitized provider error/message, request ID, HTTP status, API path, and duration through a one-time admin-bound diagnostic reference. Authorization codes, signatures, tokens, and raw provider responses are never displayed or logged.
+WP.3C runtime was `0.3.3` with database schema `4`. The initial Shopee token exchange sends only JSON string `code` and JSON integer `partner_id`; callback `shop_id` is retained for identity validation and is not unnecessarily sent in the request body. OAuth failures expose only stage, classification, sanitized provider error/message, request ID, HTTP status, API path, and duration through a one-time admin-bound diagnostic reference. Authorization codes, signatures, tokens, and raw provider responses are never displayed or logged.
+
+# WP.4A token lifecycle
+
+`ensure_usable_access_token(connectionId)` is the only foundation future provider callers should use. It returns a token only inside server-side PHP memory, reuses a token outside the 300-second Ecomkit refresh skew, and otherwise performs one locked refresh call. No cron scheduler or Order API is included. Admins can perform one manual refresh with `manage_options` and a nonce; ambiguous network/persistence outcomes require reauthorization and are never retried automatically.
 

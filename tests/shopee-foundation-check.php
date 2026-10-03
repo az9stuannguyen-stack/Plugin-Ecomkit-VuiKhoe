@@ -53,6 +53,7 @@ foreach ( array( '{}', '{bad', json_encode( array( 'v' => 2 ) ) ) as $bad ) { tr
 
 wp3_check( '5943410340670f58082e8df34264fbb195ad0fdf7745a91f92f021531817ab5e' === Ecomkit_Vuikhoe_Shopee_Signer::sign( '123', '/api/v2/shop/auth_partner', 1700000000, 'obviously-fake-partner-key' ), 'Authorization signature vector failed.' );
 wp3_check( '58f591ad3835a6c4aaf697d0446facd2ec73d6f186a166c8803012a406358b6d' === Ecomkit_Vuikhoe_Shopee_Signer::sign( '123', '/api/v2/auth/token/get', 1700000000, 'obviously-fake-partner-key' ), 'Token signature vector failed.' );
+wp3_check( '7d5fad51eb6f1607c87cb9d947224bbea6ee692e5cbe91856597221026cb1130' === Ecomkit_Vuikhoe_Shopee_Signer::sign( '123', '/api/v2/auth/access_token/get', 1700000000, 'obviously-fake-partner-key' ), 'Refresh public-signature vector failed.' );
 wp3_check( str_contains( Ecomkit_Vuikhoe_Shopee_Environment::host( 'sandbox' ), 'test-stable' ) && 'https://partner.shopeemobile.com' === Ecomkit_Vuikhoe_Shopee_Environment::host( 'production' ), 'Environment resolver failed.' );
 
 $GLOBALS['opts'] = array();

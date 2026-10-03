@@ -150,5 +150,9 @@ Exit gate: acceptance nghiệp vụ, security review và rollback rehearsal.
 
 # WP.3C gate
 
-Runtime `0.3.3`, database schema `4`: minimal Shopee token request body, strict integer Partner ID, callback/shop identity validation, and safe stage-specific live diagnostics. WP.4 remains blocked until a completely new live OAuth flow succeeds.
+WP.3C runtime `0.3.3`, database schema `4`: minimal Shopee token request body, strict integer Partner ID, callback/shop identity validation, and safe stage-specific live diagnostics. Its live OAuth gate passed before WP.4A began.
+
+# WP.4A completion gate
+
+Runtime `0.4.0`, schema `4`: locked single-use Shopee refresh rotation, `ensure_usable_access_token()`, safe lifecycle diagnostics, and an admin-only manual refresh action. There is deliberately no WP-Cron refresh. WP.4B Order API work must not start automatically and must consume access tokens only through the token service.
 

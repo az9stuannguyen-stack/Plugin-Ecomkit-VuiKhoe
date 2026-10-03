@@ -181,3 +181,9 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Envelope ghi identifier `key_source` nhưng không chứa key. Legacy envelope không có identifier tiếp tục dùng resolution ưu tiên cũ để giữ explicit-key compatibility.
 - Không lưu master key/derived key vào option, table, transient, cookie hay cache. Rotation WordPress salts làm credential cũ fail closed và yêu cầu nhập lại/ủy quyền lại.
 
+# WP.4A credential lifecycle architecture
+
+Shopee credential mutation is serialized with MySQL/MariaDB `GET_LOCK` using `ecomkit_shopee_credential_<connection-id>` and a two-second bounded wait. Refresh and OAuth reauthorization share this lock. Refresh reloads and decrypts the current row only after acquisition, then rechecks access expiry. The access/refresh pair is encrypted as one immutable unit and persisted with one database update. Lock failure fails closed.
+
+`Ecomkit_Vuikhoe_Shopee_Token_Service::ensure_usable_access_token()` is the boundary for WP.4B and later server-side provider clients. The 300-second skew is Ecomkit policy, not a Shopee requirement. No scheduler, Order API, SyncRun, escrow, or Excel reconciliation exists in WP.4A.
+

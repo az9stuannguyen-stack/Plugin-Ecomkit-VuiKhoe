@@ -8,7 +8,7 @@ function conn_check( bool $v, string $m ): void { if ( ! $v ) throw new RuntimeE
 final class ConnectionWpdb {
 	public string $prefix = 'test_'; public int $insert_id = 0; public array $rows = array(); public bool $fail_update = false;
 	public function prepare( string $q, mixed ...$a ): string { return json_encode( $a ); }
-	public function get_var( string $q ): int { $a = json_decode( $q, true ); foreach ( $this->rows as $id => $r ) if ( $r['platform'] === $a[0] && $r['external_shop_id'] === $a[1] ) return $id; return 0; }
+	public function get_var( string $q ): int { $a = json_decode( $q, true ); if ( isset( $a[0] ) && str_starts_with( (string) $a[0], 'ecomkit_shopee_credential_' ) ) return 1; foreach ( $this->rows as $id => $r ) if ( $r['platform'] === $a[0] && $r['external_shop_id'] === $a[1] ) return $id; return 0; }
 	public function insert( string $t, array $d ): int { $this->insert_id++; $this->rows[ $this->insert_id ] = $d + array( 'id' => $this->insert_id ); return 1; }
 	public function update( string $t, array $d, array $w ): int|false { if ( $this->fail_update ) return false; $this->rows[ $w['id'] ] = $d + array( 'id' => $w['id'] ); return 1; }
 	public function get_results( string $q, string $o ): array { return array_values( array_filter( $this->rows, fn( $r ) => 'SHOPEE' === $r['platform'] ) ); }
@@ -17,6 +17,7 @@ $GLOBALS['wpdb'] = new ConnectionWpdb();
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-db.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-credential-key-resolver.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-credential-encryption.php';
+require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-credential-mutation-lock.php';
 require __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-marketplace-connection-service.php';
 $service = new Ecomkit_Vuikhoe_Marketplace_Connection_Service();
 $tokens_a = array( 'access_token' => 'obviously-fake-access-a', 'refresh_token' => 'obviously-fake-refresh-a', 'expire_in' => 100 );

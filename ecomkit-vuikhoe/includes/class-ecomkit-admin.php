@@ -19,6 +19,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_save_config', array( $this, 'handle_shopee_save_config' ) );
 		add_action( 'admin_post_ecomkit_shopee_replace_partner_key', array( $this, 'handle_shopee_replace_partner_key' ) );
 		add_action( 'admin_post_ecomkit_shopee_test_config', array( $this, 'handle_shopee_test_config' ) );
+		add_action( 'admin_post_ecomkit_shopee_refresh_token', array( $this, 'handle_shopee_refresh_token' ) );
 	}
 
 	public function add_menu(): void {
@@ -79,7 +80,19 @@ final class Ecomkit_Vuikhoe_Admin {
 				$oauth_diagnostic = $stored['diagnostic'];
 			}
 		}
+		if ( isset( $_GET['refresh_diag'] ) ) {
+			$reference = sanitize_key( wp_unslash( $_GET['refresh_diag'] ) ); $stored = get_transient( 'ecomkit_shopee_refresh_diag_' . $reference ); delete_transient( 'ecomkit_shopee_refresh_diag_' . $reference );
+			if ( is_array( $stored ) && (int) ( $stored['user_id'] ?? 0 ) === get_current_user_id() && is_array( $stored['diagnostic'] ?? null ) ) { $oauth_diagnostic = $stored['diagnostic']; }
+		}
 		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => $encryption->ready(), 'key_source' => $encryption->ready() ? $encryption->key_source_label() : '', 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ), 'oauth_diagnostic' => $oauth_diagnostic ) );
+	}
+
+	public function handle_shopee_refresh_token(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability(); check_admin_referer( 'ecomkit_shopee_refresh_token', 'ecomkit_shopee_nonce' );
+		$connection_id = absint( wp_unslash( $_POST['connection_id'] ?? 0 ) ); $service = new Ecomkit_Vuikhoe_Shopee_Token_Service();
+		try { $service->ensure_usable_access_token( $connection_id, true ); $args = array( 'shopee_notice' => 'token_refreshed' ); }
+		catch ( Throwable $exception ) { $reference = bin2hex( random_bytes( 16 ) ); $diagnostic = array_merge( $service->last_diagnostic, array( 'classification' => strtoupper( sanitize_key( $exception->getMessage() ) ) ) ); set_transient( 'ecomkit_shopee_refresh_diag_' . $reference, array( 'user_id' => get_current_user_id(), 'diagnostic' => $diagnostic ), 600 ); $args = array( 'shopee_error' => 'shopee_refresh_failed', 'refresh_diag' => $reference ); }
+		wp_safe_redirect( add_query_arg( array_merge( array( 'page' => 'ecomkit-vuikhoe-marketplace' ), $args ), admin_url( 'admin.php' ) ) ); exit;
 	}
 
 	public function settings_page(): void {
