@@ -113,3 +113,11 @@ Order API signed URLs contain the access token because Shopee requires it, so fu
 
 Inputs enforce a 15-day list window, bounded page and detail sizes, exact non-control-character `order_sn`, and an explicit optional-field allowlist. There are zero automated retries and no public REST business endpoint.
 
+# WP.5 provider evidence and PII
+
+Shopee reconciliation is an administrator-only POST action protected by `manage_options` and a nonce. It never accepts manual dates or pasted order IDs; both identity and query dates come from the persisted Excel Batch. Provider calls continue through the token lifecycle service and never expose access/refresh tokens, signatures or signed URLs.
+
+The validated individual Order Detail object may contain recipient PII and is stored only in `orders.provider_raw_data`; its provider-neutral projection is stored separately in `provider_normalized_data`. Neither payload is logged, placed in transients/URLs, exposed through public REST, or rendered in the default summary. Diagnostics/errors retain only safe source location, order identity, stage, classification and suggestion. `raw_source_metadata` remains Excel-owned and unchanged.
+
+No network transaction spans a DB transaction. Failed/incomplete pagination cannot produce negative match evidence. Older provider snapshots cannot overwrite newer `provider_updated_at`; absent provider timestamps use the conservative rule that an existing snapshot is retained. Payment/Escrow is not called and financial settlement is not inferred.
+

@@ -32,7 +32,7 @@ final class Ecomkit_Vuikhoe_Shopee_Order_Service {
 	public function get_all_orders( int $connection_id, string $range_field, int $from, int $to, int $page_size = 100, ?string $status = null ): array {
 		$cursor = null; $seen_cursors = array(); $by_sn = array(); $duplicates = 0; $conflicts = 0; $request_ids = array();
 		for ( $page = 1; $page <= self::MAX_PAGES; $page++ ) {
-			$result = $this->get_order_list_page( $connection_id, $range_field, $from, $to, $page_size, $cursor, $status ); $request_ids[] = $result['request_id'];
+			try { $result = $this->get_order_list_page( $connection_id, $range_field, $from, $to, $page_size, $cursor, $status ); } catch ( Throwable $exception ) { $this->last_diagnostic['pagination_page'] = $page; throw $exception; } $request_ids[] = $result['request_id'];
 			foreach ( $result['orders'] as $order ) { $sn = $order['order_sn']; if ( isset( $by_sn[ $sn ] ) ) { $duplicates++; if ( (string) ( $by_sn[ $sn ]['order_status'] ?? '' ) !== (string) ( $order['order_status'] ?? '' ) ) { $conflicts++; } } $by_sn[ $sn ] = $order; }
 			if ( ! $result['more'] ) { return array( 'orders' => array_values( $by_sn ), 'duplicate_count' => $duplicates, 'conflict_count' => $conflicts, 'page_count' => $page, 'request_ids' => $request_ids ); }
 			$next = $result['next_cursor']; if ( '' === $next || $next === $cursor || isset( $seen_cursors[ $next ] ) ) { $this->fail( 'SHOPEE_ORDER_PAGINATION_STALLED' ); } $seen_cursors[ $next ] = true; $cursor = $next;

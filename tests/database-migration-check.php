@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ARRAY_A', 'ARRAY_A' );
-define( 'ECOMKIT_VUIKHOE_DB_VERSION', 4 );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.4.2' );
+define( 'ECOMKIT_VUIKHOE_DB_VERSION', 5 );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.5.0' );
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 $GLOBALS['migration_options'] = array();
 function get_option( string $key, mixed $default = false ): mixed { return $GLOBALS['migration_options'][ $key ] ?? $default; }
@@ -72,6 +72,10 @@ final class MigrationWpdb {
 			$this->order_columns[ $match[2] ]['Null'] = 'YES';
 			$this->order_columns[ $match[2] ]['Default'] = null;
 		}
+		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` ADD COLUMN `(provider_raw_data|provider_normalized_data|provider_updated_at|matched_at)` (.+)$/', $query, $match ) ) {
+			$type = str_starts_with( $match[3], 'longtext' ) ? 'longtext' : 'datetime';
+			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
+		}
 		return 1;
 	}
 }
@@ -135,5 +139,15 @@ migration_check( $legacy_counts === $legacy_after && $legacy_counts === $contrac
 migration_check( Ecomkit_Vuikhoe_DB::orders_schema_diagnostic()['ready'], 'Order schema readiness did not pass after repair.' );
 $query_count = count( $legacy->queries );
 migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_orders_contract()['altered'] && $query_count === count( $legacy->queries ), 'Order contract migration is not idempotent.' );
+
+$provider_schema = new MigrationWpdb( 'InnoDB' );
+$provider_counts = $provider_schema->counts;
+$GLOBALS['wpdb'] = $provider_schema;
+$provider_result = Ecomkit_Vuikhoe_DB::migrate_provider_evidence_columns();
+migration_check( array( 'provider_raw_data', 'provider_normalized_data', 'provider_updated_at', 'matched_at' ) === $provider_result['added'], 'WP.5 provider evidence columns were not added exactly.' );
+migration_check( $provider_counts === $provider_schema->counts, 'WP.5 provider schema migration changed business row counts.' );
+migration_check( Ecomkit_Vuikhoe_DB::provider_evidence_schema_ready(), 'WP.5 provider evidence schema did not verify after migration.' );
+$provider_query_count = count( $provider_schema->queries );
+migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_provider_evidence_columns()['added'] && $provider_query_count === count( $provider_schema->queries ), 'WP.5 provider schema migration is not idempotent.' );
 
 echo "WP.2D database migration checks passed.\n";

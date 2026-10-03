@@ -6,6 +6,7 @@ defined( 'ABSPATH' ) || exit;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 final class Ecomkit_Vuikhoe_Excel_Service {
@@ -17,6 +18,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	private const PRODUCT_CODE_HEADER = 'Mã hàng hóa';
 	private const PRODUCT_NAME_HEADER = 'Tên hàng hóa';
 	private const QUANTITY_HEADER = 'Số lg';
+	private const ORDER_DATE_HEADER = 'Ngày đặt';
 
 	public function __construct( private bool $skip_runtime_check = false ) {}
 
@@ -143,7 +145,8 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			$classifications['ORDER_ROW']++;
 			$total++;
 			$rows[] = array( 'row' => $row_number, 'classification' => 'ORDER_ROW', 'cells' => $row['cells'] );
-			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
+			$order_date = isset( $columns[ self::ORDER_DATE_HEADER ] ) ? $this->parse_order_date_cell( $sheet->getCell( array( $columns[ self::ORDER_DATE_HEADER ], $row_number ) ) ) : null;
+			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
 			$current_index = array_key_last( $orders );
 			$platform_counts[ $parsed['platform'] ] = ( $platform_counts[ $parsed['platform'] ] ?? 0 ) + 1;
 			if ( 'VALID_ITEM' === $product_structure ) {
@@ -160,8 +163,35 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			'valid_rows' => count( $orders ),
 			'orders' => $orders,
 			'errors' => $errors,
-			'raw' => array( 'parser_version' => self::PARSER_VERSION, 'sheet' => $sheet->getTitle(), 'header_row' => $header_row, 'headers' => array_values( $headers ), 'source_mode' => $source_mode, 'item_rows' => $item_rows, 'platform_counts' => $platform_counts, 'classifications' => $classifications, 'rows' => $rows ),
+			'raw' => array( 'parser_version' => self::PARSER_VERSION, 'sheet' => $sheet->getTitle(), 'header_row' => $header_row, 'headers' => array_values( $headers ), 'date_column' => $columns[ self::ORDER_DATE_HEADER ] ?? null, 'source_mode' => $source_mode, 'item_rows' => $item_rows, 'platform_counts' => $platform_counts, 'classifications' => $classifications, 'rows' => $rows ),
 		);
+	}
+
+	private function parse_order_date_cell( Cell $cell ): ?string {
+		$value = DataType::TYPE_FORMULA === $cell->getDataType() ? $cell->getOldCalculatedValue() : $cell->getValue();
+		if ( null === $value || '' === trim( (string) $value ) ) {
+			return null;
+		}
+		$timezone = function_exists( 'wp_timezone' ) ? wp_timezone() : new DateTimeZone( 'UTC' );
+		if ( ( is_int( $value ) || is_float( $value ) ) && ExcelDate::isDateTime( $cell ) ) {
+			try {
+				return ExcelDate::excelToDateTimeObject( (float) $value, $timezone )->format( 'Y-m-d H:i:s' );
+			} catch ( Throwable $exception ) {
+				return null;
+			}
+		}
+		if ( $value instanceof DateTimeInterface ) {
+			return DateTimeImmutable::createFromInterface( $value )->setTimezone( $timezone )->format( 'Y-m-d H:i:s' );
+		}
+		$text = trim( (string) $value );
+		foreach ( array( 'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 'Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d' ) as $format ) {
+			$date = DateTimeImmutable::createFromFormat( '!' . $format, $text, $timezone );
+			$errors = DateTimeImmutable::getLastErrors();
+			if ( false !== $date && ( false === $errors || ( 0 === $errors['warning_count'] && 0 === $errors['error_count'] ) ) && $date->format( $format ) === $text ) {
+				return $date->format( 'Y-m-d H:i:s' );
+			}
+		}
+		return null;
 	}
 
 	/** @return array<string,mixed> */

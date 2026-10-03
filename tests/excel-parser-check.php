@@ -66,6 +66,7 @@ try {
 	assert_true( 3 === $result['raw']['header_row'], 'Header after title rows was not discovered.' );
 	assert_true( 3 === count( $result['orders'] ) && 4 === $result['raw']['item_rows'], 'Order/item counts are wrong.' );
 	assert_true( 'SHOPEE' === $result['orders'][0]['platform'] && 'TEST-SHP-001' === $result['orders'][0]['order_code'], 'Shopee combined cell failed.' );
+	assert_true( '2026-01-01 10:00:00' === $result['orders'][0]['order_date'] && 3 === $result['raw']['date_column'], 'Named Excel Ngày đặt was not parsed deterministically.' );
 	assert_true( 'TEST-SHP-001' !== 'TEST001' && 'TEST-SHP-001' === $result['orders'][0]['order_code'], 'eShop code was used as identity.' );
 	assert_true( 2 === count( $result['orders'][1]['items'] ), 'Continuation row did not attach to one order.' );
 	assert_true( 'LAZADA' === $result['orders'][2]['platform'] && '000123456789' === $result['orders'][2]['order_code'], 'Lazada leading-zero ID changed.' );

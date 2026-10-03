@@ -157,6 +157,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 					'raw_order_code'          => $code,
 					'normalized_order_code'   => $code,
 					'matching_status'         => null,
+					'order_date'              => $order['order_date'] ?? null,
 					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'combined_identity' => $order['raw_identity'], 'platform_label' => $order['raw_platform'], 'cells' => $order['raw_cells'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'source_refs'             => wp_json_encode( array( 'source' => 'EXCEL', 'sheet' => $order['sheet'], 'row' => $order['row'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'created_at'              => $now,
@@ -204,6 +205,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 				'valid_rows'     => (int) $result['valid_rows'],
 				'header_rule'    => 'first-20-non-empty-rows-exact-normalized',
 				'header_row'     => (int) ( $result['raw']['header_row'] ?? 0 ),
+				'date_column'    => isset( $result['raw']['date_column'] ) ? (int) $result['raw']['date_column'] : null,
 				'item_rows'      => (int) ( $result['raw']['item_rows'] ?? 0 ),
 				'platform_counts'=> $result['raw']['platform_counts'] ?? array(),
 				'failure_diagnostic' => $result['diagnostic'] ?? null,
@@ -378,7 +380,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 	public function list_errors(): array {
 		global $wpdb;
 		$table = Ecomkit_Vuikhoe_DB::table_names()['errors'];
-		return $wpdb->get_results( $wpdb->prepare( "SELECT batch_id, filename, sheet_name, row_number, column_name, error_code, friendly_message, suggestion, created_at FROM $table WHERE source = %s ORDER BY created_at DESC, id DESC LIMIT 100", 'EXCEL' ), ARRAY_A ) ?: array();
+		return $wpdb->get_results( "SELECT batch_id, source, stage, marketplace, filename, sheet_name, row_number, column_name, order_code, error_code, friendly_message, suggestion, created_at FROM $table ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A ) ?: array();
 	}
 }
 

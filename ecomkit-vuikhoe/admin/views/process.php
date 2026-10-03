@@ -2,6 +2,7 @@
 <div class="wrap">
 	<h1><?php echo esc_html__( 'Xử lý đơn hàng', 'ecomkit-vuikhoe' ); ?></h1>
 	<?php if ( isset( $_GET['import_failure'] ) ) : ?><div class="notice notice-error inline"><p><?php echo esc_html__( 'Không thể hoàn tất yêu cầu nhập Excel an toàn.', 'ecomkit-vuikhoe' ); ?></p></div><?php endif; ?>
+	<?php if ( isset( $_GET['reconcile_error'] ) ) : ?><div class="notice notice-error inline"><p><?php echo esc_html__( 'Không thể hoàn tất đối chiếu Shopee.', 'ecomkit-vuikhoe' ); ?> <code><?php echo esc_html( strtoupper( sanitize_key( wp_unslash( $_GET['reconcile_error'] ) ) ) ); ?></code></p></div><?php endif; ?>
 	<h2><?php echo esc_html__( 'Nhập Excel nội bộ', 'ecomkit-vuikhoe' ); ?></h2>
 	<p><?php echo esc_html( sprintf( __( 'Chấp nhận một file .xlsx, tối đa %1$s và %2$s dòng dữ liệu. Cột nhận diện đơn: “Sàn & Mã Đơn”. Ô này chứa tên sàn và mã đơn, ví dụ Shopee + mã đơn.', 'ecomkit-vuikhoe' ), size_format( (int) $data['max_upload_size'] ), number_format_i18n( (int) $data['max_rows'] ) ) ); ?></p>
 	<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -16,6 +17,17 @@
 		<tr><th><?php echo esc_html__( 'Dòng nghiệp vụ đã xử lý', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $batch['metadata']['total_rows'] ?? 0 ) ); ?></td></tr><tr><th><?php echo esc_html__( 'Đơn hợp lệ', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['order_count'] ); ?></td></tr><tr><th><?php echo esc_html__( 'Dòng sản phẩm', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) ( $batch['metadata']['item_rows'] ?? 0 ) ); ?></td></tr>
 		<tr><th><?php echo esc_html__( 'Sàn đã phát hiện', 'ecomkit-vuikhoe' ); ?></th><td><?php $counts = array(); foreach ( (array) ( $batch['metadata']['platform_counts'] ?? array() ) as $platform => $count ) { $counts[] = $platform . ': ' . (int) $count; } echo esc_html( implode( ', ', $counts ) ); ?></td></tr><tr><th><?php echo esc_html__( 'Lỗi', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( (string) $batch['error_count'] ); ?></td></tr><tr><th><?php echo esc_html__( 'Thời điểm tạo', 'ecomkit-vuikhoe' ); ?></th><td><?php echo esc_html( $local_time ); ?></td></tr>
 		</tbody></table>
+		<?php $shopee_count = (int) ( $batch['metadata']['platform_counts']['SHOPEE'] ?? 0 ); $connections = (array) ( $data['ready_connections'] ?? array() ); ?>
+		<?php if ( 0 === $shopee_count && in_array( (string) $batch['status'], array( 'SUCCESS', 'WARNING' ), true ) ) : ?><h2><?php echo esc_html__( 'Đối chiếu Shopee', 'ecomkit-vuikhoe' ); ?></h2><p><?php echo esc_html__( 'Batch này không có đơn Shopee để đối chiếu.', 'ecomkit-vuikhoe' ); ?></p>
+		<?php elseif ( $shopee_count > 0 && in_array( (string) $batch['status'], array( 'SUCCESS', 'WARNING' ), true ) && $connections ) : ?>
+		<h2><?php echo esc_html__( 'Đối chiếu Shopee', 'ecomkit-vuikhoe' ); ?></h2>
+		<p><?php echo esc_html__( 'Ngày truy vấn được tự động lấy từ cột Ngày đặt của các đơn Shopee trong Batch. Không cần nhập ngày hoặc mã đơn.', 'ecomkit-vuikhoe' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="ecomkit_shopee_reconcile_batch"><input type="hidden" name="batch_id" value="<?php echo esc_attr( (string) $batch['id'] ); ?>"><?php wp_nonce_field( 'ecomkit_shopee_reconcile_batch', 'ecomkit_reconcile_nonce' ); ?>
+			<?php if ( count( $connections ) > 1 ) : ?><label for="ecomkit-reconcile-connection"><strong><?php echo esc_html__( 'Shop Shopee', 'ecomkit-vuikhoe' ); ?></strong></label> <select id="ecomkit-reconcile-connection" name="connection_id" required><option value=""><?php echo esc_html__( 'Chọn shop', 'ecomkit-vuikhoe' ); ?></option><?php foreach ( $connections as $connection ) : ?><option value="<?php echo esc_attr( (string) $connection['id'] ); ?>"><?php echo esc_html( (string) $connection['external_shop_id'] ); ?></option><?php endforeach; ?></select><?php elseif ( 1 === count( $connections ) ) : ?><input type="hidden" name="connection_id" value="<?php echo esc_attr( (string) $connections[0]['id'] ); ?>"><?php endif; ?>
+			<?php submit_button( __( 'Đối chiếu Shopee', 'ecomkit-vuikhoe' ), 'primary', 'submit', false ); ?>
+		</form>
+		<?php endif; ?>
 		<?php $failure = $batch['metadata']['failure_diagnostic'] ?? null; if ( is_array( $failure ) && ! empty( $failure['stage'] ) ) : ?>
 		<h2><?php echo esc_html__( 'Chi tiết chẩn đoán', 'ecomkit-vuikhoe' ); ?></h2>
 		<table class="widefat striped" style="max-width:900px"><tbody>

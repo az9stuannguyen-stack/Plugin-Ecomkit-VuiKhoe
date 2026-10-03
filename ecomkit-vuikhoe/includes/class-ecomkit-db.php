@@ -54,6 +54,7 @@ final class Ecomkit_Vuikhoe_DB {
 		if ( $before['tables_ok'] ) {
 			self::migrate_tables_to_innodb();
 			self::migrate_orders_contract();
+			self::migrate_provider_evidence_columns();
 		}
 		$collate = $wpdb->get_charset_collate();
 		$sql     = self::schema_sql( $tables, $collate );
@@ -76,6 +77,10 @@ final class Ecomkit_Vuikhoe_DB {
 		if ( ! self::orders_schema_diagnostic()['ready'] ) {
 			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_ORDER_SCHEMA_INCOMPATIBLE', false );
 			throw new RuntimeException( 'ECOMKIT_ORDER_SCHEMA_INCOMPATIBLE' );
+		}
+		if ( ! self::provider_evidence_schema_ready() ) {
+			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_PROVIDER_SCHEMA_INCOMPATIBLE', false );
+			throw new RuntimeException( 'ECOMKIT_PROVIDER_SCHEMA_INCOMPATIBLE' );
 		}
 
 		update_option( self::SCHEMA_OPTION, ECOMKIT_VUIKHOE_DB_VERSION, false );
@@ -205,7 +210,6 @@ final class Ecomkit_Vuikhoe_DB {
 			$identifier = self::safe_table_identifier( $tables[ $key ], $tables );
 			$before[ $key ] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$identifier`" );
 		}
-
 		$columns = self::orders_columns();
 		$altered = array();
 		foreach ( array( 'connection_id', 'matching_status' ) as $name ) {
@@ -243,6 +247,82 @@ final class Ecomkit_Vuikhoe_DB {
 		}
 
 		return array( 'altered' => $altered, 'counts' => $after );
+	}
+
+	/**
+	 * Adds WP.5 provider evidence columns without replacing the Orders table.
+	 * Existing row counts and indexes are verified before the schema version advances.
+	 *
+	 * @return array{added:string[],counts:array<string,int>}
+	 */
+	public static function migrate_provider_evidence_columns(): array {
+		global $wpdb;
+
+		$tables = self::table_names();
+		$orders = self::safe_table_identifier( $tables['orders'], $tables );
+		$count_keys = array( 'orders', 'order_items', 'batches', 'errors' );
+		$before = array();
+		foreach ( $count_keys as $key ) {
+			$identifier = self::safe_table_identifier( $tables[ $key ], $tables );
+			$before[ $key ] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$identifier`" );
+		}
+		$indexes_before = self::table_index_fingerprint( $orders );
+
+		$definitions = array(
+			'provider_raw_data'        => 'longtext NULL DEFAULT NULL',
+			'provider_normalized_data' => 'longtext NULL DEFAULT NULL',
+			'provider_updated_at'      => 'datetime NULL DEFAULT NULL',
+			'matched_at'               => 'datetime NULL DEFAULT NULL',
+		);
+		$columns = self::orders_columns();
+		$added = array();
+		foreach ( $definitions as $name => $definition ) {
+			if ( isset( $columns[ $name ] ) ) {
+				continue;
+			}
+			if ( false === $wpdb->query( "ALTER TABLE `$orders` ADD COLUMN `$name` $definition" ) ) {
+				throw new RuntimeException( 'ECOMKIT_PROVIDER_SCHEMA_ALTER_FAILED_' . strtoupper( $name ) );
+			}
+			$added[] = $name;
+			$columns = self::orders_columns();
+			if ( ! isset( $columns[ $name ] ) || 'YES' !== strtoupper( (string) ( $columns[ $name ]['Null'] ?? '' ) ) ) {
+				throw new RuntimeException( 'ECOMKIT_PROVIDER_SCHEMA_VERIFY_FAILED_' . strtoupper( $name ) );
+			}
+		}
+
+		$after = array();
+		foreach ( $count_keys as $key ) {
+			$identifier = self::safe_table_identifier( $tables[ $key ], $tables );
+			$after[ $key ] = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$identifier`" );
+		}
+		if ( $before !== $after ) {
+			throw new RuntimeException( 'ECOMKIT_PROVIDER_SCHEMA_ROW_COUNT_MISMATCH' );
+		}
+		if ( $indexes_before !== self::table_index_fingerprint( $orders ) ) {
+			throw new RuntimeException( 'ECOMKIT_PROVIDER_SCHEMA_INDEX_MISMATCH' );
+		}
+
+		return array( 'added' => $added, 'counts' => $after );
+	}
+
+	public static function provider_evidence_schema_ready(): bool {
+		$columns = self::orders_columns();
+		foreach ( array( 'provider_raw_data', 'provider_normalized_data', 'provider_updated_at', 'matched_at' ) as $name ) {
+			if ( ! isset( $columns[ $name ] ) || 'YES' !== strtoupper( (string) ( $columns[ $name ]['Null'] ?? '' ) ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static function table_index_fingerprint( string $table ): string {
+		global $wpdb;
+		$indexes = $wpdb->get_results( "SHOW INDEX FROM `$table`", ARRAY_A );
+		$definition = array_map(
+			static fn( array $index ): array => array_intersect_key( $index, array_flip( array( 'Non_unique', 'Key_name', 'Seq_in_index', 'Column_name', 'Sub_part', 'Index_type' ) ) ),
+			is_array( $indexes ) ? $indexes : array()
+		);
+		return hash( 'sha256', (string) wp_json_encode( $definition ) );
 	}
 
 	/** @return array<string,array<string,mixed>> */
@@ -442,6 +522,10 @@ final class Ecomkit_Vuikhoe_DB {
 	platform_cost_percent decimal(9,4) DEFAULT NULL,
 	canonical_data longtext DEFAULT NULL,
 	raw_source_metadata longtext DEFAULT NULL,
+	provider_raw_data longtext DEFAULT NULL,
+	provider_normalized_data longtext DEFAULT NULL,
+	provider_updated_at datetime DEFAULT NULL,
+	matched_at datetime DEFAULT NULL,
 	source_refs longtext DEFAULT NULL,
 	created_at datetime NOT NULL,
 	updated_at datetime NOT NULL,

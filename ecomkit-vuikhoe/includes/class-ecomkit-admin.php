@@ -21,6 +21,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_test_config', array( $this, 'handle_shopee_test_config' ) );
 		add_action( 'admin_post_ecomkit_shopee_refresh_token', array( $this, 'handle_shopee_refresh_token' ) );
 		add_action( 'admin_post_ecomkit_shopee_test_order_api', array( $this, 'handle_shopee_test_order_api' ) );
+		add_action( 'admin_post_ecomkit_shopee_reconcile_batch', array( $this, 'handle_shopee_reconcile_batch' ) );
 	}
 
 	public function add_menu(): void {
@@ -43,19 +44,36 @@ final class Ecomkit_Vuikhoe_Admin {
 	public function process_page(): void {
 		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
 		$imports  = new Ecomkit_Vuikhoe_Import_Service();
+		$reconciliation = new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service();
 		$this->render(
 			'process',
 			array(
 				'batch'           => $batch_id ? $imports->get_batch_summary( $batch_id ) : null,
 				'max_upload_size' => $imports->max_upload_bytes(),
 				'max_rows'        => Ecomkit_Vuikhoe_Excel_Service::MAX_ROWS,
+				'ready_connections' => $batch_id ? $reconciliation->ready_connections() : array(),
 			)
 		);
 	}
 
 	public function results_page(): void {
 		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
-		$this->render( 'results', array( 'batch_id' => $batch_id ) );
+		$this->render( 'results', array( 'batch_id' => $batch_id, 'reconciliation' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service() )->get_batch_result( $batch_id ) : null ) );
+	}
+
+	public function handle_shopee_reconcile_batch(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_shopee_reconcile_batch', 'ecomkit_reconcile_nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		$connection_id = absint( wp_unslash( $_POST['connection_id'] ?? 0 ) );
+		try {
+			( new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service() )->reconcile_batch( $batch_id, $connection_id > 0 ? $connection_id : null );
+			$url = add_query_arg( array( 'page' => 'ecomkit-vuikhoe-results', 'batch_id' => $batch_id, 'reconcile_notice' => 'completed' ), admin_url( 'admin.php' ) );
+		} catch ( Throwable $exception ) {
+			$url = add_query_arg( array( 'page' => 'ecomkit-vuikhoe-process', 'batch_id' => $batch_id, 'reconcile_error' => sanitize_key( $exception->getMessage() ) ), admin_url( 'admin.php' ) );
+		}
+		wp_safe_redirect( $url );
+		exit;
 	}
 
 	public function errors_page(): void {

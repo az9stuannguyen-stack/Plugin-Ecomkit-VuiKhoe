@@ -113,5 +113,15 @@ GetOrderDetail accepts exact safe `order_sn` strings and explicit optional-field
 
 GetOrderList explicitly sends `response_optional_fields=order_status` as a business query filter; it is excluded from the shop-level signature base. Each list item requires only a non-empty string `order_sn`. `order_status` is preserved when returned and otherwise remains `null`. A final page may use an empty or omitted `next_cursor` when `more=false`.
 
-The default admin test accepts one date and converts its WordPress-timezone boundaries to Unix seconds using `DateTimeImmutable`: local `00:00:00` to local `23:59:59`. No timezone offset is hardcoded. Failure diagnostics contain shape metadata only. WP.5 should later derive bounded query windows from imported Excel order dates; no all-history crawler or reconciliation is introduced here.
+The default admin test accepts one date and converts its WordPress-timezone boundaries to Unix seconds using `DateTimeImmutable`: local `00:00:00` to local `23:59:59`. No timezone offset is hardcoded. Failure diagnostics contain shape metadata only. WP.4B.1 itself introduced no all-history crawler or reconciliation; WP.5 below implements bounded Excel-derived windows.
 
+## WP.5 — Excel-derived exact reconciliation
+
+- Input is an existing `SUCCESS`/`WARNING` Excel Batch; only rows with `platform=SHOPEE` participate. LAZADA rows are never changed.
+- The query plan comes from the Excel `Ngày đặt` value in WordPress timezone. Consecutive local days are grouped, each window is at most 15 days, and list calls use `time_range_field=create_time`. There is no manual date/order-ID input and no unbounded history scan.
+- Every window uses `get_all_orders()`, opaque provider cursors, exact `order_sn` deduplication and the existing 100-page stall/cycle guard. Negative evidence is valid only after a window completes.
+- Identity is strictly `Excel marketplace_order_id === Shopee order_sn`, case-sensitive. `MATCHED`, `MISSING_IN_SHOPEE` and `EXTRA_IN_SHOPEE` are exact set operations; no name, phone, address, SKU, amount or time-proximity fallback exists.
+- `GetOrderDetail` runs only for matched Excel identities and batches at most 50 IDs per request. Missing detail becomes `DETAIL_MISSING`; extra/duplicate detail identities fail closed.
+- The validated per-order detail object is stored in `provider_raw_data`; a pure deterministic neutral projection is stored in `provider_normalized_data`. `provider_updated_at` protects against stale overwrite and `matched_at` records reconciliation evidence time. Excel `raw_source_metadata` remains unchanged.
+- One READY connection is selected automatically. Multiple READY shops require an explicit administrator selection; provider evidence is bound through `connection_id` to that shop.
+- WP.5 performs zero automatic retries, no Payment/Escrow request, no Lazada API call and no SyncRun creation. A controlled token refresh may still occur inside `ensure_usable_access_token()`.

@@ -95,3 +95,36 @@ Hợp đồng canonical vẫn có đúng 24 cột với thứ tự không đổi
 - Với Shopee ở stage sau, invariant vẫn là `Mã đơn sàn = order_sn`.
 - Dòng sản phẩm continuation không tạo thêm Order và không làm thay đổi sequence 24 cột; chúng được lưu dưới dạng OrderItem.
 
+## 8. Ma trận nguồn khả dụng tại WP.5
+
+Các nhãn dưới đây mô tả **nguồn đã có**, không đồng nghĩa WP.5 đã materialize kết quả export. Hợp đồng vẫn đúng 24 cột và giữ nguyên thứ tự.
+
+| # | Header export | Trạng thái nguồn WP.5 | Ghi chú |
+| ---: | --- | --- | --- |
+| 1 | Ngày Lên Đơn | `EXCEL` / `SHOPEE_ORDER_DETAIL` | Excel `Ngày đặt`; provider `create_time` được giữ riêng |
+| 2 | Mã đơn ESHOP | `UNMAPPED` | Có thể tồn tại trong raw Excel nhưng chưa materialize |
+| 3 | Mã đơn sàn | `EXCEL` / `SHOPEE_ORDER_DETAIL` | Exact `marketplace_order_id === order_sn` |
+| 4 | Kênh Bán Hàng | `EXCEL` / `SHOPEE_ORDER_DETAIL` | Platform source-backed là SHOPEE; chưa export |
+| 5 | Trạng Thái Đơn Hàng | `SHOPEE_ORDER_DETAIL` | Giữ raw `order_status` khi có |
+| 6 | Tên Khách Hàng | `SHOPEE_ORDER_DETAIL` | Recipient name trong normalized provider data; PII |
+| 7 | SĐT | `SHOPEE_ORDER_DETAIL` | Recipient phone trong normalized provider data; PII |
+| 8 | Địa Chỉ | `SHOPEE_ORDER_DETAIL` | Chỉ full address/component provider cung cấp; không tự ghép |
+| 9 | Tỉnh/TP | `SHOPEE_ORDER_DETAIL` | Component provider-backed; không suy đoán |
+| 10 | Ngày Xuất VAT | `UNMAPPED` | Chưa có nguồn được duyệt |
+| 11 | Ghi Chú | `UNMAPPED` | WP.5 chưa materialize note |
+| 12 | Đã Thu Tiền | `FUTURE_PAYMENT_ESCROW` | Không suy từ COD hoặc total amount |
+| 13 | Trạng Thái Công Nợ | `FUTURE_PAYMENT_ESCROW` | Chưa có payment evidence |
+| 14 | Chênh lệch | `FUTURE_PAYMENT_ESCROW` | Không tính tại WP.5 |
+| 15 | Giá SP (VAT 8%) | `UNMAPPED` | Item price không được đổi nghĩa thành VAT price |
+| 16 | % Tổng Chi Phí | `FUTURE_PAYMENT_ESCROW` | Không tính tại WP.5 |
+| 17 | Tổng Tiền Sẽ Thu | `FUTURE_PAYMENT_ESCROW` | `total_amount` không phải seller settlement |
+| 18 | Phí Affiliate (Vui Khỏe) | `UNMAPPED` | Không có nguồn provider được duyệt |
+| 19 | Chiết Khấu (Vui Khỏe) | `UNMAPPED` | Không có công thức được duyệt |
+| 20 | % Chiết Khấu Vui Khỏe | `UNMAPPED` | Không có công thức được duyệt |
+| 21 | Phí Cố Định (TMĐT) | `FUTURE_PAYMENT_ESCROW` | Không tính từ Order Detail |
+| 22 | Phí dịch vụ (TMĐT) | `FUTURE_PAYMENT_ESCROW` | Không tính từ Order Detail |
+| 23 | Phí Giao Dịch (TMĐT) | `FUTURE_PAYMENT_ESCROW` | Không tính từ Order Detail |
+| 24 | % Chi Phí Sàn TMĐT | `FUTURE_PAYMENT_ESCROW` | Không tính tại WP.5 |
+
+Shopee Order Detail raw fields như `total_amount`, shipping fee hoặc `escrow_amount` chỉ được giữ đúng nghĩa provider nếu thực sự xuất hiện. WP.5 không diễn giải chúng thành settlement, platform fee, affiliate fee, commission hay final receivable.
+

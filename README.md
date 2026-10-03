@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.4B.1 — Shopee Order List Live Response Alignment**, plugin `0.4.2`, database schema `4`. List parser chỉ bắt buộc `order_sn`; `order_status` là tùy chọn và được yêu cầu rõ bằng `response_optional_fields=order_status`.
+Hiện tại: **WP.5 — Excel ↔ Shopee Exact order_sn Reconciliation**, plugin `0.5.0`, database schema `5`. Batch Excel đã import có thể tự dẫn xuất cửa sổ `create_time`, đọc đủ pagination, đối chiếu chính xác `marketplace_order_id === order_sn`, tải detail chỉ cho đơn khớp và lưu evidence provider tách biệt.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -32,16 +32,16 @@ Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-onl
 1. Không thử trên production trước; sao lưu database và plugin hiện tại của staging/local.
 2. Cập nhật toàn bộ thư mục plugin `ecomkit-vuikhoe`, bao gồm `vendor/`, bằng quy trình triển khai do người vận hành quản lý.
 3. Không cần deactivate, xóa plugin hoặc cài lại. Lần tải runtime kế tiếp sẽ phát hiện schema cũ và chạy migration tăng dần.
-4. Mở **WordPress Admin → Ecomkit → Cài đặt → Database Runtime Diagnostics**, xác nhận schema `3`, InnoDB được hỗ trợ và cả sáu bảng báo `InnoDB — OK`.
+4. Mở **WordPress Admin → Ecomkit → Cài đặt → Database Runtime Diagnostics**, xác nhận schema `5`, InnoDB được hỗ trợ và cả sáu bảng báo `InnoDB — OK`.
 5. Chỉ sau khi Transactional database readiness báo `PASS`, mở **Xử lý đơn hàng** và thử bằng bản sao file Excel, không dùng trực tiếp file nghiệp vụ gốc.
 
 Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và không tạo dữ liệu mẫu. Deactivate hoặc uninstall không xóa bảng hay dữ liệu.
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.4.2`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.5.0`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
-- Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
+- Sáu bảng custom có prefix động, schema version `5`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
 - Activation idempotent; deactivation và uninstall mặc định không phá hủy dữ liệu.
 - Menu Ecomkit với Tổng quan, Xử lý đơn hàng, Kết quả, Lỗi, Lịch sử, Marketplace và Cài đặt.
@@ -72,9 +72,9 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chưa được triển khai
 
-- Parse PDF, matching và sinh kết quả 24 cột cuối.
+- Parse PDF và sinh kết quả 24 cột cuối.
 - Result reconciliation và export XLSX/CSV thực tế.
-- Shopee Order API, Payment/Escrow, token refresh tự động hoặc provider business calls.
+- Payment/Escrow, Lazada API và materialization/export tài chính 24 cột.
 
 ## Cấu hình khóa credential WP.3B
 
@@ -132,5 +132,13 @@ Every provider request calls `ensure_usable_access_token(connectionId)` first an
 
 The admin Order API test now accepts one WordPress-local calendar date. The server maps that date to local `00:00:00` through `23:59:59` with `wp_timezone()` and `DateTimeImmutable`; operators do not enter hours manually. GetOrderList requests explicitly include `response_optional_fields=order_status`, without changing the shop signature base. A missing list `order_status` is represented as `null`, while a missing/empty `order_sn` remains invalid.
 
-On structural failures, diagnostics record only top-level/response/first-item key names, JSON/PHP types, and list count—never raw JSON, order values, PII, signed URLs, or tokens. Future WP.5 reconciliation should derive bounded Shopee windows from imported Excel order dates and exact `Mã đơn sàn = order_sn`; it must not perform an unbounded historical fetch. That automation is not implemented in WP.4B.1.
+On structural failures, diagnostics record only top-level/response/first-item key names, JSON/PHP types, and list count—never raw JSON, order values, PII, signed URLs, or tokens.
+
+# WP.5 exact Shopee reconciliation
+
+Trang Batch có action quản trị `Đối chiếu Shopee` dùng `manage_options`, nonce, POST và PRG. Operator không nhập ngày hoặc `order_sn`: plugin đọc `Ngày đặt` đã persist (với fallback có kiểm soát cho metadata parser `wp2b-v1`), dùng timezone WordPress, gom các ngày liên tiếp thành window tối đa 15 ngày và dùng `create_time`. Không quét lịch sử không giới hạn.
+
+Mỗi window phải hoàn tất toàn bộ pagination trước khi đơn vắng mặt được gắn `NOT_FOUND_IN_SHOPEE`. So sánh phân biệt hoa/thường và chỉ dùng `marketplace_order_id === order_sn`; không fuzzy match hoặc fallback PII. Detail chỉ được gọi cho Excel order đã có trong list, theo batch tối đa 50.
+
+Schema `5` thêm bốn cột nullable vào `orders`: `provider_raw_data`, `provider_normalized_data`, `provider_updated_at`, `matched_at`. `raw_source_metadata` của Excel không bị ghi đè. Snapshot provider cũ hơn không thay thế snapshot mới hơn; rerun không tạo Order/OrderItem mới. Payload detail có thể chứa PII nên chỉ nằm trong DB nghiệp vụ/admin, không vào log, transient diagnostics hoặc màn hình summary mặc định. WP.5 chưa gọi Payment/Escrow, chưa dùng Lazada API, chưa tạo SyncRun và chưa export 24 cột.
 

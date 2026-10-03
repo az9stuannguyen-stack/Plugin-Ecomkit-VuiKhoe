@@ -142,6 +142,14 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Trước khi ghi business data, runtime xác nhận bốn bảng import dùng engine transactional. Mọi `$wpdb->insert()`/`update()` bắt buộc kiểm tra `false`; Order/OrderItem/Error/Batch finalize failure gây `ROLLBACK`, sau đó một transaction mới đánh dấu Batch `ERROR` và ghi lỗi an toàn.
 - Schema vẫn là version `2`: mọi cột được ghi đã tồn tại và nullable đúng yêu cầu; không có migration phá hủy.
 
+## 13. WP.5 reconciliation runtime
+
+- Runtime `0.5.0`, schema `5`. Migration chỉ thêm bốn cột nullable vào `orders`: raw provider detail, normalized provider projection, provider update timestamp và matched timestamp. Không drop/recreate, không sửa raw Excel, và xác minh row counts/indexes trước khi tăng version.
+- Phase A đọc Batch/Orders và lập window từ `Ngày đặt`; Phase B thực hiện network reads; Phase C xác nhận list/detail completeness; Phase D dùng transaction DB ngắn. Không giữ transaction trong khi chờ Shopee.
+- Chỉ `platform=SHOPEE` được xử lý. Một READY connection được tự chọn; nhiều READY connection bắt buộc admin chọn rõ shop. `connection_id` ràng buộc evidence với shop đã dùng.
+- Set comparison là exact, case-sensitive: `MATCHED = EXCEL ∩ PROVIDER`, `MISSING = EXCEL - PROVIDER`, `EXTRA = PROVIDER - EXCEL`. Window chưa hoàn tất không được tạo `NOT_FOUND_IN_SHOPEE`.
+- Provider raw detail và normalized projection nằm riêng trong Order. Reconciliation summary không chứa PII được lưu trong `batches.source_metadata`; không tạo `SyncRun` ở WP.5.
+
 ## 13. Production runtime diagnostics WP.2C
 
 - Runtime `0.2.3`, schema vẫn `2`. Deployment bắt buộc gồm toàn bộ `vendor/`; bootstrap cảnh báo quản trị viên nếu `vendor/autoload.php` không đọc được.

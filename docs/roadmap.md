@@ -94,7 +94,7 @@ Không tự động bắt đầu WP.3 sau WP.2.
 
 Exit gate: đầy đủ matrix `MATCHED`, missing, duplicate, parse error, case/whitespace và rollback tests.
 
-## WP.5 — Result, Error và History
+## Kế hoạch cũ đã được thay thế — Result, Error và History
 
 - Read-only admin screens/REST, pagination 20/50/100, URL-persisted filters.
 - Full-Batch summaries, safe error details, path/secret redaction.
@@ -102,7 +102,7 @@ Exit gate: đầy đủ matrix `MATCHED`, missing, duplicate, parse error, case/
 
 Exit gate: capability tests, XSS/redaction tests, query/index performance ở dữ liệu mục tiêu.
 
-## WP.6 — Export
+## Kế hoạch cũ đã được thay thế — Export
 
 - XLSX và BOM CSV đúng contract 24 cột.
 - Filter toàn Batch, stable ordering, date/text/null conventions và formula-injection defense.
@@ -163,4 +163,12 @@ Runtime `0.4.1`, schema `4`: read-only GetOrderList/GetOrderDetail foundation, s
 # WP.4B.1 gate
 
 Runtime `0.4.2`, schema `4`: live GetOrderList alignment makes `order_status` optional, requests it explicitly, adds safe response-shape diagnostics, and replaces manual time entry with a WordPress-timezone full-day selector. WP.5 remains unimplemented; its future bounded windows should be derived from Excel business dates rather than manual dates or unbounded history scans.
+
+## WP.5 — Excel ↔ Shopee exact reconciliation
+
+Runtime `0.5.0`, schema `5`: a successful/warning Excel Batch can be reconciled through an explicit admin action. Windows are derived automatically from Shopee rows' `Ngày đặt`, split to at most 15 calendar days, use `create_time`, and retrieve all pages with the existing cursor/cycle/page-limit guards. Missing dates remain unresolved with an actionable error.
+
+Matching is exact and case-sensitive on `marketplace_order_id === order_sn`. Only complete windows may produce `NOT_FOUND_IN_SHOPEE`; extra provider orders remain summary metadata and never become Excel Orders. Detail is requested only for matched Excel IDs in batches of 50. Provider raw/normalized evidence is separated from Excel raw, reruns are idempotent, and stale provider snapshots cannot move backwards.
+
+WP.5 does not call Payment/Escrow, Lazada, PDF, final export or create SyncRun. WP.6 remains gated on a successful live reconciliation and will own result/canonical 24-column materialization.
 
