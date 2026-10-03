@@ -4,6 +4,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Shopee_Config {
 	public const OPTION = 'ecomkit_vuikhoe_shopee_config';
+	public const FIXED_SECRET_MASK = '••••••••••••••••';
 	private const AAD = 'ecomkit|shopee|provider-config';
 	public function __construct( private ?Ecomkit_Vuikhoe_Credential_Encryption $encryption = null ) { $this->encryption ??= new Ecomkit_Vuikhoe_Credential_Encryption(); }
 
@@ -37,6 +38,20 @@ final class Ecomkit_Vuikhoe_Shopee_Config {
 		$key = $plain['partner_key'] ?? null;
 		if ( ! is_string( $key ) || '' === $key ) { throw new RuntimeException( 'ECOMKIT_CREDENTIAL_DECRYPT_FAILED' ); }
 		return $key;
+	}
+
+	/** @return array{state:string,mask:string,status:string} */
+	public function partner_key_ui_state(): array {
+		$config = $this->get();
+		if ( empty( $config['encrypted_partner_key'] ) ) {
+			return array( 'state' => 'not_configured', 'mask' => '', 'status' => 'Chưa cấu hình' );
+		}
+		try {
+			$this->partner_key( $config );
+			return array( 'state' => 'configured', 'mask' => self::FIXED_SECRET_MASK, 'status' => 'Đã lưu an toàn' );
+		} catch ( Throwable $exception ) {
+			return array( 'state' => 'decrypt_failed', 'mask' => '', 'status' => 'Không thể đọc credential đã mã hóa' );
+		}
 	}
 
 	/** @return array{ready:bool,code:string} */

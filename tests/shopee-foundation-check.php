@@ -58,8 +58,19 @@ wp3_check( ! str_contains( json_encode( $GLOBALS['opts'] ), 'obviously-fake-part
 $envelope = $saved['encrypted_partner_key'];
 $saved2 = $config_service->save( 'sandbox', '123', '' );
 wp3_check( $envelope === $saved2['encrypted_partner_key'], 'Blank Partner Key edit did not preserve secret.' );
+$mask_before = $config_service->partner_key_ui_state()['mask'];
 $saved3 = $config_service->save( 'sandbox', '123', 'obviously-fake-replacement-key' );
 wp3_check( $envelope !== $saved3['encrypted_partner_key'], 'New Partner Key did not replace envelope.' );
+$ui = $config_service->partner_key_ui_state();
+wp3_check( 'configured' === $ui['state'] && Ecomkit_Vuikhoe_Shopee_Config::FIXED_SECRET_MASK === $ui['mask'] && $mask_before === $ui['mask'] && ! str_contains( json_encode( $ui ), 'replacement-key' ), 'Configured Partner Key UI state is unsafe or mask depends on secret length.' );
+$preserved_config = $GLOBALS['opts'][ Ecomkit_Vuikhoe_Shopee_Config::OPTION ];
+try { ( new Ecomkit_Vuikhoe_Shopee_Config( new Ecomkit_Vuikhoe_Credential_Encryption( 'invalid-key' ) ) )->save( 'sandbox', '123', 'new-value-that-must-not-persist' ); throw new RuntimeException( 'Invalid master key accepted.' ); } catch ( RuntimeException $e ) {}
+wp3_check( $preserved_config === $GLOBALS['opts'][ Ecomkit_Vuikhoe_Shopee_Config::OPTION ], 'Failed replacement changed existing encrypted Partner Key.' );
+$wrong_key_ui = ( new Ecomkit_Vuikhoe_Shopee_Config( new Ecomkit_Vuikhoe_Credential_Encryption( base64_encode( str_repeat( 'Z', 32 ) ) ) ) )->partner_key_ui_state();
+wp3_check( 'decrypt_failed' === $wrong_key_ui['state'] && '' === $wrong_key_ui['mask'], 'Wrong master key did not produce safe UI failure.' );
+$view_source = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/marketplace.php' );
+wp3_check( ! str_contains( $view_source, 'partner_key(' ) && str_contains( $view_source, 'value="" autocomplete="new-password"' ) && str_contains( $view_source, "\$key_ui['mask']" ), 'Marketplace view can repopulate or does not mask Partner Key safely.' );
+wp3_check( str_contains( $view_source, "\$config['partner_id']" ), 'Partner ID is not rendered visibly.' );
 foreach ( array( '', '-1', '1.2', 'abc', '01' ) as $id ) { try { $config_service->save( 'sandbox', $id, 'x' ); throw new RuntimeException( 'Invalid Partner ID accepted.' ); } catch ( InvalidArgumentException $e ) {} }
 
 $GLOBALS['http_calls'] = array();

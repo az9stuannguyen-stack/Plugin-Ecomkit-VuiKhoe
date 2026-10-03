@@ -17,6 +17,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_test_excel_runtime', array( $this, 'handle_excel_runtime_test' ) );
 		add_action( 'admin_post_ecomkit_shopee_save_config', array( $this, 'handle_shopee_save_config' ) );
+		add_action( 'admin_post_ecomkit_shopee_replace_partner_key', array( $this, 'handle_shopee_replace_partner_key' ) );
 		add_action( 'admin_post_ecomkit_shopee_test_config', array( $this, 'handle_shopee_test_config' ) );
 	}
 
@@ -68,7 +69,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	public function marketplace_page(): void {
 		$config_service = new Ecomkit_Vuikhoe_Shopee_Config();
 		$config = $config_service->get();
-		$this->render( 'marketplace', array( 'shopee_config' => $config, 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => ( new Ecomkit_Vuikhoe_Credential_Encryption() )->ready(), 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ) ) );
+		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => ( new Ecomkit_Vuikhoe_Credential_Encryption() )->ready(), 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ) ) );
 	}
 
 	public function settings_page(): void {
@@ -100,6 +101,22 @@ final class Ecomkit_Vuikhoe_Admin {
 		$args = array( 'page' => 'ecomkit-vuikhoe-marketplace' );
 		$args[ $result['ready'] ? 'shopee_notice' : 'shopee_error' ] = strtolower( $result['code'] );
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) ); exit;
+	}
+
+	public function handle_shopee_replace_partner_key(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_shopee_replace_partner_key', 'ecomkit_shopee_nonce' );
+		$config_service = new Ecomkit_Vuikhoe_Shopee_Config();
+		$config = $config_service->get();
+		$new_key = (string) wp_unslash( $_POST['partner_key_new'] ?? '' );
+		try {
+			if ( '' === trim( $new_key ) ) { throw new InvalidArgumentException( 'SHOPEE_PARTNER_KEY_REQUIRED' ); }
+			$config_service->save( (string) ( $config['environment'] ?? '' ), (string) ( $config['partner_id'] ?? '' ), $new_key );
+			$args = array( 'shopee_notice' => 'partner_key_saved' );
+		} catch ( Throwable $exception ) {
+			$args = array( 'shopee_error' => strtolower( sanitize_key( $exception->getMessage() ) ) );
+		}
+		wp_safe_redirect( add_query_arg( array_merge( array( 'page' => 'ecomkit-vuikhoe-marketplace' ), $args ), admin_url( 'admin.php' ) ) ); exit;
 	}
 
 	public function handle_excel_runtime_test(): void {

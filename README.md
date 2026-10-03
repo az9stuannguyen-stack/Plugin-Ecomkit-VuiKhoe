@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Stage **WP.3 — Shopee Provider Configuration + OAuth** triển khai plugin phiên bản `0.3.0`, schema `4`: cấu hình ứng dụng Shopee, OAuth shop, AES-256-GCM credential storage và UI connection an toàn. Chưa có Shopee Order API, refresh tự động, escrow, matching, kết quả 24 cột cuối, export hoặc PDF.
+Stage **WP.3A — Shopee Secret UI Masking** triển khai plugin phiên bản `0.3.1`, schema `4`: Partner Key đã lưu chỉ hiện mask cố định và được thay thế qua password field rỗng riêng; plaintext không bao giờ được gửi lại trình duyệt. OAuth và encrypted credential storage của WP.3 giữ nguyên.
 
 Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
 
@@ -37,7 +37,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.3.0`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.3.1`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
 define('ECOMKIT_VUIKHOE_DB_VERSION', 4);
-define('ECOMKIT_VUIKHOE_VERSION', '0.3.0');
+define('ECOMKIT_VUIKHOE_VERSION', '0.3.1');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -82,10 +82,13 @@ check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_test_excel_runti
 check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_test_excel_runtime', 'ecomkit_runtime_nonce' )"), 'Excel runtime-test nonce validation is missing.');
 check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_shopee_save_config', 'ecomkit_shopee_nonce' )"), 'Shopee config nonce validation is missing.');
 check(str_contains((string) $admin, 'handle_shopee_save_config'), 'Shopee provider config handler is missing.');
+check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_shopee_replace_partner_key', 'ecomkit_shopee_nonce' )"), 'Partner Key replacement nonce validation is missing.');
+check(str_contains((string) $admin, 'handle_shopee_replace_partner_key'), 'Partner Key replacement handler is missing.');
+check(substr_count((string) $admin, 'Ecomkit_Vuikhoe_Security::require_management_capability()') >= 4, 'Shopee secret actions are not consistently admin-only.');
 check(str_contains((string) $oauth, "check_admin_referer( 'ecomkit_shopee_oauth_start', 'ecomkit_shopee_nonce' )"), 'Shopee OAuth start nonce validation is missing.');
 check(str_contains((string) $oauth, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Shopee OAuth start capability validation is missing.');
 check(str_contains((string) $oauth, "'permission_callback' => '__return_true'"), 'Public Shopee callback route is missing.');
-check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.3.0' )"), 'WP.3 plugin version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.3.1' )"), 'WP.3A plugin version is wrong.');
 check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 4 )"), 'WP.3 must retain DB schema 4.');
 check(str_contains((string) $import, "'xlsx' !== strtolower"), 'XLSX-only extension validation is missing.');
 check(str_contains((string) $import, 'wp_check_filetype_and_ext'), 'WordPress content/type validation is missing.');
