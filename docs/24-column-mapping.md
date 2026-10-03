@@ -14,7 +14,7 @@
 
 | # | Header export | Canonical key | Kiểu logic | Nguồn file matching | Shopee hiện hành | Quy tắc NULL |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | Ngày Lên Đơn | `order_date` | date/datetime | Chưa map | `create_time` → ISO → date | Trống nếu thiếu |
+| 1 | Ngày Lên Đơn | `order_date` | date/datetime | Excel `Ngày đặt`, parse strict trong timezone WordPress và lưu UTC | `create_time` → ISO → date | Trống nếu thiếu |
 | 2 | Mã đơn ESHOP | `eshop_order_code` | text | Chưa map | Chưa map | Trống |
 | 3 | Mã đơn sàn | `raw_order_code` | text | Mã nguồn primary | `order_sn` chính xác | Bắt buộc với record hợp lệ |
 | 4 | Kênh Bán Hàng | `sales_channel` | text | Chưa map | Hằng `SHOPEE` | Trống nếu nguồn chưa xác định |
@@ -127,4 +127,6 @@ Các nhãn dưới đây mô tả **nguồn đã có**, không đồng nghĩa WP
 | 24 | % Chi Phí Sàn TMĐT | `FUTURE_PAYMENT_ESCROW` | Không tính tại WP.5 |
 
 Shopee Order Detail raw fields như `total_amount`, shipping fee hoặc `escrow_amount` chỉ được giữ đúng nghĩa provider nếu thực sự xuất hiện. WP.5 không diễn giải chúng thành settlement, platform fee, affiliate fee, commission hay final receivable.
+
+WP.5A không materialize export 24 cột. Nó chỉ làm rõ nguồn cột 1: Excel datetime có precision thực được lưu UTC; date-only giữ marker `DATE` để không giả vờ biết giờ. UI chuyển lại qua timezone WordPress. Nếu thiếu/không hợp lệ, giá trị canonical vẫn trống và reconciliation không được suy diễn `NOT_FOUND_IN_SHOPEE` khi chưa chạy provider window.
 

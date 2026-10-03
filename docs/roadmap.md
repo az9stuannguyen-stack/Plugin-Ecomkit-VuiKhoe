@@ -172,3 +172,9 @@ Matching is exact and case-sensitive on `marketplace_order_id === order_sn`. Onl
 
 WP.5 does not call Payment/Escrow, Lazada, PDF, final export or create SyncRun. WP.6 remains gated on a successful live reconciliation and will own result/canonical 24-column materialization.
 
+## WP.5A — production Excel order dates
+
+Runtime `0.5.1`, schema `5`: repair production `Ngày đặt` extraction for Excel serials and strict `d/m/Y H:i[:s]` strings containing ordinary whitespace, LF or CRLF. Parsed instants use the WordPress timezone and persist as UTC without changing the original raw cell. Batch preview exposes the local date/time before reconciliation.
+
+Invalid non-empty dates produce `EXCEL_INVALID_ORDER_DATE`. Missing dates remain unresolved under `SHOPEE_RECON_ORDER_DATE_MISSING`; when no window can be planned, provider calls remain zero, the UI reports `WARNING`, and no green completed notice or false `NOT_FOUND_IN_SHOPEE` is allowed. WP.6 remains blocked until the production re-import and live reconciliation pass.
+

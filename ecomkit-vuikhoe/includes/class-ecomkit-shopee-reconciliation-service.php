@@ -47,9 +47,10 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 				continue;
 			}
 			$by_sn[ $sn ] = $order;
-			$date = self::stored_order_local_date( (string) ( $order['order_date'] ?? '' ), $timezone );
+			$raw = json_decode( (string) ( $order['raw_source_metadata'] ?? '' ), true );
+			$storage = is_array( $raw ) ? (string) ( $raw['order_date_storage'] ?? 'LOCAL' ) : 'LOCAL';
+			$date = self::stored_order_local_date( (string) ( $order['order_date'] ?? '' ), $timezone, $storage );
 			if ( null === $date && $date_column > 0 ) {
-				$raw = json_decode( (string) ( $order['raw_source_metadata'] ?? '' ), true );
 				$date = self::parse_excel_local_date( is_array( $raw ) ? ( $raw['cells'][ (string) $date_column ] ?? null ) : null, $timezone );
 			}
 			if ( null === $date ) {
@@ -60,7 +61,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		}
 		$identity_errors = array_filter( $planning_errors, static fn( array $error ): bool => 'SHOPEE_RECON_PROVIDER_IDENTITY_MISMATCH' === $error['error_code'] );
 		if ( $identity_errors ) {
-			$summary = array( 'connection_id' => $connection_id, 'shop_id' => (string) $connection['external_shop_id'], 'started_at' => current_time( 'mysql', true ), 'completed_at' => current_time( 'mysql', true ), 'windows' => array(), 'excel_shopee_count' => count( $excel_orders ), 'provider_count' => 0, 'matched_count' => 0, 'missing_count' => 0, 'extra_count' => 0, 'detail_count' => 0, 'detail_missing_count' => 0, 'missing_date_count' => 0, 'extra_order_sns' => array(), 'status' => 'ERROR' );
+			$summary = array( 'connection_id' => $connection_id, 'shop_id' => (string) $connection['external_shop_id'], 'started_at' => current_time( 'mysql', true ), 'completed_at' => current_time( 'mysql', true ), 'windows' => array(), 'provider_windows_executed' => 0, 'shopee_api_calls' => 0, 'excel_shopee_count' => count( $excel_orders ), 'provider_count' => 0, 'matched_count' => 0, 'missing_count' => 0, 'extra_count' => 0, 'detail_count' => 0, 'detail_missing_count' => 0, 'missing_date_count' => 0, 'extra_order_sns' => array(), 'status' => 'ERROR' );
 			$this->persist( $batch, $batch_metadata, $connection_id, array(), array(), array(), array(), array(), false, $planning_errors, $summary );
 			return $summary;
 		}
@@ -71,10 +72,12 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		$complete_order_ids = array();
 		$provider_errors = array();
 		$window_results = array();
+		$api_calls = 0;
 		foreach ( $windows as $window ) {
 			$window_ids = array_keys( array_filter( $dates_by_id, static fn( string $date ): bool => $date >= $window['start_date'] && $date <= $window['end_date'] ) );
 			try {
 				$result = $this->orders->get_all_orders( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100 );
+				$api_calls += (int) $result['page_count'];
 				foreach ( $result['orders'] as $provider_order ) {
 					$provider_by_sn[ $provider_order['order_sn'] ] = $provider_order;
 				}
@@ -83,6 +86,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 				}
 				$window_results[] = array( 'start_date' => $window['start_date'], 'end_date' => $window['end_date'], 'status' => 'SUCCESS', 'page_count' => (int) $result['page_count'], 'provider_count' => count( $result['orders'] ) );
 			} catch ( Throwable $exception ) {
+				$api_calls += max( 1, (int) ( $this->orders->last_diagnostic['pagination_page'] ?? 1 ) );
 				$is_partial = (int) ( $this->orders->last_diagnostic['pagination_page'] ?? 1 ) > 1 || in_array( $exception->getMessage(), array( 'SHOPEE_ORDER_PAGINATION_STALLED', 'SHOPEE_ORDER_PAGE_LIMIT_EXCEEDED' ), true );
 				$error_code = $is_partial ? 'SHOPEE_RECON_PAGINATION_INCOMPLETE' : 'SHOPEE_RECON_LIST_FAILED';
 				$provider_errors[] = $this->error_record( $batch, null, $error_code, 'RECON_LIST', 'Không thể đọc đầy đủ tất cả trang đơn Shopee trong một khoảng ngày.', 'Thử đối chiếu lại; các đơn trong khoảng lỗi chưa được kết luận NOT FOUND.' );
@@ -111,6 +115,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		if ( $matched ) {
 			try {
 				$detail = $this->orders->get_order_details_batched( $connection_id, array_keys( $matched ), self::DETAIL_FIELDS );
+				$api_calls += count( $detail['request_ids'] );
 				$details_by_sn = $detail['orders_by_sn'];
 				$detail_missing = $detail['missing_order_sn'];
 				if ( $detail['extra_order_sn'] || (int) $detail['duplicate_count'] > 0 ) {
@@ -119,6 +124,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 					$details_by_sn = array();
 				}
 			} catch ( Throwable $exception ) {
+				$api_calls++;
 				$provider_errors[] = $this->error_record( $batch, null, 'SHOPEE_RECON_DETAIL_FAILED', 'RECON_DETAIL', 'Không thể tải đầy đủ chi tiết các đơn Shopee đã khớp.', 'Thử đối chiếu lại; dữ liệu chi tiết cũ được giữ nguyên.' );
 				$detail_failed = true;
 			}
@@ -135,6 +141,8 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 			'started_at'          => $started_at,
 			'completed_at'        => current_time( 'mysql', true ),
 			'windows'             => $window_results,
+			'provider_windows_executed' => count( $window_results ),
+			'shopee_api_calls'     => $api_calls,
 			'excel_shopee_count'  => count( $excel_orders ),
 			'provider_count'      => count( $provider_by_sn ),
 			'matched_count'       => count( $matched ),
@@ -200,7 +208,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 				return null;
 			}
 		}
-		$text = trim( (string) $value );
+		$text = trim( (string) preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) );
 		foreach ( array( 'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 'Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d' ) as $format ) {
 			$date = DateTimeImmutable::createFromFormat( '!' . $format, $text, $timezone );
 			$errors = DateTimeImmutable::getLastErrors();
@@ -229,9 +237,11 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		$safe_rows = array();
 		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
 			$normalized = json_decode( (string) ( $row['provider_normalized_data'] ?? '' ), true );
-			$display_date = (string) ( $row['order_date'] ?? '' );
+			$raw = json_decode( (string) ( $row['raw_source_metadata'] ?? '' ), true );
+			$precision = is_array( $raw ) ? (string) ( $raw['order_date_precision'] ?? 'DATETIME' ) : 'DATETIME';
+			$storage = is_array( $raw ) ? (string) ( $raw['order_date_storage'] ?? 'LOCAL' ) : 'LOCAL';
+			$display_date = self::format_stored_order_date( (string) ( $row['order_date'] ?? '' ), $precision, wp_timezone(), $storage );
 			if ( '' === $display_date && $date_column > 0 ) {
-				$raw = json_decode( (string) ( $row['raw_source_metadata'] ?? '' ), true );
 				$display_date = (string) ( self::parse_excel_local_date( is_array( $raw ) ? ( $raw['cells'][ (string) $date_column ] ?? null ) : null, wp_timezone() ) ?? '' );
 			}
 			$safe_rows[] = array(
@@ -273,13 +283,28 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		return $ready[0];
 	}
 
-	private static function stored_order_local_date( string $value, DateTimeZone $timezone ): ?string {
+	private static function stored_order_local_date( string $value, DateTimeZone $timezone, string $storage = 'UTC' ): ?string {
 		if ( '' === $value ) {
 			return null;
 		}
-		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, $timezone );
+		$source_timezone = 'UTC' === $storage ? new DateTimeZone( 'UTC' ) : $timezone;
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, $source_timezone );
 		$errors = DateTimeImmutable::getLastErrors();
-		return false !== $date && ( false === $errors || ( 0 === $errors['warning_count'] && 0 === $errors['error_count'] ) ) && $date->format( 'Y-m-d H:i:s' ) === $value ? $date->format( 'Y-m-d' ) : null;
+		return false !== $date && ( false === $errors || ( 0 === $errors['warning_count'] && 0 === $errors['error_count'] ) ) && $date->format( 'Y-m-d H:i:s' ) === $value ? $date->setTimezone( $timezone )->format( 'Y-m-d' ) : null;
+	}
+
+	public static function format_stored_order_date( string $value, string $precision, DateTimeZone $timezone, string $storage = 'UTC' ): string {
+		if ( '' === $value ) {
+			return '';
+		}
+		$source_timezone = 'UTC' === $storage ? new DateTimeZone( 'UTC' ) : $timezone;
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, $source_timezone );
+		$errors = DateTimeImmutable::getLastErrors();
+		if ( false === $date || ( false !== $errors && ( $errors['warning_count'] > 0 || $errors['error_count'] > 0 ) ) || $date->format( 'Y-m-d H:i:s' ) !== $value ) {
+			return '';
+		}
+		$format = 'DATE' === $precision ? get_option( 'date_format' ) : get_option( 'date_format' ) . ' ' . get_option( 'time_format' );
+		return wp_date( $format, $date->getTimestamp(), $timezone );
 	}
 
 	/** @return array{start_date:string,end_date:string,time_from:int,time_to:int} */

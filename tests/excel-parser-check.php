@@ -3,9 +3,12 @@
 declare(strict_types=1);
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
+function wp_timezone(): DateTimeZone { return new DateTimeZone( 'Asia/Bangkok' ); }
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
 function assert_true( bool $condition, string $message ): void {
@@ -62,15 +65,55 @@ try {
 		), null, 'A3' );
 	} );
 	$result = $parser->parse( $production );
-	assert_true( 'SUCCESS' === $result['status'], 'Production fixture must succeed.' );
+	assert_true( 'SUCCESS' === $result['status'], 'Production fixture must succeed: ' . json_encode( $result['errors'] ) );
 	assert_true( 3 === $result['raw']['header_row'], 'Header after title rows was not discovered.' );
 	assert_true( 3 === count( $result['orders'] ) && 4 === $result['raw']['item_rows'], 'Order/item counts are wrong.' );
 	assert_true( 'SHOPEE' === $result['orders'][0]['platform'] && 'TEST-SHP-001' === $result['orders'][0]['order_code'], 'Shopee combined cell failed.' );
-	assert_true( '2026-01-01 10:00:00' === $result['orders'][0]['order_date'] && 3 === $result['raw']['date_column'], 'Named Excel Ngày đặt was not parsed deterministically.' );
+	assert_true( '2026-01-01 03:00:00' === $result['orders'][0]['order_date'] && 3 === $result['raw']['date_column'], 'Named Excel Ngày đặt was not parsed to UTC deterministically.' );
+	assert_true( 'DATETIME' === $result['orders'][0]['order_date_precision'], 'Datetime precision was not retained.' );
 	assert_true( 'TEST-SHP-001' !== 'TEST001' && 'TEST-SHP-001' === $result['orders'][0]['order_code'], 'eShop code was used as identity.' );
 	assert_true( 2 === count( $result['orders'][1]['items'] ), 'Continuation row did not attach to one order.' );
 	assert_true( 'LAZADA' === $result['orders'][2]['platform'] && '000123456789' === $result['orders'][2]['order_code'], 'Lazada leading-zero ID changed.' );
 	assert_true( array() === codes( $result ), 'Valid continuation generated an error.' );
+
+	$paths[] = $date_matrix = fixture( static function ( Spreadsheet $book ): void {
+		$sheet = $book->getActiveSheet();
+		$sheet->fromArray( array( 'Sàn & Mã Đơn', 'Ngày đặt', 'Mã hàng hóa', 'Tên hàng hóa', 'Số lg' ), null, 'A1' );
+		$serial = ExcelDate::PHPToExcel( new DateTimeImmutable( '2026-09-17 14:15:00', wp_timezone() ) );
+		$sheet->setCellValue( 'A2', "Shopee\nDATE-NUMERIC" );
+		$sheet->setCellValue( 'B2', $serial );
+		$sheet->getStyle( 'B2' )->getNumberFormat()->setFormatCode( NumberFormat::FORMAT_DATE_DATETIME );
+		$values = array(
+			3 => '17/09/2026 14:15',
+			4 => "17/09/2026\n14:15",
+			5 => "17/09/2026\r\n14:15",
+			6 => '17/09/2026    14:15',
+			7 => '17/09/2026',
+			8 => '31/02/2026 14:15',
+			9 => '',
+		);
+		foreach ( $values as $row => $value ) {
+			$sheet->setCellValue( "A{$row}", "Shopee\nDATE-{$row}" );
+			$sheet->setCellValue( "B{$row}", $value );
+			$sheet->setCellValue( "C{$row}", 'SKU-' . $row );
+			$sheet->setCellValue( "D{$row}", 'Item ' . $row );
+			$sheet->setCellValue( "E{$row}", 1 );
+		}
+		$sheet->setCellValue( 'C10', 'SKU-CONTINUATION' );
+		$sheet->setCellValue( 'D10', 'Continuation item' );
+		$sheet->setCellValue( 'E10', 1 );
+		$sheet->setCellValue( 'D12', 'Thủ Kho' );
+	} );
+	$date_result = $parser->parse( $date_matrix );
+	assert_true( 8 === count( $date_result['orders'] ), 'Date matrix order count changed.' );
+	foreach ( array( 0, 1, 2, 3, 4 ) as $index ) {
+		assert_true( '2026-09-17 07:15:00' === $date_result['orders'][ $index ]['order_date'], 'Numeric/string/newline date was not normalized to the same UTC instant.' );
+	}
+	assert_true( '2026-09-16 17:00:00' === $date_result['orders'][5]['order_date'] && 'DATE' === $date_result['orders'][5]['order_date_precision'], 'Date-only precision or UTC storage failed.' );
+	assert_true( null === $date_result['orders'][6]['order_date'] && in_array( 'EXCEL_INVALID_ORDER_DATE', codes( $date_result ), true ), 'Impossible date was normalized or not reported.' );
+	assert_true( "17/09/2026\n14:15" === $date_result['orders'][2]['raw_cells']['2'], 'Date normalization overwrote the raw Excel cell.' );
+	assert_true( null === $date_result['orders'][7]['order_date'] && 2 === count( $date_result['orders'][7]['items'] ), 'Blank date or continuation-row inheritance policy failed.' );
+	assert_true( 1 === $date_result['raw']['classifications']['CONTINUATION_ITEM_ROW'] && 1 === $date_result['raw']['classifications']['FOOTER_OR_NONDATA_ROW'], 'Continuation/footer classification regressed in date matrix.' );
 
 	$paths[] = $orphan = fixture( static function ( Spreadsheet $book ): void {
 		$book->getActiveSheet()->fromArray( array( array( 'Sàn & Mã Đơn', 'Mã hàng hóa', 'Tên hàng hóa', 'Số lg' ), array( null, 'SKU-X', 'Sản phẩm X', 1 ) ) );
@@ -109,6 +152,7 @@ try {
 		assert_true( $expected_orders === count( $shape['orders'] ), "Fixture {$name} order count failed." );
 		assert_true( $expected_items === $shape['raw']['item_rows'] && $expected_items === $shape['total_rows'], "Fixture {$name} item/business-row count failed." );
 		assert_true( $expected_shopee === ( $shape['raw']['platform_counts']['SHOPEE'] ?? 0 ) && $expected_lazada === ( $shape['raw']['platform_counts']['LAZADA'] ?? 0 ), "Fixture {$name} platform counts failed." );
+		assert_true( count( $shape['orders'] ) === count( array_filter( array_column( $shape['orders'], 'order_date' ) ) ), "Fixture {$name} order dates were not extracted." );
 		assert_true( 1 === $shape['raw']['classifications']['BLANK_ROW'] && 1 === $shape['raw']['classifications']['FOOTER_OR_NONDATA_ROW'], "Fixture {$name} footer structure failed." );
 	}
 	assert_true( 5 === count( $parser->parse( $paths[ array_key_last( $paths ) ] )['orders'][1]['items'] ), 'Fixture C row 5 must have five items.' );

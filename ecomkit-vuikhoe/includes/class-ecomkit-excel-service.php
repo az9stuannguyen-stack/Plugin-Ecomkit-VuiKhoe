@@ -14,7 +14,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	public const LEGACY_HEADER = 'Mã đơn sàn';
 	public const MAX_ROWS = 2000;
 	private const HEADER_SCAN_NON_EMPTY_ROWS = 20;
-	private const PARSER_VERSION = 'wp2b-v1';
+	private const PARSER_VERSION = 'wp5a-v1';
 	private const PRODUCT_CODE_HEADER = 'Mã hàng hóa';
 	private const PRODUCT_NAME_HEADER = 'Tên hàng hóa';
 	private const QUANTITY_HEADER = 'Số lg';
@@ -145,8 +145,20 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			$classifications['ORDER_ROW']++;
 			$total++;
 			$rows[] = array( 'row' => $row_number, 'classification' => 'ORDER_ROW', 'cells' => $row['cells'] );
-			$order_date = isset( $columns[ self::ORDER_DATE_HEADER ] ) ? $this->parse_order_date_cell( $sheet->getCell( array( $columns[ self::ORDER_DATE_HEADER ], $row_number ) ) ) : null;
-			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
+			$order_date = isset( $columns[ self::ORDER_DATE_HEADER ] ) ? $this->parse_order_date_cell( $sheet->getCell( array( $columns[ self::ORDER_DATE_HEADER ], $row_number ) ) ) : array( 'value' => null, 'precision' => null, 'state' => 'blank', 'safe_raw' => null );
+			if ( 'invalid' === $order_date['state'] ) {
+				$errors[] = $this->row_error(
+					'EXCEL_INVALID_ORDER_DATE',
+					sprintf( 'Ngày đặt ở dòng %d không đúng định dạng ngày/giờ được hỗ trợ.', $row_number ),
+					'Kiểm tra ô Ngày đặt; dùng định dạng ngày/tháng/năm và giờ:phút, ví dụ 17/09/2026 14:15.',
+					$sheet->getTitle(),
+					$row_number,
+					$order_date['safe_raw'],
+					array(),
+					self::ORDER_DATE_HEADER
+				);
+			}
+			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
 			$current_index = array_key_last( $orders );
 			$platform_counts[ $parsed['platform'] ] = ( $platform_counts[ $parsed['platform'] ] ?? 0 ) + 1;
 			if ( 'VALID_ITEM' === $product_structure ) {
@@ -167,31 +179,46 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 		);
 	}
 
-	private function parse_order_date_cell( Cell $cell ): ?string {
+	/** @return array{value:?string,precision:?string,state:string,safe_raw:?string} */
+	private function parse_order_date_cell( Cell $cell ): array {
 		$value = DataType::TYPE_FORMULA === $cell->getDataType() ? $cell->getOldCalculatedValue() : $cell->getValue();
 		if ( null === $value || '' === trim( (string) $value ) ) {
-			return null;
+			return array( 'value' => null, 'precision' => null, 'state' => 'blank', 'safe_raw' => null );
 		}
 		$timezone = function_exists( 'wp_timezone' ) ? wp_timezone() : new DateTimeZone( 'UTC' );
 		if ( ( is_int( $value ) || is_float( $value ) ) && ExcelDate::isDateTime( $cell ) ) {
 			try {
-				return ExcelDate::excelToDateTimeObject( (float) $value, $timezone )->format( 'Y-m-d H:i:s' );
+				$serial = (float) $value;
+				if ( ! is_finite( $serial ) || $serial <= 0 ) {
+					throw new RuntimeException( 'Invalid Excel date serial.' );
+				}
+				$date = DateTimeImmutable::createFromInterface( ExcelDate::excelToDateTimeObject( $serial, $timezone ) );
+				return array( 'value' => $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' ), 'precision' => 'DATETIME', 'state' => 'valid', 'safe_raw' => null );
 			} catch ( Throwable $exception ) {
-				return null;
+				return array( 'value' => null, 'precision' => null, 'state' => 'invalid', 'safe_raw' => $this->safe_order_date_raw( $value ) );
 			}
 		}
 		if ( $value instanceof DateTimeInterface ) {
-			return DateTimeImmutable::createFromInterface( $value )->setTimezone( $timezone )->format( 'Y-m-d H:i:s' );
+			return array( 'value' => DateTimeImmutable::createFromInterface( $value )->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' ), 'precision' => 'DATETIME', 'state' => 'valid', 'safe_raw' => null );
 		}
-		$text = trim( (string) $value );
+		$text = trim( (string) preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) );
 		foreach ( array( 'd/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 'Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d' ) as $format ) {
 			$date = DateTimeImmutable::createFromFormat( '!' . $format, $text, $timezone );
 			$errors = DateTimeImmutable::getLastErrors();
 			if ( false !== $date && ( false === $errors || ( 0 === $errors['warning_count'] && 0 === $errors['error_count'] ) ) && $date->format( $format ) === $text ) {
-				return $date->format( 'Y-m-d H:i:s' );
+				$precision = str_contains( $format, 'H:i' ) ? 'DATETIME' : 'DATE';
+				return array( 'value' => $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' ), 'precision' => $precision, 'state' => 'valid', 'safe_raw' => null );
 			}
 		}
-		return null;
+		return array( 'value' => null, 'precision' => null, 'state' => 'invalid', 'safe_raw' => $this->safe_order_date_raw( $value ) );
+	}
+
+	private function safe_order_date_raw( mixed $value ): ?string {
+		if ( ! is_scalar( $value ) ) {
+			return null;
+		}
+		$text = trim( (string) preg_replace( '/\s+/u', ' ', trim( (string) $value ) ) );
+		return '' === $text ? null : mb_substr( $text, 0, 80 );
 	}
 
 	/** @return array<string,mixed> */

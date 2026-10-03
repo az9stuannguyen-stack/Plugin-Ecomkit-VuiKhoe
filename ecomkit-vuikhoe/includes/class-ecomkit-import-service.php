@@ -158,7 +158,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 					'normalized_order_code'   => $code,
 					'matching_status'         => null,
 					'order_date'              => $order['order_date'] ?? null,
-					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'combined_identity' => $order['raw_identity'], 'platform_label' => $order['raw_platform'], 'cells' => $order['raw_cells'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
+					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'combined_identity' => $order['raw_identity'], 'platform_label' => $order['raw_platform'], 'cells' => $order['raw_cells'], 'order_date_precision' => $order['order_date_precision'] ?? null, 'order_date_storage' => ! empty( $order['order_date'] ) ? 'UTC' : null ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'source_refs'             => wp_json_encode( array( 'source' => 'EXCEL', 'sheet' => $order['sheet'], 'row' => $order['row'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'created_at'              => $now,
 					'updated_at'              => $now,
@@ -364,9 +364,30 @@ final class Ecomkit_Vuikhoe_Import_Service {
 			return null;
 		}
 		$batch['metadata'] = json_decode( (string) $batch['source_metadata'], true ) ?: array();
-		$batch['orders']   = $wpdb->get_results( $wpdb->prepare( "SELECT platform, raw_order_code, source_refs FROM {$tables['orders']} WHERE batch_id = %d ORDER BY id ASC LIMIT 100", $batch_id ), ARRAY_A );
+		$batch['orders']   = (array) $wpdb->get_results( $wpdb->prepare( "SELECT platform, raw_order_code, order_date, raw_source_metadata, source_refs FROM {$tables['orders']} WHERE batch_id = %d ORDER BY id ASC LIMIT 100", $batch_id ), ARRAY_A );
+		foreach ( $batch['orders'] as &$order ) {
+			$raw = json_decode( (string) ( $order['raw_source_metadata'] ?? '' ), true );
+			$precision = is_array( $raw ) ? (string) ( $raw['order_date_precision'] ?? 'DATETIME' ) : 'DATETIME';
+			$storage = is_array( $raw ) ? (string) ( $raw['order_date_storage'] ?? 'LOCAL' ) : 'LOCAL';
+			$order['order_date_display'] = self::format_order_date( (string) ( $order['order_date'] ?? '' ), $precision, $storage );
+		}
+		unset( $order );
 		$batch['errors']   = $wpdb->get_results( $wpdb->prepare( "SELECT sheet_name, row_number, column_name, error_code, friendly_message, suggestion FROM {$tables['errors']} WHERE batch_id = %d ORDER BY id ASC LIMIT 100", $batch_id ), ARRAY_A );
 		return $batch;
+	}
+
+	private static function format_order_date( string $value, string $precision = 'DATETIME', string $storage = 'UTC' ): string {
+		if ( '' === $value ) {
+			return '';
+		}
+		$source_timezone = 'UTC' === $storage ? new DateTimeZone( 'UTC' ) : wp_timezone();
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, $source_timezone );
+		$errors = DateTimeImmutable::getLastErrors();
+		if ( false === $date || ( false !== $errors && ( $errors['warning_count'] > 0 || $errors['error_count'] > 0 ) ) || $date->format( 'Y-m-d H:i:s' ) !== $value ) {
+			return '';
+		}
+		$format = 'DATE' === $precision ? get_option( 'date_format' ) : get_option( 'date_format' ) . ' ' . get_option( 'time_format' );
+		return wp_date( $format, $date->getTimestamp(), wp_timezone() );
 	}
 
 	/** @return array<int,array<string,mixed>> */

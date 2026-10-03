@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.5 — Excel ↔ Shopee Exact order_sn Reconciliation**, plugin `0.5.0`, database schema `5`. Batch Excel đã import có thể tự dẫn xuất cửa sổ `create_time`, đọc đủ pagination, đối chiếu chính xác `marketplace_order_id === order_sn`, tải detail chỉ cho đơn khớp và lưu evidence provider tách biệt.
+Hiện tại: **WP.5A — Production Excel Order Date Persistence Fix**, plugin `0.5.1`, database schema `5`. `Ngày đặt` được parse nghiêm ngặt trong timezone WordPress, lưu UTC và dùng để tự dẫn xuất cửa sổ `create_time`; reconciliation vẫn đối chiếu chính xác `marketplace_order_id === order_sn`.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.5.0`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.5.1`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `5`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
@@ -69,6 +69,9 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 - Upload lifecycle: xác thực extension/kích thước, di chuyển vào file tạm ngẫu nhiên, xác nhận file tồn tại/readable/có kích thước, đọc cấu trúc XLSX, persist dữ liệu nội bộ và xóa workbook tạm. Workbook nguồn không được lưu lâu dài.
 - Mã nên được định dạng Text để giữ leading zero và ID dài. Numeric cell không thể phục hồi chính xác sẽ bị từ chối, không đoán chữ số.
 - Dòng trống hoàn toàn bị bỏ qua. Dòng thiếu mã và occurrence duplicate sau lần đầu tạo lỗi; lần xuất hiện hợp lệ đầu tiên được giữ.
+- Cột production `Ngày đặt` được nhận bằng exact normalized header. Giá trị Excel datetime serial dùng utility của PhpSpreadsheet; chuỗi chỉ nhận `d/m/Y H:i[:s]` (hoặc ISO không mơ hồ), sau khi chuẩn hóa whitespace/LF/CRLF. `strtotime()` không được dùng để đoán locale.
+- Datetime nguồn được hiểu trong `wp_timezone()` nếu không mang timezone riêng, sau đó lưu vào `orders.order_date` dưới dạng UTC `Y-m-d H:i:s`; marker `order_date_storage=UTC` và precision `DATE`/`DATETIME` nằm trong raw metadata mà không ghi đè raw cell. Date-only biểu thị chỉ biết ngày, không phải thời gian chính xác.
+- Giá trị ngày không rỗng nhưng bất hợp lệ tạo `EXCEL_INVALID_ORDER_DATE`; ô trống vẫn persist Order với `order_date=NULL` và WP.5 giữ trạng thái chưa kết luận thay vì gán `NOT_FOUND_IN_SHOPEE`.
 
 ## Chưa được triển khai
 
@@ -141,4 +144,8 @@ Trang Batch có action quản trị `Đối chiếu Shopee` dùng `manage_option
 Mỗi window phải hoàn tất toàn bộ pagination trước khi đơn vắng mặt được gắn `NOT_FOUND_IN_SHOPEE`. So sánh phân biệt hoa/thường và chỉ dùng `marketplace_order_id === order_sn`; không fuzzy match hoặc fallback PII. Detail chỉ được gọi cho Excel order đã có trong list, theo batch tối đa 50.
 
 Schema `5` thêm bốn cột nullable vào `orders`: `provider_raw_data`, `provider_normalized_data`, `provider_updated_at`, `matched_at`. `raw_source_metadata` của Excel không bị ghi đè. Snapshot provider cũ hơn không thay thế snapshot mới hơn; rerun không tạo Order/OrderItem mới. Payload detail có thể chứa PII nên chỉ nằm trong DB nghiệp vụ/admin, không vào log, transient diagnostics hoặc màn hình summary mặc định. WP.5 chưa gọi Payment/Escrow, chưa dùng Lazada API, chưa tạo SyncRun và chưa export 24 cột.
+
+# WP.5A production order dates
+
+Batch preview hiển thị `Ngày đặt` trong timezone WordPress trước khi đối chiếu. Reconciliation đổi UTC về ngày local để tạo full-day window; không yêu cầu nhập ngày thủ công. Nếu mọi đơn Shopee đều thiếu ngày, provider windows và Shopee API calls đều bằng `0`, status là `WARNING`, không có đơn nào bị gán `NOT_FOUND_IN_SHOPEE`, và UI không hiển thị banner hoàn tất màu xanh. Schema vẫn là `5`; không có migration trong WP.5A.
 

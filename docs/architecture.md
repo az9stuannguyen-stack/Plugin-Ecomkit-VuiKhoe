@@ -150,6 +150,14 @@ Các quyết định này thuộc stage sau; WP.0 chỉ khóa contract nghiệp 
 - Set comparison là exact, case-sensitive: `MATCHED = EXCEL ∩ PROVIDER`, `MISSING = EXCEL - PROVIDER`, `EXTRA = PROVIDER - EXCEL`. Window chưa hoàn tất không được tạo `NOT_FOUND_IN_SHOPEE`.
 - Provider raw detail và normalized projection nằm riêng trong Order. Reconciliation summary không chứa PII được lưu trong `batches.source_metadata`; không tạo `SyncRun` ở WP.5.
 
+## 13.1 WP.5A order-date contract
+
+- Runtime `0.5.1`, schema vẫn `5`; cột `orders.order_date datetime NULL` đã tồn tại nên không có migration.
+- Parser map exact header normalized `Ngày đặt`. Excel numeric datetime dùng `PhpSpreadsheet\Shared\Date`; chuỗi chỉ qua các format xác định `d/m/Y H:i[:s]`, date-only và ISO không mơ hồ sau khi gom whitespace/LF/CRLF. Không dùng `strtotime()` để đoán input.
+- Nguồn không có timezone được hiểu bằng `wp_timezone()`, rồi lưu UTC `Y-m-d H:i:s`. `raw_source_metadata` giữ nguyên cells, thêm precision và storage marker; dữ liệu từ parser cũ không có marker tiếp tục được đọc theo local-wall-time cũ để tránh làm lệch Batch hiện hữu.
+- ORDER_ROW là nơi duy nhất thiết lập ngày. Continuation item không ghi đè ngày cha. Date không rỗng nhưng sai tạo `EXCEL_INVALID_ORDER_DATE`; date trống thuộc semantics cảnh báo `SHOPEE_RECON_ORDER_DATE_MISSING` của planner.
+- Batch preview và reconciliation chuyển UTC về timezone WordPress khi hiển thị. Run không có window dùng warning, báo window/API call bằng 0 và không tạo `NOT_FOUND_IN_SHOPEE`.
+
 ## 13. Production runtime diagnostics WP.2C
 
 - Runtime `0.2.3`, schema vẫn `2`. Deployment bắt buộc gồm toàn bộ `vendor/`; bootstrap cảnh báo quản trị viên nếu `vendor/autoload.php` không đọc được.

@@ -10,6 +10,7 @@ function get_option( string $key, mixed $default = false ): mixed { return $GLOB
 function update_option( string $key, mixed $value, bool $autoload = false ): bool { $GLOBALS['recon_options'][ $key ] = $value; return true; }
 function current_time( string $type, bool $gmt = false ): string { return '2026-10-03 01:02:03'; }
 function wp_timezone(): DateTimeZone { return new DateTimeZone( 'America/New_York' ); }
+function wp_date( string $format, ?int $timestamp = null, ?DateTimeZone $timezone = null ): string { return ( new DateTimeImmutable( '@' . (string) $timestamp ) )->setTimezone( $timezone ?? wp_timezone() )->format( $format ); }
 function rest_url( string $path ): string { return 'https://example.test/wp-json/' . $path; }
 function wp_http_validate_url( string $url ): string|false { return filter_var( $url, FILTER_VALIDATE_URL ); }
 function wp_parse_url( string $url, int $component = -1 ): mixed { return parse_url( $url, $component ); }
@@ -89,6 +90,10 @@ recon_check( 2 === count( $long_windows ) && $long_windows[0]['time_to'] - $long
 $dst_dates = array_map( static fn( int $day ): string => ( new DateTimeImmutable( '2026-10-25' ) )->modify( '+' . $day . ' days' )->format( 'Y-m-d' ), range( 0, 14 ) );
 foreach ( Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::derive_windows( $dst_dates, $timezone ) as $dst_window ) { recon_check( $dst_window['time_to'] - $dst_window['time_from'] <= 1296000, 'DST produced an oversized provider window.' ); }
 recon_check( '2026-09-17' === Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::parse_excel_local_date( '17/09/2026 10:30', $timezone ) && null === Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::parse_excel_local_date( '', $timezone ), 'Excel date parsing/missing-date behavior failed.' );
+recon_check( '2026-09-17' === Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::parse_excel_local_date( "17/09/2026\r\n10:30", $timezone ), 'Reconciliation fallback did not normalize date whitespace.' );
+$GLOBALS['recon_options']['date_format'] = 'd/m/Y';
+$GLOBALS['recon_options']['time_format'] = 'H:i';
+recon_check( '17/09/2026 10:30' === Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::format_stored_order_date( '2026-09-17 14:30:00', 'DATETIME', $timezone ), 'UTC order date was not displayed in the WordPress timezone.' );
 
 $normal = Ecomkit_Vuikhoe_Shopee_Order_Normalizer::normalize( array( 'order_sn' => 'A', 'order_status' => 'COMPLETED', 'create_time' => 100, 'update_time' => 200, 'buyer_username' => 'buyer', 'recipient_address' => array( 'name' => 'Recipient', 'phone' => 'phone', 'full_address' => 'address' ), 'item_list' => array( array( 'item_id' => 1, 'item_name' => 'Item', 'model_quantity_purchased' => 2, 'model_discounted_price' => 50 ) ), 'total_amount' => 100 ) );
 recon_check( 'A' === $normal['marketplaceOrderId'] && 'A' === $normal['rawOrderCode'] && 100 === $normal['totalAmount'] && null === $normal['actualShippingFee'] && ! array_key_exists( 'sellerSettlement', $normal ), 'Pure normalizer or financial safety failed.' );
@@ -117,12 +122,22 @@ function queue_reconciliation( int $update_time ): void {
 $service = new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service();
 queue_reconciliation( 100 );
 $summary = $service->reconcile_batch( 10 );
-recon_check( 4 === $summary['excel_shopee_count'] && 3 === $summary['provider_count'] && 2 === $summary['matched_count'] && 1 === $summary['missing_count'] && 1 === $summary['extra_count'] && 2 === $summary['detail_count'] && 1 === $summary['missing_date_count'] && 'WARNING' === $summary['status'], 'Reconciliation counts are wrong.' );
+recon_check( 4 === $summary['excel_shopee_count'] && 3 === $summary['provider_count'] && 2 === $summary['matched_count'] && 1 === $summary['missing_count'] && 1 === $summary['extra_count'] && 2 === $summary['detail_count'] && 1 === $summary['missing_date_count'] && 1 === $summary['provider_windows_executed'] && 2 === $summary['shopee_api_calls'] && 'WARNING' === $summary['status'], 'Reconciliation counts are wrong.' );
 recon_check( 'MATCHED' === $wpdb->orders[1]['matching_status'] && 'MATCHED' === $wpdb->orders[2]['matching_status'] && 'NOT_FOUND_IN_SHOPEE' === $wpdb->orders[3]['matching_status'] && null === $wpdb->orders[4]['matching_status'], 'Matching status policy failed.' );
 recon_check( $connection_id === $wpdb->orders[1]['connection_id'] && null === $wpdb->orders[5]['connection_id'] && null === $wpdb->orders[5]['matching_status'], 'Connection binding or LAZADA isolation failed.' );
 recon_check( $excel_raw_before === $wpdb->orders[1]['raw_source_metadata'] && ! empty( $wpdb->orders[1]['provider_raw_data'] ) && ! empty( $wpdb->orders[1]['provider_normalized_data'] ), 'Excel/provider raw-normalized separation failed.' );
 recon_check( 2 === count( $GLOBALS['recon_get_calls'] ) && str_contains( $GLOBALS['recon_get_calls'][0]['url'], 'time_range_field=create_time' ), 'Provider calls were not bounded to list plus matched-only detail.' );
 recon_check( (bool) array_filter( $wpdb->errors, static fn( array $error ): bool => 'SHOPEE_RECON_ORDER_DATE_MISSING' === $error['error_code'] ), 'Missing Excel date error was not persisted.' );
+
+$wpdb->batches[12] = array( 'id' => 12, 'source_type' => 'EXCEL', 'status' => 'SUCCESS', 'source_filename' => 'all-dates-missing.xlsx', 'source_metadata' => json_encode( array( 'parser_version' => 'wp5a-v1', 'date_column' => 3 ) ) );
+foreach ( range( 20, 23 ) as $id ) {
+	$wpdb->orders[ $id ] = array_merge( $base, array( 'id' => $id, 'batch_id' => 12, 'marketplace_order_id' => 'NO-DATE-' . $id, 'order_date' => null, 'raw_source_metadata' => json_encode( array( 'cells' => array( '3' => '' ) ) ), 'source_refs' => json_encode( array( 'sheet' => 'Orders', 'row' => $id ) ) ) );
+}
+$calls_before_missing_dates = count( $GLOBALS['recon_get_calls'] );
+$missing_dates = $service->reconcile_batch( 12 );
+recon_check( 'WARNING' === $missing_dates['status'] && 4 === $missing_dates['missing_date_count'] && 0 === $missing_dates['provider_windows_executed'] && 0 === $missing_dates['shopee_api_calls'], 'All-missing-date Batch did not remain safely incomplete.' );
+recon_check( $calls_before_missing_dates === count( $GLOBALS['recon_get_calls'] ), 'All-missing-date Batch called Shopee.' );
+foreach ( range( 20, 23 ) as $id ) { recon_check( null === $wpdb->orders[ $id ]['matching_status'], 'Missing date created a false NOT_FOUND result.' ); }
 
 $order_count = count( $wpdb->orders );
 $old_raw = $wpdb->orders[1]['provider_raw_data'];
@@ -167,6 +182,8 @@ $process_view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/pr
 $results_view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/results.php' );
 recon_check( str_contains( (string) $admin_source, "require_management_capability();\n\t\tcheck_admin_referer( 'ecomkit_shopee_reconcile_batch'" ), 'Reconciliation capability/nonce enforcement is missing.' );
 recon_check( str_contains( (string) $process_view, 'ecomkit_shopee_reconcile_batch' ) && ! str_contains( (string) $process_view, 'time_from' ) && ! str_contains( (string) $process_view, 'time_to' ) && ! str_contains( (string) $process_view, 'order_sn_list' ), 'Admin reconciliation asks for manual dates or order IDs.' );
+recon_check( str_contains( (string) $process_view, 'order_date_display' ), 'Batch preview does not expose the safely formatted order date.' );
 recon_check( ! str_contains( (string) $results_view, 'provider_raw_data' ) && ! str_contains( (string) $results_view, 'recipientPhone' ), 'Provider raw data or PII reached the summary view.' );
+recon_check( str_contains( (string) $results_view, "'SUCCESS' ===" ) && str_contains( (string) $results_view, 'notice-warning' ) && str_contains( (string) $results_view, 'provider_windows_executed' ) && str_contains( (string) $results_view, 'shopee_api_calls' ), 'Incomplete reconciliation warning/count UX is missing.' );
 recon_check( 0 === count( $GLOBALS['recon_post_calls'] ), 'Unexpected token/provider POST occurred during fake reconciliation.' );
 echo "WP.5 Shopee reconciliation checks passed.\n";
