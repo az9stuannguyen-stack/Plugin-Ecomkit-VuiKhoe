@@ -94,6 +94,8 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         'Ecomkit_Vuikhoe_Shopee_Environment' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-environment.php',
         'Ecomkit_Vuikhoe_Shopee_HTTP_Client' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-http-client.php',
         'Ecomkit_Vuikhoe_Shopee_OAuth' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-oauth.php',
+        'Ecomkit_Vuikhoe_Shopee_Order_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-order-service.php',
+        'Ecomkit_Vuikhoe_Shopee_Order_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-order-service.php',
         'Ecomkit_Vuikhoe_Shopee_Provider_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-http-client.php',
         'Ecomkit_Vuikhoe_Shopee_Signer' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-signer.php',
         'Ecomkit_Vuikhoe_Shopee_Token_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-token-service.php',

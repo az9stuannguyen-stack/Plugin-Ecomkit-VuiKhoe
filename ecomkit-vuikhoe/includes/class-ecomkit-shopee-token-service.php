@@ -15,6 +15,9 @@ final class Ecomkit_Vuikhoe_Shopee_Token_Service {
 		try { return $this->lock->synchronized( $connection_id, function () use ( $connection_id, $force_refresh ): string { return $this->under_lock( $connection_id, $force_refresh ); } ); }
 		catch ( Throwable $exception ) { if ( 'ECOMKIT_CREDENTIAL_LOCK_UNAVAILABLE' === $exception->getMessage() ) { $this->last_diagnostic['classification'] = $exception->getMessage(); } throw $exception; }
 	}
+	public function mark_reauthorization_required( int $connection_id, array $diagnostic = array() ): void {
+		$this->lock->synchronized( $connection_id, function () use ( $connection_id, $diagnostic ): void { global $wpdb; $table = Ecomkit_Vuikhoe_DB::table_names()['marketplace_connections']; $row = $wpdb->get_row( $wpdb->prepare( "SELECT metadata FROM $table WHERE id = %d", $connection_id ), ARRAY_A ); if ( ! is_array( $row ) ) { throw new RuntimeException( 'SHOPEE_REFRESH_CONNECTION_INVALID' ); } $metadata = json_decode( (string) ( $row['metadata'] ?? '' ), true ); $this->set_lifecycle( $connection_id, is_array( $metadata ) ? $metadata : array(), 'REAUTH_REQUIRED', $diagnostic ); } );
+	}
 
 	private function under_lock( int $connection_id, bool $force_refresh ): string {
 		global $wpdb;

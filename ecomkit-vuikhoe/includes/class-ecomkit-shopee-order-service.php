@@ -1,0 +1,73 @@
+<?php
+/** Read-only Shopee Order API foundation. No order persistence or reconciliation. */
+defined( 'ABSPATH' ) || exit;
+
+final class Ecomkit_Vuikhoe_Shopee_Order_Service {
+	private const LIST_PATH = '/api/v2/order/get_order_list';
+	private const DETAIL_PATH = '/api/v2/order/get_order_detail';
+	private const MAX_WINDOW = 1296000;
+	private const MAX_PAGES = 100;
+	private const DETAIL_BATCH = 50;
+	private const STATUSES = array( 'UNPAID', 'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED', 'IN_CANCEL', 'CANCELLED', 'INVOICE_PENDING' );
+	private const OPTIONAL_FIELDS = array( 'buyer_user_id', 'buyer_username', 'recipient_address', 'item_list', 'pay_time', 'payment_method', 'shipping_carrier', 'estimated_shipping_fee', 'actual_shipping_fee', 'note', 'note_update_time' );
+	public array $last_diagnostic = array();
+	public function __construct( private ?Ecomkit_Vuikhoe_Shopee_Token_Service $tokens = null ) { $this->tokens ??= new Ecomkit_Vuikhoe_Shopee_Token_Service(); }
+
+	/** Exactly one provider list call. */
+	public function get_order_list_page( int $connection_id, string $range_field, int $from, int $to, int $page_size = 100, ?string $cursor = null, ?string $status = null ): array {
+		$this->validate_list_input( $range_field, $from, $to, $page_size, $status ); $connection = $this->connection( $connection_id );
+		$this->last_diagnostic = array( 'stage' => 'ORDER_TOKEN_READY', 'classification' => '', 'api_path' => self::LIST_PATH, 'connection_id' => $connection_id, 'shop_id' => $connection['shop_id'] );
+		$access_token = $this->tokens->ensure_usable_access_token( $connection_id );
+		$params = array( 'time_range_field' => $range_field, 'time_from' => $from, 'time_to' => $to, 'page_size' => $page_size );
+		if ( null !== $cursor ) { $params['cursor'] = $cursor; } if ( null !== $status && '' !== $status ) { $params['order_status'] = $status; }
+		$data = $this->shop_get( $connection, self::LIST_PATH, $access_token, $params, 'ORDER_LIST' );
+		$this->last_diagnostic['stage'] = 'ORDER_LIST_RESPONSE_VALIDATE'; $response = $data['response'] ?? null;
+		if ( ! is_array( $response ) || ! isset( $response['order_list'], $response['more'] ) || ! is_array( $response['order_list'] ) || ! is_bool( $response['more'] ) ) { $this->fail( 'SHOPEE_ORDER_RESPONSE_INVALID' ); }
+		$orders = array(); foreach ( $response['order_list'] as $order ) { if ( ! is_array( $order ) || ! isset( $order['order_sn'], $order['order_status'] ) || ! is_string( $order['order_sn'] ) || ! is_string( $order['order_status'] ) || '' === trim( $order['order_sn'] ) ) { $this->fail( 'SHOPEE_ORDER_RESPONSE_INVALID' ); } $order['order_sn'] = trim( $order['order_sn'] ); $orders[] = $order; }
+		$next = $response['next_cursor'] ?? ''; if ( ! is_string( $next ) && ! is_int( $next ) ) { $this->fail( 'SHOPEE_ORDER_RESPONSE_INVALID' ); }
+		$this->last_diagnostic['stage'] = 'ORDER_LIST_COMPLETE';
+		return array( 'orders' => $orders, 'more' => $response['more'], 'next_cursor' => (string) $next, 'request_id' => (string) ( $data['request_id'] ?? '' ), 'diagnostic' => $this->last_diagnostic );
+	}
+
+	public function get_all_orders( int $connection_id, string $range_field, int $from, int $to, int $page_size = 100, ?string $status = null ): array {
+		$cursor = null; $seen_cursors = array(); $by_sn = array(); $duplicates = 0; $conflicts = 0; $request_ids = array();
+		for ( $page = 1; $page <= self::MAX_PAGES; $page++ ) {
+			$result = $this->get_order_list_page( $connection_id, $range_field, $from, $to, $page_size, $cursor, $status ); $request_ids[] = $result['request_id'];
+			foreach ( $result['orders'] as $order ) { $sn = $order['order_sn']; if ( isset( $by_sn[ $sn ] ) ) { $duplicates++; if ( (string) $by_sn[ $sn ]['order_status'] !== (string) $order['order_status'] ) { $conflicts++; } } $by_sn[ $sn ] = $order; }
+			if ( ! $result['more'] ) { return array( 'orders' => array_values( $by_sn ), 'duplicate_count' => $duplicates, 'conflict_count' => $conflicts, 'page_count' => $page, 'request_ids' => $request_ids ); }
+			$next = $result['next_cursor']; if ( '' === $next || $next === $cursor || isset( $seen_cursors[ $next ] ) ) { $this->fail( 'SHOPEE_ORDER_PAGINATION_STALLED' ); } $seen_cursors[ $next ] = true; $cursor = $next;
+		}
+		$this->fail( 'SHOPEE_ORDER_PAGE_LIMIT_EXCEEDED' );
+	}
+
+	/** Exactly one provider detail call. */
+	public function get_order_detail_page( int $connection_id, array $order_sns, array $optional_fields = array() ): array {
+		$order_sns = $this->validate_order_sns( $order_sns, false ); if ( count( $order_sns ) > self::DETAIL_BATCH ) { $this->fail( 'SHOPEE_ORDER_DETAIL_BATCH_TOO_LARGE' ); }
+		$fields = $this->validate_optional_fields( $optional_fields ); $connection = $this->connection( $connection_id ); $access_token = $this->tokens->ensure_usable_access_token( $connection_id );
+		$params = array( 'order_sn_list' => implode( ',', $order_sns ) ); if ( $fields ) { $params['response_optional_fields'] = implode( ',', $fields ); }
+		$data = $this->shop_get( $connection, self::DETAIL_PATH, $access_token, $params, 'ORDER_DETAIL' ); $this->last_diagnostic['stage'] = 'ORDER_DETAIL_RESPONSE_VALIDATE';
+		$response = $data['response'] ?? null; if ( ! is_array( $response ) || ! isset( $response['order_list'] ) || ! is_array( $response['order_list'] ) ) { $this->fail( 'SHOPEE_ORDER_RESPONSE_INVALID' ); }
+		$by_sn = array(); $duplicates = 0; foreach ( $response['order_list'] as $order ) { if ( ! is_array( $order ) || ! isset( $order['order_sn'] ) || ! is_string( $order['order_sn'] ) || '' === trim( $order['order_sn'] ) ) { $this->fail( 'SHOPEE_ORDER_RESPONSE_INVALID' ); } $sn = trim( $order['order_sn'] ); if ( isset( $by_sn[ $sn ] ) ) { $duplicates++; } $order['order_sn'] = $sn; $by_sn[ $sn ] = $order; }
+		$missing = array_values( array_diff( $order_sns, array_keys( $by_sn ) ) ); $extra = array_values( array_diff( array_keys( $by_sn ), $order_sns ) ); $this->last_diagnostic['stage'] = 'ORDER_DETAIL_COMPLETE';
+		return array( 'orders_by_sn' => $by_sn, 'requested_count' => count( $order_sns ), 'returned_count' => count( $by_sn ), 'missing_order_sn' => $missing, 'extra_order_sn' => $extra, 'duplicate_count' => $duplicates, 'complete' => ! $missing && ! $extra && 0 === $duplicates, 'request_id' => (string) ( $data['request_id'] ?? '' ) );
+	}
+
+	public function get_order_details_batched( int $connection_id, array $order_sns, array $optional_fields = array() ): array {
+		$order_sns = $this->validate_order_sns( $order_sns, true ); $all = array(); $duplicates = 0; $request_ids = array();
+		foreach ( array_chunk( $order_sns, self::DETAIL_BATCH ) as $batch ) { $result = $this->get_order_detail_page( $connection_id, $batch, $optional_fields ); $request_ids[] = $result['request_id']; $duplicates += $result['duplicate_count']; foreach ( $result['orders_by_sn'] as $sn => $order ) { if ( isset( $all[ $sn ] ) ) { $duplicates++; } $all[ $sn ] = $order; } }
+		$missing = array_values( array_diff( $order_sns, array_keys( $all ) ) ); $extra = array_values( array_diff( array_keys( $all ), $order_sns ) );
+		return array( 'orders_by_sn' => $all, 'requested_count' => count( $order_sns ), 'returned_count' => count( $all ), 'missing_order_sn' => $missing, 'extra_order_sn' => $extra, 'duplicate_count' => $duplicates, 'complete' => ! $missing && ! $extra && 0 === $duplicates, 'request_ids' => $request_ids );
+	}
+
+	private function connection( int $id ): array { global $wpdb; $this->last_diagnostic = array( 'stage' => 'ORDER_CONNECTION_READINESS', 'classification' => '', 'connection_id' => $id ); $table = Ecomkit_Vuikhoe_DB::table_names()['marketplace_connections']; $row = $wpdb->get_row( $wpdb->prepare( "SELECT id, platform, external_shop_id, status, credential_source, metadata FROM $table WHERE id = %d", $id ), ARRAY_A ); if ( ! is_array( $row ) ) { $this->fail( 'SHOPEE_ORDER_CONNECTION_NOT_READY' ); } $meta = json_decode( (string) ( $row['metadata'] ?? '' ), true ); $meta = is_array( $meta ) ? $meta : array(); $config = ( new Ecomkit_Vuikhoe_Shopee_Config() )->get(); if ( 'SHOPEE' !== ( $row['platform'] ?? '' ) || 'ACTIVE' !== ( $row['status'] ?? '' ) || 'OAUTH' !== ( $row['credential_source'] ?? '' ) || 'ECOMKIT' !== ( $meta['refresh_ownership'] ?? '' ) || 'READY' !== ( $meta['credential_lifecycle'] ?? 'READY' ) || ! hash_equals( (string) ( $meta['provider_config_fingerprint'] ?? '' ), (string) ( $config['fingerprint'] ?? '' ) ) || ! self::positive_digits( (string) ( $row['external_shop_id'] ?? '' ) ) ) { $this->fail( 'SHOPEE_ORDER_CONNECTION_NOT_READY' ); } return array( 'id' => $id, 'shop_id' => (string) $row['external_shop_id'], 'config' => $config ); }
+	private function shop_get( array $connection, string $path, string $access_token, array $filters, string $prefix ): array { $config_service = new Ecomkit_Vuikhoe_Shopee_Config(); $partner_key = $config_service->partner_key( $connection['config'] ); $partner_id = (string) $connection['config']['partner_id']; if ( ! self::positive_digits( $partner_id ) ) { $this->fail( 'SHOPEE_ORDER_CONNECTION_NOT_READY' ); } $timestamp = time(); $common = array( 'partner_id' => (int) $partner_id, 'timestamp' => $timestamp, 'access_token' => $access_token, 'shop_id' => (int) $connection['shop_id'], 'sign' => Ecomkit_Vuikhoe_Shopee_Signer::sign_shop( $partner_id, $path, $timestamp, $access_token, $connection['shop_id'], $partner_key ) ); $this->last_diagnostic['stage'] = $prefix . '_REQUEST_BUILD'; $url = add_query_arg( array_merge( $common, $filters ), Ecomkit_Vuikhoe_Shopee_Environment::api_url( (string) $connection['config']['environment'], $path ) ); $started = microtime( true ); $response = wp_remote_get( $url, array( 'timeout' => 15, 'redirection' => 0, 'sslverify' => true ) ); $this->last_diagnostic = array_merge( $this->last_diagnostic, array( 'stage' => $prefix . '_HTTP', 'api_path' => $path, 'duration_ms' => (int) round( ( microtime( true ) - $started ) * 1000 ), 'http_status' => null, 'provider_error' => '', 'provider_message' => '', 'request_id' => '' ) ); if ( is_wp_error( $response ) ) { $this->fail( 'SHOPEE_ORDER_NETWORK_ERROR' ); } $status = (int) wp_remote_retrieve_response_code( $response ); $this->last_diagnostic['http_status'] = $status; try { $data = json_decode( wp_remote_retrieve_body( $response ), true, 64, JSON_THROW_ON_ERROR ); } catch ( Throwable $exception ) { $this->fail( 'SHOPEE_ORDER_INVALID_JSON' ); } if ( ! is_array( $data ) ) { $this->fail( 'SHOPEE_ORDER_INVALID_JSON' ); } $this->last_diagnostic['stage'] = $prefix . '_PROVIDER_RESPONSE'; if ( ! array_key_exists( 'error', $data ) || ! is_scalar( $data['error'] ) ) { $this->fail( 'SHOPEE_ORDER_RESPONSE_INVALID' ); } $error = sanitize_key( (string) $data['error'] ); $this->last_diagnostic['provider_error'] = $error; $this->last_diagnostic['provider_message'] = self::safe_message( (string) ( $data['message'] ?? '' ), $access_token ); $this->last_diagnostic['request_id'] = sanitize_text_field( (string) ( $data['request_id'] ?? '' ) ); if ( '' !== $error ) { if ( 'error_auth' === $error ) { $this->tokens->mark_reauthorization_required( (int) $connection['id'], $this->last_diagnostic ); } $this->fail( self::map_provider_error( $error ) ); } if ( $status < 200 || $status >= 300 ) { $this->fail( 'SHOPEE_ORDER_HTTP_ERROR' ); } return $data; }
+	private function validate_list_input( string $field, int $from, int $to, int $size, ?string $status ): void { if ( ! in_array( $field, array( 'create_time', 'update_time' ), true ) || $from < 1 || $to < 1 || $from > $to ) { $this->fail( 'SHOPEE_ORDER_WINDOW_INVALID' ); } if ( $to - $from > self::MAX_WINDOW ) { $this->fail( 'SHOPEE_ORDER_WINDOW_TOO_LARGE' ); } if ( $size < 1 || $size > 100 ) { $this->fail( 'SHOPEE_ORDER_PAGE_SIZE_INVALID' ); } if ( null !== $status && '' !== $status && ! in_array( $status, self::STATUSES, true ) ) { $this->fail( 'SHOPEE_ORDER_STATUS_INVALID' ); } }
+	private function validate_order_sns( array $values, bool $deduplicate ): array { $out = array(); foreach ( $values as $value ) { if ( ! is_string( $value ) || '' === $value || strlen( $value ) > 191 || str_contains( $value, ',' ) || preg_match( '/[\x00-\x1F\x7F]/', $value ) || ( ! $deduplicate && isset( $out[ $value ] ) ) ) { $this->fail( 'SHOPEE_ORDER_IDENTITY_INVALID' ); } $out[ $value ] = true; } if ( ! $out ) { $this->fail( 'SHOPEE_ORDER_IDENTITY_INVALID' ); } return array_keys( $out ); }
+	private function validate_optional_fields( array $fields ): array { $out = array(); foreach ( $fields as $field ) { if ( ! is_string( $field ) || ! in_array( $field, self::OPTIONAL_FIELDS, true ) ) { $this->fail( 'SHOPEE_ORDER_OPTIONAL_FIELD_INVALID' ); } $out[ $field ] = true; } return array_keys( $out ); }
+	private static function positive_digits( string $value ): bool { return PHP_INT_SIZE >= 8 && 1 === preg_match( '/^[1-9][0-9]*$/', $value ) && false !== filter_var( $value, FILTER_VALIDATE_INT, array( 'options' => array( 'min_range' => 1, 'max_range' => PHP_INT_MAX ) ) ); }
+	private static function safe_message( string $message, string $access_token ): string { $message = str_replace( $access_token, '[redacted]', $message ); $message = preg_replace( '/[A-Za-z0-9_\-]{32,}/', '[redacted]', $message ); return mb_substr( trim( preg_replace( '/[\x00-\x1F\x7F]/', '', (string) $message ) ), 0, 240 ); }
+	private static function map_provider_error( string $error ): string { return match ( $error ) { 'source_ip_undeclared' => 'SHOPEE_SOURCE_IP_UNDECLARED', 'error_sign' => 'SHOPEE_SIGNATURE_INVALID', 'invalid_partner_id' => 'SHOPEE_INVALID_PARTNER_ID', 'error_partner_key_expired' => 'SHOPEE_PROVIDER_CONFIG_REQUIRES_UPDATE', 'error_auth' => 'SHOPEE_ORDER_AUTH_ERROR', 'error_api_permission', 'error_api_call_restricted' => 'SHOPEE_ORDER_PERMISSION_DENIED', 'error_rate_limit', 'error_limit' => 'SHOPEE_ORDER_RATE_LIMITED', 'error_server', 'error_network' => 'SHOPEE_ORDER_PROVIDER_ERROR', default => 'SHOPEE_ORDER_PROVIDER_ERROR' }; }
+	private function fail( string $classification ): never { $this->last_diagnostic['classification'] = $classification; throw new Ecomkit_Vuikhoe_Shopee_Order_Exception( $classification, $this->last_diagnostic ); }
+}
+
+final class Ecomkit_Vuikhoe_Shopee_Order_Exception extends RuntimeException { public function __construct( string $code, public readonly array $diagnostic = array() ) { parent::__construct( $code ); } }

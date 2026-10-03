@@ -187,3 +187,9 @@ Shopee credential mutation is serialized with MySQL/MariaDB `GET_LOCK` using `ec
 
 `Ecomkit_Vuikhoe_Shopee_Token_Service::ensure_usable_access_token()` is the boundary for WP.4B and later server-side provider clients. The 300-second skew is Ecomkit policy, not a Shopee requirement. No scheduler, Order API, SyncRun, escrow, or Excel reconciliation exists in WP.4A.
 
+# WP.4B provider-read boundary
+
+`Ecomkit_Vuikhoe_Shopee_Order_Service` is read-only and depends on `Ecomkit_Vuikhoe_Shopee_Token_Service`; it never decrypts connection credentials. Every list/detail HTTP request obtains an ephemeral usable access token, signs the shop-level base `partner_id + api_path + timestamp + access_token + shop_id`, and performs one `wp_remote_get()` without retries or redirects. Filters and cursors are not part of the signature base.
+
+The low-level methods make exactly one request. Higher-level list pagination preserves opaque cursors, rejects non-progress/cycles, deduplicates exact `order_sn` with latest-page-wins plus conflict counters, and has a 100-page local guard. Higher-level detail reads split exact identities into batches of 50 and report completeness. No provider response is written to application tables.
+

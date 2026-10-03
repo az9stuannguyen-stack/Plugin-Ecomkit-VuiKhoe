@@ -45,6 +45,8 @@ return array(
     'Ecomkit_Vuikhoe_Shopee_Environment' => $baseDir . '/includes/class-ecomkit-shopee-environment.php',
     'Ecomkit_Vuikhoe_Shopee_HTTP_Client' => $baseDir . '/includes/class-ecomkit-shopee-http-client.php',
     'Ecomkit_Vuikhoe_Shopee_OAuth' => $baseDir . '/includes/class-ecomkit-shopee-oauth.php',
+    'Ecomkit_Vuikhoe_Shopee_Order_Exception' => $baseDir . '/includes/class-ecomkit-shopee-order-service.php',
+    'Ecomkit_Vuikhoe_Shopee_Order_Service' => $baseDir . '/includes/class-ecomkit-shopee-order-service.php',
     'Ecomkit_Vuikhoe_Shopee_Provider_Exception' => $baseDir . '/includes/class-ecomkit-shopee-http-client.php',
     'Ecomkit_Vuikhoe_Shopee_Signer' => $baseDir . '/includes/class-ecomkit-shopee-signer.php',
     'Ecomkit_Vuikhoe_Shopee_Token_Service' => $baseDir . '/includes/class-ecomkit-shopee-token-service.php',

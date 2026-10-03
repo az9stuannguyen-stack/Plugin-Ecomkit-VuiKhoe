@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.4A — Shopee Token Refresh Lifecycle**, plugin `0.4.0`, database schema `4`. Refresh token được coi là single-use; access/refresh pair được thay thế trong một encrypted envelope dưới per-connection lock.
+Hiện tại: **WP.4B — Shopee Order API Foundation**, plugin `0.4.1`, database schema `4`. GetOrderList/GetOrderDetail chỉ đọc, dùng shop-level signing và luôn lấy token qua WP.4A; chưa persist, reconcile hoặc gọi Payment/Escrow.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.4.0`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.4.1`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `3`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
@@ -121,4 +121,10 @@ WP.3C runtime was `0.3.3` with database schema `4`. The initial Shopee token exc
 # WP.4A token lifecycle
 
 `ensure_usable_access_token(connectionId)` is the only foundation future provider callers should use. It returns a token only inside server-side PHP memory, reuses a token outside the 300-second Ecomkit refresh skew, and otherwise performs one locked refresh call. No cron scheduler or Order API is included. Admins can perform one manual refresh with `manage_options` and a nonce; ambiguous network/persistence outcomes require reauthorization and are never retried automatically.
+
+# WP.4B read-only Order API
+
+The plugin supports read-only `GET /api/v2/order/get_order_list` and `GET /api/v2/order/get_order_detail`. List windows are limited to 15 days, page size to 1-100, cursors remain opaque, pagination stalls/cycles are rejected, and synchronous all-page reads stop at 100 pages as an Ecomkit safety guard. Detail calls accept at most 50 exact `order_sn` values; the higher-level client batches larger sets and reports missing, extra, and duplicate identities.
+
+Every provider request calls `ensure_usable_access_token(connectionId)` first and uses shop-level signing. The admin live test reads at most five orders with one list call and, when non-empty, one detail call. It stores only a short-lived PII-free preview. WP.4B performs no Batch/Order/SyncRun persistence, Excel reconciliation, Payment/Escrow request, PDF work, retry loop, cron, or background sync.
 

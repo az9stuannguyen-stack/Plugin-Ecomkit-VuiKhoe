@@ -107,3 +107,9 @@ OAuth failure details are stored for at most ten minutes in a one-time transient
 
 Shopee refresh tokens are treated as rotating single-use state. The refresh endpoint is never retried automatically. Network/timeout ambiguity, or encryption/persistence failure after provider success, moves the safe lifecycle toward `REFRESH_UNCERTAIN` and requires reauthorization while preserving old ciphertext. Definitive expired/invalid refresh authorization becomes `REAUTH_REQUIRED`. Tokens appear only in encrypted envelopes and ephemeral server-side memory, never in URLs, HTML, diagnostics, logs, or options plaintext.
 
+# WP.4B Order API security
+
+Order API signed URLs contain the access token because Shopee requires it, so full URLs are never logged or included in diagnostics. Diagnostics retain only stage, classification, API path, HTTP status, duration, safe provider error/message, request ID, shop ID, and counts. Detail customer/name/phone/address/buyer/item payloads are never logged or stored in options/transients; the admin PRG result contains at most five order numbers, statuses, raw total amounts, and item counts.
+
+Inputs enforce a 15-day list window, bounded page and detail sizes, exact non-control-character `order_sn`, and an explicit optional-field allowlist. There are zero automated retries and no public REST business endpoint.
+

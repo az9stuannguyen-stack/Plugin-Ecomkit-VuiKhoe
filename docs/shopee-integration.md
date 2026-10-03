@@ -101,3 +101,11 @@ Refresh uses one `POST /api/v2/auth/access_token/get` call. Production host is `
 
 The current refresh token is single-use. Under the shared connection advisory lock, Ecomkit reloads the credential, skips refresh when the access token is usable beyond its 300-second application-policy skew, or validates and atomically encrypts/persists both returned tokens and provider `expire_in`. The 30-day refresh expiry shown in UI is explicitly an estimate, not provider-returned authority. There are zero automatic retries after an ambiguous send, no cron scheduler, and recovery is manual reauthorization. Future WP.4B code must call `ensure_usable_access_token(connectionId)` rather than decrypt credentials directly.
 
+# WP.4B Order API contract
+
+Order reads use `GET /api/v2/order/get_order_list` and `GET /api/v2/order/get_order_detail` on the configured environment host. Common query parameters are `partner_id`, `timestamp`, `access_token`, `shop_id`, and `sign`; the HMAC-SHA256 shop signature base is `partner_id + api_path + timestamp + access_token + shop_id`. Business filters are excluded from that base, and the signed URL is never diagnostic output.
+
+GetOrderList accepts only `create_time` or `update_time`, positive ordered Unix seconds covering at most 15 days, page size 1-100, an opaque cursor, and an allowlisted optional status. One-page and all-pages clients are separate. The latter rejects cursor stalls/cycles, stops at 100 pages, and applies deterministic exact-identity deduplication with latest occurrence winning and duplicate/conflict counts.
+
+GetOrderDetail accepts exact safe `order_sn` strings and explicit optional-field names. A low-level call is capped at 50; the batched client chunks larger sets and reports requested/returned counts, missing, extra, and duplicate identities without fabricating data. The live admin test converts `datetime-local` values with `wp_timezone()`, makes at most one five-order list call and one detail call, and persists no provider orders or PII.
+

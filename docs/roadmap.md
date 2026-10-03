@@ -156,3 +156,7 @@ WP.3C runtime `0.3.3`, database schema `4`: minimal Shopee token request body, s
 
 Runtime `0.4.0`, schema `4`: locked single-use Shopee refresh rotation, `ensure_usable_access_token()`, safe lifecycle diagnostics, and an admin-only manual refresh action. There is deliberately no WP-Cron refresh. WP.4B Order API work must not start automatically and must consume access tokens only through the token service.
 
+# WP.4B completion gate
+
+Runtime `0.4.1`, schema `4`: read-only GetOrderList/GetOrderDetail foundation, shop signing, token lifecycle integration, bounded pagination/detail batching, strict identity completeness, safe diagnostics, and an admin live test capped at two provider calls. Excel reconciliation and provider normalization remain blocked until live Order API validation passes; Payment/Escrow remains out of scope.
+
