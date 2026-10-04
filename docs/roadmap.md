@@ -194,3 +194,7 @@ Runtime `0.6.1`, schema giữ `6`, canonical snapshot `v2`. Kiểm tra đủ 24 
 
 Runtime `0.6.2`, schema `7`, canonical giữ `v2`. Admin chọn một Order Shopee MATCHED từ Batch và bấm kiểm tra; mỗi lần chỉ gửi một `POST /api/v2/payment/get_escrow_detail` với JSON `order_sn` từ `marketplace_order_id`. Không có GET fallback, retry, batch endpoint hay tự động đồng bộ. Validated accounting evidence được lưu riêng trong nullable `payment_raw_data`, `payment_normalized_data`, `payment_fetched_at` (thời điểm lấy, không phải thời điểm provider cập nhật) và `payment_request_id`; migration chỉ thêm cột. Live shop vẫn phải xác nhận POST contract/quyền Payment. Chưa có mapping canonical tài chính, chưa có WP.7. WP.6C cần live evidence và phê duyệt ngữ nghĩa kế toán.
 
+## WP.6C — Shopee financial canonical mapping
+
+Runtime `0.6.3`, schema giữ `7`, canonical `v3`. Live Payment POST đã được xác nhận ngoài giai đoạn code. Action Batch "Cập nhật tài chính Shopee" gọi tối đa một lần cho mỗi Order Shopee MATCHED thiếu snapshot (hoặc mỗi Order khi admin chọn refresh), không gọi cho Lazada; lỗi từng Order độc lập, snapshot cũ được giữ. Sau đó materialize local toàn Batch. `commissionFee`, `serviceFee`, `sellerTransactionFee` map trực tiếp vào ba phí sàn; seller receivable dùng `escrowAmountAfterAdjustment` rồi `escrowAmount`. V1/v2 stale. Các phần trăm, công nợ, đã thu, chênh lệch, affiliate/discount nội bộ vẫn NULL. WP.7 chưa bắt đầu.
+

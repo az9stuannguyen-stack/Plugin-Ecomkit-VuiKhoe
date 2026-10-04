@@ -2,7 +2,9 @@
 
 ## WP.6 canonical Result
 
-`Ecomkit_Vuikhoe_Canonical_Columns::all()` là nguồn code duy nhất cho 24 key/label/thứ tự. Pure materializer nhận Order, OrderItems, Batch provenance và provider normalized snapshot đã persist; không DB/HTTP. Service ghi JSON `v2` vào `orders.canonical_data`, cùng version, UTC materialized timestamp và SHA-256 source fingerprint. Một Order luôn là một row; Result UI và WP.7 dùng cùng definition. WP.6A ưu tiên `orders.eshop_order_code`, sau đó raw Excel cell có `column_map` xác thực; fallback cell D chỉ dành cho Batch cũ có đủ provenance của đúng định dạng production đã xác minh.
+`Ecomkit_Vuikhoe_Canonical_Columns::all()` là nguồn code duy nhất cho 24 key/label/thứ tự. Pure materializer nhận Order, OrderItems, Batch provenance và provider normalized snapshots đã persist; không DB/HTTP. Service ghi JSON `v3` vào `orders.canonical_data`, cùng version, UTC materialized timestamp và SHA-256 source fingerprint bao gồm Payment evidence. Một Order luôn là một row; Result UI và WP.7 dùng cùng definition. WP.6A ưu tiên `orders.eshop_order_code`, sau đó raw Excel cell có `column_map` xác thực; fallback cell D chỉ dành cho Batch cũ có đủ provenance của đúng định dạng production đã xác minh.
+
+WP.6C Batch enrichment đọc Order Shopee MATCHED, gọi single-order Payment tuần tự chỉ cho snapshot thiếu hoặc explicit refresh, persist mỗi thành công riêng, giữ snapshot cũ khi một call lỗi, rồi materialize toàn Batch từ dữ liệu đã lưu. Không giữ DB transaction qua network. Canonical v3 chỉ map bốn giá trị tài chính được duyệt; không tính phần trăm/trạng thái kế toán.
 
 ## 1. Mục tiêu
 

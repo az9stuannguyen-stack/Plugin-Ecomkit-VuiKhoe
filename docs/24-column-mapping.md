@@ -30,13 +30,13 @@
 | 14 | Chênh lệch | `difference_amount` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
 | 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | `UNMAPPED` | Không tính từ item price | Trống |
 | 16 | % Tổng Chi Phí | `total_cost_percent` | decimal(9,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
-| 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không suy từ `total_amount` | Trống |
+| 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `escrowAmountAfterAdjustment` > `escrowAmount` | Không suy từ buyerTotalAmount | NULL nếu cả hai thiếu |
 | 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | `UNMAPPED` | Không tính | Trống |
 | 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | `UNMAPPED` | Không tính | Trống |
 | 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | decimal(9,4) | `UNMAPPED` | Không tính | Trống |
-| 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
-| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
-| 23 | Phí Giao Dịch (TMĐT) | `transaction_platform_fee` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
+| 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `commissionFee` | Trực tiếp, không tính | NULL nếu thiếu |
+| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `serviceFee` | Trực tiếp, không tính | NULL nếu thiếu |
+| 23 | Phí Giao Dịch (TMĐT) | `transaction_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `sellerTransactionFee` | Trực tiếp, không tính | NULL nếu thiếu |
 | 24 | % Chi Phí Sàn TMĐT | `platform_cost_percent` | decimal(9,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
 
 ### Lưu ý Shopee quan trọng
@@ -97,9 +97,9 @@ Hợp đồng canonical vẫn có đúng 24 cột với thứ tự không đổi
 - Với Shopee ở stage sau, invariant vẫn là `Mã đơn sàn = order_sn`.
 - Dòng sản phẩm continuation không tạo thêm Order và không làm thay đổi sequence 24 cột; chúng được lưu dưới dạng OrderItem.
 
-## 8. Phân loại nguồn canonical v2
+## 8. Phân loại nguồn canonical v3
 
-Bảng tại mục 2 cố định nhãn và thứ tự. WP.6A mở nguồn cột 2 từ Excel. Snapshot đổi `v1` sang `v2`; snapshot cũ phải materialize lại. Nguồn thiếu hoặc không xác minh được luôn là NULL.
+Bảng tại mục 2 cố định nhãn và thứ tự. WP.6A mở nguồn cột 2 từ Excel; WP.6C mở bốn cột tài chính từ Payment đã lưu. Snapshot `v1`/`v2` phải materialize lại thành `v3`. Nguồn thiếu hoặc không xác minh được luôn là NULL.
 
 Shopee Order Detail raw fields như `total_amount`, shipping fee hoặc `escrow_amount` chỉ được giữ đúng nghĩa provider nếu thực sự xuất hiện. WP.5 không diễn giải chúng thành settlement, platform fee, affiliate fee, commission hay final receivable.
 
@@ -107,7 +107,7 @@ WP.5A không materialize export 24 cột. Nó chỉ làm rõ nguồn cột 1: Ex
 
 ## 9. Ma trận nguồn WP.6A cho đủ 24 cột
 
-`EXCEL_AVAILABLE` = 1; `SHOPEE_ORDER_DETAIL_AVAILABLE` = 5; đa nguồn Excel rồi Shopee = 3; `FUTURE_PAYMENT_ESCROW` = 9; `UNMAPPED_NO_SOURCE` = 6. Tổng 24. NULL được phép ở mọi cột khi nguồn thực thiếu; riêng mã đơn sàn là bắt buộc đối với Order hợp lệ đầu vào.
+`EXCEL_AVAILABLE` = 1; `SHOPEE_ORDER_DETAIL_AVAILABLE` = 5; đa nguồn Excel rồi Shopee = 3; `SHOPEE_PAYMENT_ESCROW` = 4; `FUTURE_PAYMENT_ESCROW` = 5; `UNMAPPED_NO_SOURCE` = 6. Tổng 24. NULL được phép ở mọi cột khi nguồn thực thiếu; riêng mã đơn sàn là bắt buộc đối với Order hợp lệ đầu vào.
 
 | # | Nhãn canonical | Nguồn hiện tại | Key chính xác | Fallback | Hành vi WP.6A / phụ thuộc tương lai |
 | ---: | --- | --- | --- | --- | --- |
@@ -127,13 +127,13 @@ WP.5A không materialize export 24 cột. Nó chỉ làm rõ nguồn cột 1: Ex
 | 14 | Chênh lệch | FUTURE_PAYMENT_ESCROW | Chưa có đủ toán hạng/công thức duyệt | Không | NULL |
 | 15 | Giá SP (VAT 8%) | UNMAPPED_NO_SOURCE | OrderItem có SKU/name/quantity; `price` không được parser điền và không phải giá VAT 8% | Không | NULL; không tự nhân 1.08 |
 | 16 | % Tổng Chi Phí | FUTURE_PAYMENT_ESCROW | Chưa có fee breakdown và công thức | Không | NULL |
-| 17 | Tổng Tiền Sẽ Thu | FUTURE_PAYMENT_ESCROW | Seller receivable chưa có | Không; `totalAmount` là gross order amount | NULL đến khi có escrow/payout mapping |
+| 17 | Tổng Tiền Sẽ Thu | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.escrowAmountAfterAdjustment` | `escrowAmount`, sau đó NULL | Seller receivable nguồn Shopee; không dùng buyerTotalAmount |
 | 18 | Phí Affiliate (Vui Khỏe) | UNMAPPED_NO_SOURCE | Không có internal affiliate source đã xác minh | Không | NULL |
 | 19 | Chiết Khấu (Vui Khỏe) | UNMAPPED_NO_SOURCE | Không có internal discount source đã xác minh | Không | NULL; không dùng Shopee promotion |
 | 20 | % Chiết Khấu Vui Khỏe | UNMAPPED_NO_SOURCE | Không có internal discount rate đã xác minh | Không | NULL |
-| 21 | Phí Cố Định (TMĐT) | FUTURE_PAYMENT_ESCROW | Chưa có fixed fee evidence | Không | NULL |
-| 22 | Phí dịch vụ (TMĐT) | FUTURE_PAYMENT_ESCROW | Chưa có service fee evidence | Không | NULL |
-| 23 | Phí Giao Dịch (TMĐT) | FUTURE_PAYMENT_ESCROW | Chưa có transaction fee evidence | Không | NULL |
+| 21 | Phí Cố Định (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.commissionFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
+| 22 | Phí dịch vụ (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.serviceFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
+| 23 | Phí Giao Dịch (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.sellerTransactionFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
 | 24 | % Chi Phí Sàn TMĐT | FUTURE_PAYMENT_ESCROW | Chưa có fee breakdown và công thức | Không | NULL |
 
 Nguồn Excel persist: `orders.order_date`, `platform`, `raw_order_code`, `eshop_order_code` (từ import mới), `raw_source_metadata.cells`, `column_map` (từ import mới), `source_refs` (sheet/row) và OrderItems `sku`, `product_name`, `quantity`. Parser đọc cell theo chỉ số **một-based**: Excel D là `cells['4']`. Import mới tìm header bằng cơ chế hiện hữu (không giả định row 1/3), lưu `header_row` trong Batch metadata và `column_map` gồm ít nhất sáu header production trong Order raw metadata. Continuation item không ghi đè eShop identity của Order.
@@ -142,5 +142,7 @@ Workbook production đã được xác minh: sheet `DANH SÁCH ĐƠN HÀNG`, row
 
 Nguồn Shopee WP.5 persist trong `provider_normalized_data`: `providerStatus`, `providerCreatedAt`, `recipientName`, `recipientPhone`, `recipientFullAddress`, `recipientState`, `recipientCity`, `recipientRegion`, `totalAmount`, `estimatedShippingFee`, `actualShippingFee`, `escrowAmount` và danh sách items. `provider_raw_data` có thể chứa `note` hoặc field khác tùy response nhưng WP.5 không yêu cầu note trong detail, và chưa có quyết định ngữ nghĩa canonical cho nó. Các số tiền Order Detail này không tương đương phí sàn hay seller settlement.
 
-WP.6B lưu riêng `payment_raw_data`/`payment_normalized_data` từ `POST /api/v2/payment/get_escrow_detail`, chỉ cho một Shopee `marketplace_order_id` đã MATCHED. Các nguồn ứng viên cho WP.6C (chưa được duyệt để materialize): `commission_fee` → Phí Cố Định (TMĐT) (độ tin cậy thấp; cần phê duyệt), `service_fee` → Phí dịch vụ (TMĐT) (trung bình), `seller_transaction_fee` → Phí Giao Dịch (TMĐT) (trung bình), `escrow_amount`/`escrow_amount_after_adjustment` → Tổng Tiền Sẽ Thu (cần live state và phê duyệt). `% Chi Phí Sàn TMĐT`, `% Tổng Chi Phí`, Chênh lệch chưa có công thức và toán hạng duyệt. Đã Thu Tiền/Trạng Thái Công Nợ cần bằng chứng thu tiền, giải ngân và quy tắc kế toán riêng; không suy từ COMPLETED. `order_ams_commission_fee` là Shopee Affiliate, không phải Phí Affiliate (Vui Khỏe). Toàn bộ canonical tài chính tiếp tục NULL trong v2.
+WP.6B lưu riêng `payment_raw_data`/`payment_normalized_data` từ `POST /api/v2/payment/get_escrow_detail` cho Shopee `marketplace_order_id` đã MATCHED. WP.6C phê duyệt bốn ánh xạ trực tiếp trong bảng trên. `% Chi Phí Sàn TMĐT`, `% Tổng Chi Phí`, Chênh lệch chưa có công thức/toán hạng duyệt. Đã Thu Tiền/Trạng Thái Công Nợ cần bằng chứng giải ngân và quy tắc kế toán riêng; không suy từ COMPLETED. `order_ams_commission_fee` là Shopee Affiliate, không phải Phí Affiliate (Vui Khỏe).
+
+WP.6C đã phê duyệt bốn ánh xạ trực tiếp ghi trong bảng. Canonical v3 chỉ đọc `payment_normalized_data` khi `marketplaceOrderId` khớp `orders.marketplace_order_id` của Shopee MATCHED; fingerprint bao gồm Payment normalized evidence. Field thiếu là NULL, số 0 từ provider được giữ nguyên. Các phần trăm, Đã Thu Tiền, Trạng Thái Công Nợ, Chênh lệch, Phí Affiliate và chiết khấu nội bộ vẫn NULL; shipping và buyerTotalAmount chỉ giữ ở Payment snapshot.
 

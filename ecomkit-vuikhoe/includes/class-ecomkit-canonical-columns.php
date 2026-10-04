@@ -4,7 +4,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Canonical_Columns {
-	public const VERSION = 'v2';
+	public const VERSION = 'v3';
 
 	/** @return array<int,array{index:int,key:string,label:string,source:string}> */
 	public static function all(): array {
@@ -25,13 +25,13 @@ final class Ecomkit_Vuikhoe_Canonical_Columns {
 			array( 'difference_amount', 'Chênh lệch', 'FUTURE_PAYMENT_ESCROW' ),
 			array( 'product_price_vat_8', 'Giá SP (VAT 8%)', 'UNMAPPED_NO_SOURCE' ),
 			array( 'total_cost_percent', '% Tổng Chi Phí', 'FUTURE_PAYMENT_ESCROW' ),
-			array( 'total_amount_to_collect', 'Tổng Tiền Sẽ Thu', 'FUTURE_PAYMENT_ESCROW' ),
+			array( 'total_amount_to_collect', 'Tổng Tiền Sẽ Thu', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'affiliate_fee_vuikhoe', 'Phí Affiliate (Vui Khỏe)', 'UNMAPPED_NO_SOURCE' ),
 			array( 'discount_vuikhoe', 'Chiết Khấu (Vui Khỏe)', 'UNMAPPED_NO_SOURCE' ),
 			array( 'discount_percent_vuikhoe', '% Chiết Khấu Vui Khỏe', 'UNMAPPED_NO_SOURCE' ),
-			array( 'fixed_platform_fee', 'Phí Cố Định (TMĐT)', 'FUTURE_PAYMENT_ESCROW' ),
-			array( 'service_platform_fee', 'Phí dịch vụ (TMĐT)', 'FUTURE_PAYMENT_ESCROW' ),
-			array( 'transaction_platform_fee', 'Phí Giao Dịch (TMĐT)', 'FUTURE_PAYMENT_ESCROW' ),
+			array( 'fixed_platform_fee', 'Phí Cố Định (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
+			array( 'service_platform_fee', 'Phí dịch vụ (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
+			array( 'transaction_platform_fee', 'Phí Giao Dịch (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'platform_cost_percent', '% Chi Phí Sàn TMĐT', 'FUTURE_PAYMENT_ESCROW' ),
 		);
 		return array_map(

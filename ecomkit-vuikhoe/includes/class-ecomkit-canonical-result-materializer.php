@@ -1,5 +1,5 @@
 <?php
-/** Pure deterministic projection from persisted Order evidence to canonical v2. */
+/** Pure deterministic projection from persisted Order evidence to canonical v3. */
 
 defined( 'ABSPATH' ) || exit;
 
@@ -44,6 +44,14 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 				$value = $this->scalar( $provider[ $key ] ?? null );
 				if ( null !== $value ) { $values['province_city'] = $value; break; }
 			}
+			$payment = $this->decode_provider( $order['payment_normalized_data'] ?? null );
+			if ( (string) ( $payment['marketplaceOrderId'] ?? '' ) === (string) ( $order['marketplace_order_id'] ?? '' ) ) {
+				$values['fixed_platform_fee'] = $this->payment_number( $payment['commissionFee'] ?? null );
+				$values['service_platform_fee'] = $this->payment_number( $payment['serviceFee'] ?? null );
+				$values['transaction_platform_fee'] = $this->payment_number( $payment['sellerTransactionFee'] ?? null );
+				$values['total_amount_to_collect'] = $this->payment_number( $payment['escrowAmountAfterAdjustment'] ?? null );
+				$values['total_amount_to_collect'] ??= $this->payment_number( $payment['escrowAmount'] ?? null );
+			}
 		}
 		foreach ( $values as $value ) {
 			if ( null !== $value && ! is_scalar( $value ) ) { throw new RuntimeException( 'CANONICAL_SOURCE_INVALID' ); }
@@ -61,6 +69,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			'source_refs' => $order['source_refs'] ?? null,
 			'platform' => $order['platform'] ?? null, 'matching_status' => $order['matching_status'] ?? null,
 			'provider_normalized_data' => $this->decode_provider( $order['provider_normalized_data'] ?? null),
+			'payment_normalized_data' => $this->decode_provider( $order['payment_normalized_data'] ?? null ),
 			'items' => array_map( static fn( array $item ): array => array_intersect_key( $item, array_flip( array( 'id', 'sku', 'product_name', 'quantity', 'price', 'variant' ) ) ), $items ),
 		);
 		return hash( 'sha256', (string) wp_json_encode( $source, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ) );
@@ -116,6 +125,11 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 	private function scalar( mixed $value ): mixed {
 		if ( null === $value || ! is_scalar( $value ) ) { return null; }
 		return is_string( $value ) && '' === trim( $value ) ? null : $value;
+	}
+
+	private function payment_number( mixed $value ): int|float|string|null {
+		if ( is_int( $value ) || is_float( $value ) ) { return $value; }
+		return is_string( $value ) && is_numeric( $value ) ? $value : null;
 	}
 
 	private function date_value( mixed $value, string $kind ): ?string {
