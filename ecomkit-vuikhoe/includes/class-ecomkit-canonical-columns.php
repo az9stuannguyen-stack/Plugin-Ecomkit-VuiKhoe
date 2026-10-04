@@ -5,6 +5,9 @@ defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Canonical_Columns {
 	public const VERSION = 'v3';
+	private const MONEY_KEYS = array( 'amount_collected', 'difference_amount', 'product_price_vat_8', 'total_amount_to_collect', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
+
+	public static function is_money( string $key ): bool { return in_array( $key, self::MONEY_KEYS, true ); }
 
 	/** @return array<int,array{index:int,key:string,label:string,source:string}> */
 	public static function all(): array {
