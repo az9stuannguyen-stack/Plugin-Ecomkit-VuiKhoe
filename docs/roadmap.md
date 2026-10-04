@@ -184,5 +184,9 @@ Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
 
 Runtime `0.6.0`, schema `6`: mỗi Excel Order có một canonical snapshot `v1` đúng 24 cột trong `orders.canonical_data`. Migration chỉ thêm nullable version/timestamp/fingerprint. Result admin materialize lại local, phát hiện stale, lọc platform/matching và giữ cả Shopee, CANCELLED, missing/detail-missing và Lazada. Payment/Escrow, Lazada API và export chưa triển khai.
 
-Next: **WP.7 — XLSX/CSV Export from Canonical Results**.
+WP.7 chỉ được xem xét sau khi WP.6A được kiểm tra thủ công và nguồn của các cột chưa map được quyết định.
+
+## WP.6A — canonical source coverage audit
+
+Runtime `0.6.1`, schema giữ `6`, canonical snapshot `v2`. Kiểm tra đủ 24 cột cho thấy `Mã đơn ESHOP` có nguồn Excel production nhưng WP.6 chưa materialize; parser nay persist field và header provenance cho import mới. Snapshot v1 hiện là stale và operator có thể materialize lại local. Batch cũ thiếu header map chỉ được khôi phục cell D khi đồng thời đáp ứng provenance nghiêm ngặt của workbook production 8 Orders/18 Items đã xác minh; Batch khác để NULL. Các cột tài chính cần Payment/Escrow và các cột chưa có nguồn xác thực vẫn NULL. WP.7 chưa bắt đầu; cần manual review nguồn trước khi xuất.
 

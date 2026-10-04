@@ -158,7 +158,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 					self::ORDER_DATE_HEADER
 				);
 			}
-			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
+			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'eshop_order_code' => isset( $columns['Mã đơn hàng eShop'] ) ? $this->column_text( $row['cells'], $columns, 'Mã đơn hàng eShop' ) : null, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
 			$current_index = array_key_last( $orders );
 			$platform_counts[ $parsed['platform'] ] = ( $platform_counts[ $parsed['platform'] ] ?? 0 ) + 1;
 			if ( 'VALID_ITEM' === $product_structure ) {
@@ -175,7 +175,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			'valid_rows' => count( $orders ),
 			'orders' => $orders,
 			'errors' => $errors,
-			'raw' => array( 'parser_version' => self::PARSER_VERSION, 'sheet' => $sheet->getTitle(), 'header_row' => $header_row, 'headers' => array_values( $headers ), 'date_column' => $columns[ self::ORDER_DATE_HEADER ] ?? null, 'source_mode' => $source_mode, 'item_rows' => $item_rows, 'platform_counts' => $platform_counts, 'classifications' => $classifications, 'rows' => $rows ),
+			'raw' => array( 'parser_version' => self::PARSER_VERSION, 'sheet' => $sheet->getTitle(), 'header_row' => $header_row, 'headers' => array_values( $headers ), 'column_map' => $columns, 'date_column' => $columns[ self::ORDER_DATE_HEADER ] ?? null, 'source_mode' => $source_mode, 'item_rows' => $item_rows, 'platform_counts' => $platform_counts, 'classifications' => $classifications, 'rows' => $rows ),
 		);
 	}
 

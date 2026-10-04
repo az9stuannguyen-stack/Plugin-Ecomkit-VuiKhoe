@@ -72,7 +72,9 @@ try {
 	assert_true( '2026-01-01 03:00:00' === $result['orders'][0]['order_date'] && 3 === $result['raw']['date_column'], 'Named Excel Ngày đặt was not parsed to UTC deterministically.' );
 	assert_true( 'DATETIME' === $result['orders'][0]['order_date_precision'], 'Datetime precision was not retained.' );
 	assert_true( 'TEST-SHP-001' !== 'TEST001' && 'TEST-SHP-001' === $result['orders'][0]['order_code'], 'eShop code was used as identity.' );
+	assert_true( 'TEST001' === $result['orders'][0]['eshop_order_code'] && 4 === $result['raw']['column_map']['Mã đơn hàng eShop'], 'eShop source or header provenance was lost.' );
 	assert_true( 2 === count( $result['orders'][1]['items'] ), 'Continuation row did not attach to one order.' );
+	assert_true( 'TEST002' === $result['orders'][1]['eshop_order_code'], 'Continuation row cleared parent eShop identity.' );
 	assert_true( 'LAZADA' === $result['orders'][2]['platform'] && '000123456789' === $result['orders'][2]['order_code'], 'Lazada leading-zero ID changed.' );
 	assert_true( array() === codes( $result ), 'Valid continuation generated an error.' );
 

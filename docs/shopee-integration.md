@@ -2,7 +2,7 @@
 
 ## WP.6 Result materialization
 
-WP.6 không gọi Shopee. Nó chỉ đọc `provider_normalized_data` do WP.5 đã persist. Canonical v1 dùng `providerCreatedAt` chỉ khi Excel `order_date` NULL; recipient dùng `recipientName`, `recipientPhone`, `recipientFullAddress` và `recipientState > recipientCity > recipientRegion` cho Order `MATCHED`. `NOT_FOUND_IN_SHOPEE`, `DETAIL_MISSING` và Lazada giữ các giá trị provider là NULL. `CANCELLED` vẫn là một Order `MATCHED` và không bị loại.
+WP.6A không gọi Shopee. Nó chỉ đọc `provider_normalized_data` do WP.5 đã persist. Canonical v2 dùng `providerCreatedAt` chỉ khi Excel `order_date` NULL; recipient dùng `recipientName`, `recipientPhone`, `recipientFullAddress` và `recipientState > recipientCity > recipientRegion` cho Order `MATCHED`. `NOT_FOUND_IN_SHOPEE`, `DETAIL_MISSING` và Lazada giữ các giá trị provider là NULL. `CANCELLED` vẫn là một Order `MATCHED` và không bị loại.
 
 ## 1. Trạng thái WP.3
 

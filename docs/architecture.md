@@ -2,7 +2,7 @@
 
 ## WP.6 canonical Result
 
-`Ecomkit_Vuikhoe_Canonical_Columns::all()` là nguồn code duy nhất cho 24 key/label/thứ tự. Pure materializer nhận Order, OrderItems và provider normalized snapshot đã persist; không DB/HTTP. Service ghi JSON `v1` vào `orders.canonical_data`, cùng version, UTC materialized timestamp và SHA-256 source fingerprint. Một Order luôn là một row; Result UI và WP.7 dùng cùng definition.
+`Ecomkit_Vuikhoe_Canonical_Columns::all()` là nguồn code duy nhất cho 24 key/label/thứ tự. Pure materializer nhận Order, OrderItems, Batch provenance và provider normalized snapshot đã persist; không DB/HTTP. Service ghi JSON `v2` vào `orders.canonical_data`, cùng version, UTC materialized timestamp và SHA-256 source fingerprint. Một Order luôn là một row; Result UI và WP.7 dùng cùng definition. WP.6A ưu tiên `orders.eshop_order_code`, sau đó raw Excel cell có `column_map` xác thực; fallback cell D chỉ dành cho Batch cũ có đủ provenance của đúng định dạng production đã xác minh.
 
 ## 1. Mục tiêu
 

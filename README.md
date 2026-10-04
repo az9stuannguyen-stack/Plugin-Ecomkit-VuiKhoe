@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6 — Reconciliation Result UI + Canonical 24-Column Materialization**, plugin `0.6.0`, database schema `6`. Mỗi Excel Order materialize thành đúng một snapshot canonical `v1` gồm 24 cột; Result admin hỗ trợ Batch, platform/matching filter, stale fingerprint và không gọi provider.
+Hiện tại: **WP.6A — Canonical source coverage audit**, plugin `0.6.1`, database schema `6`. Canonical snapshot `v2` mở nguồn Excel `Mã đơn hàng eShop`, giữ đúng 24 cột và báo snapshot `v1` cần materialize lại. Import mới lưu eShop code theo header đã phát hiện; Batch cũ chỉ phục hồi từ raw cell D khi metadata xác thực đúng định dạng production. Các cột chưa có nguồn xác thực vẫn NULL.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.6.0`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.6.1`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `6`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

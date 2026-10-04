@@ -9,10 +9,12 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 		global $wpdb;
 		if ( $batch_id < 1 ) { throw new InvalidArgumentException( 'CANONICAL_SOURCE_INVALID' ); }
 		$tables = Ecomkit_Vuikhoe_DB::table_names();
-		$batch = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$tables['batches']} WHERE id = %d AND source_type = %s", $batch_id, 'EXCEL' ), ARRAY_A );
+		$batch = $wpdb->get_row( $wpdb->prepare( "SELECT id, source_metadata FROM {$tables['batches']} WHERE id = %d AND source_type = %s", $batch_id, 'EXCEL' ), ARRAY_A );
 		if ( ! is_array( $batch ) ) { throw new RuntimeException( 'CANONICAL_SOURCE_INVALID' ); }
 		$orders = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$tables['orders']} WHERE batch_id = %d ORDER BY id ASC", $batch_id ), ARRAY_A );
 		$orders = is_array( $orders ) ? $orders : array();
+		$batch_source = json_decode( (string) ( $batch['source_metadata'] ?? '' ), true );
+		$batch_source = is_array( $batch_source ) ? $batch_source : array();
 		$items = $this->items_by_order( array_column( $orders, 'id' ) );
 		$materializer = new Ecomkit_Vuikhoe_Canonical_Result_Materializer( wp_timezone() );
 		$now = current_time( 'mysql', true );
@@ -20,10 +22,10 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 		foreach ( $orders as $order ) {
 			try {
 				$order_items = $items[ (int) $order['id'] ] ?? array();
-				$snapshot = $materializer->materialize( $order, $order_items );
+				$snapshot = $materializer->materialize( $order, $order_items, $batch_source );
 				$json = wp_json_encode( $snapshot, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
 				if ( ! is_string( $json ) || 24 !== count( $snapshot['columns'] ) ) { throw new RuntimeException( 'CANONICAL_ROW_BUILD_FAILED' ); }
-				$updates[] = array( 'id' => (int) $order['id'], 'json' => $json, 'fingerprint' => $materializer->fingerprint( $order, $order_items ) );
+				$updates[] = array( 'id' => (int) $order['id'], 'json' => $json, 'fingerprint' => $materializer->fingerprint( $order, $order_items, $batch_source ) );
 			} catch ( Throwable $exception ) {
 				if ( in_array( $exception->getMessage(), array( 'CANONICAL_MAPPING_CONTRACT_INVALID', 'CANONICAL_SOURCE_INVALID' ), true ) ) { throw $exception; }
 				throw new RuntimeException( 'CANONICAL_ROW_BUILD_FAILED', 0, $exception );
@@ -51,6 +53,8 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 		if ( ! is_array( $batch ) ) { return null; }
 		$all = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$tables['orders']} WHERE batch_id = %d ORDER BY id ASC", $batch_id ), ARRAY_A );
 		$all = is_array( $all ) ? $all : array();
+		$batch_source = json_decode( (string) ( $batch['source_metadata'] ?? '' ), true );
+		$batch_source = is_array( $batch_source ) ? $batch_source : array();
 		$items = $this->items_by_order( array_column( $all, 'id' ) );
 		$materializer = new Ecomkit_Vuikhoe_Canonical_Result_Materializer( wp_timezone() );
 		$rows = array(); $counts = array( 'total' => count( $all ), 'SHOPEE' => 0, 'LAZADA' => 0, 'MATCHED' => 0, 'NOT_FOUND_IN_SHOPEE' => 0, 'DETAIL_MISSING' => 0, 'ready' => 0, 'warnings' => 0 );
@@ -58,8 +62,9 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 			$p = (string) ( $order['platform'] ?? '' ); $m = (string) ( $order['matching_status'] ?? '' );
 			if ( isset( $counts[ $p ] ) ) { $counts[ $p ]++; } if ( isset( $counts[ $m ] ) ) { $counts[ $m ]++; }
 			$snapshot = json_decode( (string) ( $order['canonical_data'] ?? '' ), true );
-			$ready = is_array( $snapshot ) && Ecomkit_Vuikhoe_Canonical_Columns::VERSION === (string) ( $order['canonical_result_version'] ?? '' ) && is_array( $snapshot['columns'] ?? null ) && 24 === count( $snapshot['columns'] );
-			$stale = $ready && ! hash_equals( (string) ( $order['canonical_source_fingerprint'] ?? '' ), $materializer->fingerprint( $order, $items[ (int) $order['id'] ] ?? array() ) );
+			$version_current = Ecomkit_Vuikhoe_Canonical_Columns::VERSION === (string) ( $order['canonical_result_version'] ?? '' ) && Ecomkit_Vuikhoe_Canonical_Columns::VERSION === (string) ( $snapshot['version'] ?? '' );
+			$ready = is_array( $snapshot ) && $version_current && is_array( $snapshot['columns'] ?? null ) && 24 === count( $snapshot['columns'] );
+			$stale = is_array( $snapshot ) && ( ! $version_current || ( $ready && ! hash_equals( (string) ( $order['canonical_source_fingerprint'] ?? '' ), $materializer->fingerprint( $order, $items[ (int) $order['id'] ] ?? array(), $batch_source ) ) ) );
 			if ( $ready ) { $counts['ready']++; } if ( $stale || in_array( $m, array( 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING' ), true ) ) { $counts['warnings']++; }
 			if ( ( '' !== $platform && $platform !== $p ) || ( '__BLANK__' === $matching ? '' !== $m : ( '' !== $matching && $matching !== $m ) ) ) { continue; }
 			$rows[] = array( 'id' => (int) $order['id'], 'platform' => $p, 'matching_status' => $m, 'stale' => $stale, 'ready' => $ready, 'columns' => $ready ? $snapshot['columns'] : array() );

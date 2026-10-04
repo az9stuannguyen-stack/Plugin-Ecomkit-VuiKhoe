@@ -15,7 +15,7 @@
 | # | Header export | Canonical key | Kiểu logic | Nguồn file matching | Shopee hiện hành | Quy tắc NULL |
 | ---: | --- | --- | --- | --- | --- | --- |
 | 1 | Ngày Lên Đơn | `order_date` | date/datetime | `EXCEL > SHOPEE_ORDER_DETAIL`: Excel `Ngày đặt` luôn thắng; chỉ khi Excel NULL, Order SHOPEE `MATCHED` mới fallback `providerCreatedAt`; sau cùng NULL | `create_time` đã normalize thành `providerCreatedAt` | Trống nếu cả hai thiếu/không hợp lệ |
-| 2 | Mã đơn ESHOP | `eshop_order_code` | text | `UNMAPPED` | `UNMAPPED` | Trống |
+| 2 | Mã đơn ESHOP | `eshop_order_code` | text | `EXCEL_AVAILABLE`: eShop nội bộ từ header `Mã đơn hàng eShop`, tách biệt mã sàn | Không có nguồn provider | Trống nếu không có field/header map hoặc legacy provenance được xác thực |
 | 3 | Mã đơn sàn | `raw_order_code` | text | `EXCEL > SHOPEE_ORDER_DETAIL`: mã nguồn primary luôn thắng | `order_sn` exact chỉ là fallback | Bắt buộc với record hợp lệ |
 | 4 | Kênh Bán Hàng | `sales_channel` | text | `EXCEL > SHOPEE_ORDER_DETAIL`: platform Excel luôn thắng | Provider hằng `SHOPEE` chỉ là fallback | Trống nếu nguồn chưa xác định |
 | 5 | Trạng Thái Đơn Hàng | `order_status` | text | `SHOPEE_ORDER_DETAIL` | `providerStatus` nguyên bản khi `MATCHED` | Trống nếu thiếu |
@@ -97,11 +97,48 @@ Hợp đồng canonical vẫn có đúng 24 cột với thứ tự không đổi
 - Với Shopee ở stage sau, invariant vẫn là `Mã đơn sàn = order_sn`.
 - Dòng sản phẩm continuation không tạo thêm Order và không làm thay đổi sequence 24 cột; chúng được lưu dưới dạng OrderItem.
 
-## 8. Phân loại nguồn canonical v1
+## 8. Phân loại nguồn canonical v2
 
-Bảng duy nhất tại mục 2 là hợp đồng có thẩm quyền. Cột 1, 3 và 4 có nguồn `EXCEL` với provider fallback nêu rõ trong từng dòng; cột 5–9 là `SHOPEE_ORDER_DETAIL`; cột 2, 10, 11, 15, 18–20 là `UNMAPPED`; cột 12–14, 16, 17, 21–24 là `FUTURE_PAYMENT_ESCROW`. Mọi nguồn không khả dụng materialize thành NULL.
+Bảng tại mục 2 cố định nhãn và thứ tự. WP.6A mở nguồn cột 2 từ Excel. Snapshot đổi `v1` sang `v2`; snapshot cũ phải materialize lại. Nguồn thiếu hoặc không xác minh được luôn là NULL.
 
 Shopee Order Detail raw fields như `total_amount`, shipping fee hoặc `escrow_amount` chỉ được giữ đúng nghĩa provider nếu thực sự xuất hiện. WP.5 không diễn giải chúng thành settlement, platform fee, affiliate fee, commission hay final receivable.
 
 WP.5A không materialize export 24 cột. Nó chỉ làm rõ nguồn cột 1: Excel datetime có precision thực được lưu UTC; date-only giữ marker `DATE` để không giả vờ biết giờ. UI chuyển lại qua timezone WordPress. Nếu thiếu/không hợp lệ, giá trị canonical vẫn trống và reconciliation không được suy diễn `NOT_FOUND_IN_SHOPEE` khi chưa chạy provider window.
+
+## 9. Ma trận nguồn WP.6A cho đủ 24 cột
+
+`EXCEL_AVAILABLE` = 1; `SHOPEE_ORDER_DETAIL_AVAILABLE` = 5; đa nguồn Excel rồi Shopee = 3; `FUTURE_PAYMENT_ESCROW` = 9; `UNMAPPED_NO_SOURCE` = 6. Tổng 24. NULL được phép ở mọi cột khi nguồn thực thiếu; riêng mã đơn sàn là bắt buộc đối với Order hợp lệ đầu vào.
+
+| # | Nhãn canonical | Nguồn hiện tại | Key chính xác | Fallback | Hành vi WP.6A / phụ thuộc tương lai |
+| ---: | --- | --- | --- | --- | --- |
+| 1 | Ngày Lên Đơn | EXCEL_THEN_SHOPEE_FALLBACK | `orders.order_date` UTC | `providerCreatedAt` khi Shopee MATCHED | Ngày địa phương; NULL nếu cả hai thiếu |
+| 2 | Mã đơn ESHOP | EXCEL_AVAILABLE | `orders.eshop_order_code`; raw `cells[column_map['Mã đơn hàng eShop']]` | Chỉ raw `cells['4']` của Batch legacy đã xác thực | Text Excel độc lập với mã sàn; NULL nếu provenance không đủ; không có provider fallback |
+| 3 | Mã đơn sàn | EXCEL_THEN_SHOPEE_FALLBACK | `orders.raw_order_code` | `rawOrderCode` khi Shopee MATCHED | Giữ leading zero, không dùng eShop |
+| 4 | Kênh Bán Hàng | EXCEL_THEN_SHOPEE_FALLBACK | `orders.platform` | `provider.platform` khi Shopee MATCHED | SHOPEE/LAZADA khi có nguồn |
+| 5 | Trạng Thái Đơn Hàng | SHOPEE_ORDER_DETAIL_AVAILABLE | `providerStatus` | Không | Chỉ Shopee MATCHED; Lazada NULL |
+| 6 | Tên Khách Hàng | SHOPEE_ORDER_DETAIL_AVAILABLE | `recipientName` | Không | Chỉ Shopee MATCHED |
+| 7 | SĐT | SHOPEE_ORDER_DETAIL_AVAILABLE | `recipientPhone` | Không | Không dùng buyer username |
+| 8 | Địa Chỉ | SHOPEE_ORDER_DETAIL_AVAILABLE | `recipientFullAddress` | Không | Không tự ghép |
+| 9 | Tỉnh/TP | SHOPEE_ORDER_DETAIL_AVAILABLE | `recipientState` | `recipientCity` rồi `recipientRegion` | Không suy từ địa chỉ tự do |
+| 10 | Ngày Xuất VAT | UNMAPPED_NO_SOURCE | Không có header/field đã xác minh | Không | NULL; không dùng ngày đặt |
+| 11 | Ghi Chú | UNMAPPED_NO_SOURCE | Không có header Excel đã xác minh; WP.5 không yêu cầu Shopee `note` | Không | NULL; cần duyệt ngữ nghĩa note trước khi map |
+| 12 | Đã Thu Tiền | FUTURE_PAYMENT_ESCROW | Chưa có payment evidence | Không | NULL; COMPLETED không chứng minh đã thu |
+| 13 | Trạng Thái Công Nợ | FUTURE_PAYMENT_ESCROW | Chưa có receivable evidence | Không | NULL; không suy từ order/matching status |
+| 14 | Chênh lệch | FUTURE_PAYMENT_ESCROW | Chưa có đủ toán hạng/công thức duyệt | Không | NULL |
+| 15 | Giá SP (VAT 8%) | UNMAPPED_NO_SOURCE | OrderItem có SKU/name/quantity; `price` không được parser điền và không phải giá VAT 8% | Không | NULL; không tự nhân 1.08 |
+| 16 | % Tổng Chi Phí | FUTURE_PAYMENT_ESCROW | Chưa có fee breakdown và công thức | Không | NULL |
+| 17 | Tổng Tiền Sẽ Thu | FUTURE_PAYMENT_ESCROW | Seller receivable chưa có | Không; `totalAmount` là gross order amount | NULL đến khi có escrow/payout mapping |
+| 18 | Phí Affiliate (Vui Khỏe) | UNMAPPED_NO_SOURCE | Không có internal affiliate source đã xác minh | Không | NULL |
+| 19 | Chiết Khấu (Vui Khỏe) | UNMAPPED_NO_SOURCE | Không có internal discount source đã xác minh | Không | NULL; không dùng Shopee promotion |
+| 20 | % Chiết Khấu Vui Khỏe | UNMAPPED_NO_SOURCE | Không có internal discount rate đã xác minh | Không | NULL |
+| 21 | Phí Cố Định (TMĐT) | FUTURE_PAYMENT_ESCROW | Chưa có fixed fee evidence | Không | NULL |
+| 22 | Phí dịch vụ (TMĐT) | FUTURE_PAYMENT_ESCROW | Chưa có service fee evidence | Không | NULL |
+| 23 | Phí Giao Dịch (TMĐT) | FUTURE_PAYMENT_ESCROW | Chưa có transaction fee evidence | Không | NULL |
+| 24 | % Chi Phí Sàn TMĐT | FUTURE_PAYMENT_ESCROW | Chưa có fee breakdown và công thức | Không | NULL |
+
+Nguồn Excel persist: `orders.order_date`, `platform`, `raw_order_code`, `eshop_order_code` (từ import mới), `raw_source_metadata.cells`, `column_map` (từ import mới), `source_refs` (sheet/row) và OrderItems `sku`, `product_name`, `quantity`. Parser đọc cell theo chỉ số **một-based**: Excel D là `cells['4']`. Import mới tìm header bằng cơ chế hiện hữu (không giả định row 1/3), lưu `header_row` trong Batch metadata và `column_map` gồm ít nhất sáu header production trong Order raw metadata. Continuation item không ghi đè eShop identity của Order.
+
+Workbook production đã được xác minh: sheet `DANH SÁCH ĐƠN HÀNG`, row 1 title, row 2 blank, row 3 header `STT | Sàn & Mã Đơn | Ngày đặt | Mã đơn hàng eShop | Mã hàng hóa | Tên hàng hóa | Số lg`. Mã eShop có dạng `ĐH...`, khác hẳn marketplace order ID. Với Batch cũ không có header map, chỉ dùng `cells['4']` khi **đồng thời** có parser `wp5a-v1`, metadata header row 3/date column 3/8 Orders/18 Items, source Excel, sheet đúng, row Order ≥4, đúng bảy raw cells không rỗng tại các vị trí nghiệp vụ và combined identity khớp cell B. Không dùng filename làm chứng cứ. Thiếu bất cứ điều kiện nào thì NULL; không chuyển sang mã sàn, Shopee `order_sn`, STT hay SKU.
+
+Nguồn Shopee WP.5 persist trong `provider_normalized_data`: `providerStatus`, `providerCreatedAt`, `recipientName`, `recipientPhone`, `recipientFullAddress`, `recipientState`, `recipientCity`, `recipientRegion`, `totalAmount`, `estimatedShippingFee`, `actualShippingFee`, `escrowAmount` và danh sách items. `provider_raw_data` có thể chứa `note` hoặc field khác tùy response nhưng WP.5 không yêu cầu note trong detail, và chưa có quyết định ngữ nghĩa canonical cho nó. Các số tiền Order Detail này không tương đương phí sàn hay seller settlement.
 
