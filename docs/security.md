@@ -109,6 +109,8 @@ OAuth failure details are stored for at most ten minutes in a one-time transient
 
 # WP.4A refresh safety
 
+WP.6B Payment test chỉ dành cho admin có capability và nonce, nhận Order ID đã MATCHED từ Batch thay vì order_sn tùy ý. Signed URL, token, Partner Key và Payment raw JSON không xuất hiện trong diagnostics/transient/HTML; chỉ summary tài chính và key/type shape được hiển thị. Persisted raw Payment chỉ giữ `order_sn` và `order_income`, tách khỏi Order Detail và canonical. Một click có tối đa một Payment POST, không tự thử GET khi method bị từ chối.
+
 Shopee refresh tokens are treated as rotating single-use state. The refresh endpoint is never retried automatically. Network/timeout ambiguity, or encryption/persistence failure after provider success, moves the safe lifecycle toward `REFRESH_UNCERTAIN` and requires reauthorization while preserving old ciphertext. Definitive expired/invalid refresh authorization becomes `REAUTH_REQUIRED`. Tokens appear only in encrypted envelopes and ephemeral server-side memory, never in URLs, HTML, diagnostics, logs, or options plaintext.
 
 # WP.4B Order API security

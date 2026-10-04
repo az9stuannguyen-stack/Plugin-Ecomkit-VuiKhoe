@@ -23,6 +23,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_test_order_api', array( $this, 'handle_shopee_test_order_api' ) );
 		add_action( 'admin_post_ecomkit_shopee_reconcile_batch', array( $this, 'handle_shopee_reconcile_batch' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_materialize_results', array( $this, 'handle_materialize_results' ) );
+		add_action( 'admin_post_ecomkit_shopee_payment_test', array( $this, 'handle_shopee_payment_test' ) );
 	}
 
 	public function add_menu(): void {
@@ -62,7 +63,29 @@ final class Ecomkit_Vuikhoe_Admin {
 		$platform = isset( $_GET['platform'] ) && in_array( (string) $_GET['platform'], array( 'SHOPEE', 'LAZADA' ), true ) ? (string) $_GET['platform'] : '';
 		$matching = isset( $_GET['matching'] ) && in_array( (string) $_GET['matching'], array( 'MATCHED', 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING', '__BLANK__' ), true ) ? (string) $_GET['matching'] : '';
 		$service = new Ecomkit_Vuikhoe_Canonical_Result_Service();
-		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching ) );
+		$payment_test = null;
+		if ( isset( $_GET['payment_test'] ) ) {
+			$reference = sanitize_key( wp_unslash( $_GET['payment_test'] ) );
+			$stored = get_transient( 'ecomkit_shopee_payment_test_' . $reference );
+			delete_transient( 'ecomkit_shopee_payment_test_' . $reference );
+			if ( is_array( $stored ) && (int) ( $stored['user_id'] ?? 0 ) === get_current_user_id() && (int) ( $stored['batch_id'] ?? 0 ) === $batch_id ) { $payment_test = $stored['result'] ?? null; }
+		}
+		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test ) );
+	}
+
+	public function handle_shopee_payment_test(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_shopee_payment_test', 'ecomkit_payment_nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		$order_id = absint( wp_unslash( $_POST['order_id'] ?? 0 ) );
+		$service = new Ecomkit_Vuikhoe_Shopee_Payment_Service();
+		try { $result = array( 'ok' => true, 'data' => $service->inspect_matched_order( $batch_id, $order_id ) ); }
+		catch ( Throwable $exception ) {
+			$result = array( 'ok' => false, 'classification' => strtoupper( sanitize_key( $exception->getMessage() ) ), 'diagnostic' => array_intersect_key( $service->last_diagnostic, array_flip( array( 'api_path', 'method', 'http_status', 'request_id', 'provider_error', 'provider_message', 'top_level_keys', 'response_type', 'response_keys', 'order_income_type', 'order_income_keys', 'order_income_field_types' ) ) ) );
+		}
+		$reference = bin2hex( random_bytes( 16 ) );
+		set_transient( 'ecomkit_shopee_payment_test_' . $reference, array( 'user_id' => get_current_user_id(), 'batch_id' => $batch_id, 'result' => $result ), 600 );
+		wp_safe_redirect( add_query_arg( array( 'page' => 'ecomkit-vuikhoe-results', 'batch_id' => $batch_id, 'payment_test' => $reference ), admin_url( 'admin.php' ) ) ); exit;
 	}
 
 	public function handle_materialize_results(): void {

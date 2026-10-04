@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ARRAY_A', 'ARRAY_A' );
-define( 'ECOMKIT_VUIKHOE_DB_VERSION', 6 );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.1' );
+define( 'ECOMKIT_VUIKHOE_DB_VERSION', 7 );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.2' );
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 $GLOBALS['migration_options'] = array();
 function get_option( string $key, mixed $default = false ): mixed { return $GLOBALS['migration_options'][ $key ] ?? $default; }
@@ -79,6 +79,10 @@ final class MigrationWpdb {
 		}
 		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` ADD COLUMN `(canonical_result_version|canonical_materialized_at|canonical_source_fingerprint)` (.+)$/', $query, $match ) ) {
 			$type = str_starts_with( $match[3], 'datetime' ) ? 'datetime' : 'varchar';
+			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
+		}
+		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` ADD COLUMN `(payment_raw_data|payment_normalized_data|payment_fetched_at|payment_request_id)` (.+)$/', $query, $match ) ) {
+			$type = str_starts_with( $match[3], 'longtext' ) ? 'longtext' : ( str_starts_with( $match[3], 'datetime' ) ? 'datetime' : 'varchar' );
 			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
 		}
 		return 1;
@@ -161,5 +165,12 @@ migration_check( array( 'canonical_result_version', 'canonical_materialized_at',
 migration_check( $canonical_counts === $canonical_schema->counts && Ecomkit_Vuikhoe_DB::canonical_result_schema_ready(), 'WP.6 canonical migration did not preserve/verify Orders.' );
 $canonical_query_count = count( $canonical_schema->queries );
 migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_canonical_result_columns()['added'] && $canonical_query_count === count( $canonical_schema->queries ), 'WP.6 canonical migration is not idempotent.' );
+
+$payment_schema = new MigrationWpdb( 'InnoDB' ); $payment_counts = $payment_schema->counts; $GLOBALS['wpdb'] = $payment_schema;
+$payment_result = Ecomkit_Vuikhoe_DB::migrate_payment_columns();
+migration_check( array( 'payment_raw_data', 'payment_normalized_data', 'payment_fetched_at', 'payment_request_id' ) === $payment_result['added'], 'WP.6B payment fields were not added exactly.' );
+migration_check( $payment_counts === $payment_schema->counts && Ecomkit_Vuikhoe_DB::payment_schema_ready(), 'WP.6B payment migration changed rows or failed readiness.' );
+$payment_query_count = count( $payment_schema->queries );
+migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_payment_columns()['added'] && $payment_query_count === count( $payment_schema->queries ), 'WP.6B payment migration is not idempotent.' );
 
 echo "WP.2D database migration checks passed.\n";

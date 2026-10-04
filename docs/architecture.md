@@ -209,6 +209,8 @@ Shopee credential mutation is serialized with MySQL/MariaDB `GET_LOCK` using `ec
 
 # WP.4B provider-read boundary
 
+WP.6B thêm ranh giới Payment riêng: chỉ một Order đã `MATCHED` trong Excel Batch, dùng `marketplace_order_id` chứ không dùng `eshop_order_code`. Client tái sử dụng token lifecycle và shop signer; POST JSON `order_sn` có common auth ở query, không ký body. Snapshot Payment lưu ở bốn cột nullable riêng; Order Detail, Excel, OrderItems và canonical v2 không bị sửa. Admin action là thủ công, một Payment call mỗi click, không retry hoặc GET fallback.
+
 `Ecomkit_Vuikhoe_Shopee_Order_Service` is read-only and depends on `Ecomkit_Vuikhoe_Shopee_Token_Service`; it never decrypts connection credentials. Every list/detail HTTP request obtains an ephemeral usable access token, signs the shop-level base `partner_id + api_path + timestamp + access_token + shop_id`, and performs one `wp_remote_get()` without retries or redirects. Filters and cursors are not part of the signature base.
 
 The low-level methods make exactly one request. Higher-level list pagination preserves opaque cursors, rejects non-progress/cycles, deduplicates exact `order_sn` with latest-page-wins plus conflict counters, and has a 100-page local guard. Higher-level detail reads split exact identities into batches of 50 and report completeness. No provider response is written to application tables.

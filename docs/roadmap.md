@@ -190,3 +190,7 @@ WP.7 chỉ được xem xét sau khi WP.6A được kiểm tra thủ công và n
 
 Runtime `0.6.1`, schema giữ `6`, canonical snapshot `v2`. Kiểm tra đủ 24 cột cho thấy `Mã đơn ESHOP` có nguồn Excel production nhưng WP.6 chưa materialize; parser nay persist field và header provenance cho import mới. Snapshot v1 hiện là stale và operator có thể materialize lại local. Batch cũ thiếu header map chỉ được khôi phục cell D khi đồng thời đáp ứng provenance nghiêm ngặt của workbook production 8 Orders/18 Items đã xác minh; Batch khác để NULL. Các cột tài chính cần Payment/Escrow và các cột chưa có nguồn xác thực vẫn NULL. WP.7 chưa bắt đầu; cần manual review nguồn trước khi xuất.
 
+## WP.6B — Shopee Payment/Escrow foundation
+
+Runtime `0.6.2`, schema `7`, canonical giữ `v2`. Admin chọn một Order Shopee MATCHED từ Batch và bấm kiểm tra; mỗi lần chỉ gửi một `POST /api/v2/payment/get_escrow_detail` với JSON `order_sn` từ `marketplace_order_id`. Không có GET fallback, retry, batch endpoint hay tự động đồng bộ. Validated accounting evidence được lưu riêng trong nullable `payment_raw_data`, `payment_normalized_data`, `payment_fetched_at` (thời điểm lấy, không phải thời điểm provider cập nhật) và `payment_request_id`; migration chỉ thêm cột. Live shop vẫn phải xác nhận POST contract/quyền Payment. Chưa có mapping canonical tài chính, chưa có WP.7. WP.6C cần live evidence và phê duyệt ngữ nghĩa kế toán.
+
