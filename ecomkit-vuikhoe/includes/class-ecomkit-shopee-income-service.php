@@ -25,6 +25,60 @@ final class Ecomkit_Vuikhoe_Shopee_Income_Service {
 		return array( $from, $to );
 	}
 
+	/** One shared provider page for a Batch query; no order is inferred absent here. */
+	public function scan_page( int $connection_id, string $bucket, string $from, string $to, string $cursor = '' ): array {
+		global $wpdb;
+		$this->last_diagnostic = array( 'stage' => 'WP.6E', 'api_path' => self::PATH, 'method' => 'POST', 'http_status' => null, 'request_id' => '' );
+		try { list( $from, $to ) = self::query_dates( $bucket, $from, $to ); } catch ( InvalidArgumentException $exception ) { $this->fail( $exception->getMessage() ); }
+		if ( $connection_id < 1 || strlen( $cursor ) > 1024 ) { $this->fail( 'SHOPEE_INCOME_REQUEST_INVALID' ); }
+		$tables = Ecomkit_Vuikhoe_DB::table_names();
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT id, platform, external_shop_id, status, credential_source, metadata FROM {$tables['marketplace_connections']} WHERE id = %d", $connection_id ), ARRAY_A );
+		$meta = is_array( $row ) ? json_decode( (string) ( $row['metadata'] ?? '' ), true ) : null;
+		$config_service = new Ecomkit_Vuikhoe_Shopee_Config(); $config = $config_service->get();
+		if ( ! is_array( $row ) || ! is_array( $meta ) || ! $config_service->readiness()['ready'] || 'SHOPEE' !== (string) ( $row['platform'] ?? '' ) || 'ACTIVE' !== (string) ( $row['status'] ?? '' ) || 'OAUTH' !== (string) ( $row['credential_source'] ?? '' ) || 'ECOMKIT' !== (string) ( $meta['refresh_ownership'] ?? '' ) || 'READY' !== (string) ( $meta['credential_lifecycle'] ?? '' ) || ! hash_equals( (string) ( $config['fingerprint'] ?? '' ), (string) ( $meta['provider_config_fingerprint'] ?? '' ) ) || ! Ecomkit_Vuikhoe_Shopee_Config::valid_partner_id( (string) ( $row['external_shop_id'] ?? '' ) ) ) { $this->fail( 'SHOPEE_INCOME_CONNECTION_NOT_READY' ); }
+		$token = $this->tokens->ensure_usable_access_token( $connection_id );
+		$partner_id = (string) $config['partner_id']; $shop_id = (string) $row['external_shop_id']; $timestamp = time();
+		$signature = Ecomkit_Vuikhoe_Shopee_Signer::sign_shop( $partner_id, self::PATH, $timestamp, $token, $shop_id, $config_service->partner_key( $config ) );
+		$url = add_query_arg( array( 'partner_id' => (int) $partner_id, 'timestamp' => $timestamp, 'access_token' => $token, 'shop_id' => (int) $shop_id, 'sign' => $signature ), Ecomkit_Vuikhoe_Shopee_Environment::api_url( (string) $config['environment'], self::PATH ) );
+		$body = wp_json_encode( array( 'cursor' => $cursor, 'date_from' => $from, 'date_to' => $to, 'income_status' => 'RELEASED' === $bucket ? 1 : 2, 'page_size' => self::PAGE_SIZE ) );
+		if ( ! is_string( $body ) ) { $this->fail( 'SHOPEE_INCOME_REQUEST_INVALID' ); }
+		$http = wp_remote_post( $url, array( 'timeout' => 15, 'sslverify' => true, 'redirection' => 0, 'headers' => array( 'Content-Type' => 'application/json' ), 'body' => $body ) );
+		if ( is_wp_error( $http ) ) { $this->fail( 'SHOPEE_INCOME_NETWORK_ERROR' ); }
+		$status = (int) wp_remote_retrieve_response_code( $http ); $this->last_diagnostic['http_status'] = $status;
+		try { $data = json_decode( wp_remote_retrieve_body( $http ), true, 64, JSON_THROW_ON_ERROR ); } catch ( Throwable ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
+		if ( ! is_array( $data ) ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
+		$this->last_diagnostic['top_level_keys'] = array_keys( $data );
+		$this->last_diagnostic['request_id'] = sanitize_text_field( (string) ( $data['request_id'] ?? '' ) );
+		$this->last_diagnostic['provider_message'] = self::safe_message( (string) ( $data['message'] ?? '' ), $token, $signature );
+		if ( ! array_key_exists( 'error', $data ) || ! is_scalar( $data['error'] ) ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
+		$error = sanitize_key( (string) $data['error'] ); $this->last_diagnostic['provider_error'] = $error;
+		if ( '' !== $error ) { $this->fail( self::provider_classification( $error ) ); }
+		if ( 200 !== $status ) { $this->fail( 'SHOPEE_INCOME_HTTP_ERROR' ); }
+		if ( array_key_exists( 'response', $data ) && null === $data['response'] && ! array_key_exists( 'income_detail_list', $data ) ) { return array( 'classification' => 'SHOPEE_INCOME_EMPTY', 'records' => array(), 'next_cursor' => '', 'request_id' => $this->last_diagnostic['request_id'] ); }
+		$income = $data['income_detail_list'] ?? ( is_array( $data['response'] ?? null ) ? ( $data['response']['income_detail_list'] ?? null ) : null );
+		$this->last_diagnostic['income_response_type'] = get_debug_type( $income );
+		$this->last_diagnostic['income_response_keys'] = is_array( $income ) ? array_keys( $income ) : array();
+		if ( ! is_array( $income ) || ! is_array( $income['list'] ?? null ) || ! array_is_list( $income['list'] ) || ! is_array( $income['next_page'] ?? null ) || ! is_string( $income['next_page']['cursor'] ?? null ) ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
+		foreach ( $income['list'] as $item ) { if ( ! is_array( $item ) || ! is_string( $item['order_sn'] ?? null ) || '' === $item['order_sn'] ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); } }
+		return array( 'classification' => 'SUCCESS', 'records' => $income['list'], 'next_cursor' => $income['next_page']['cursor'], 'request_id' => $this->last_diagnostic['request_id'] );
+	}
+
+	/** Save one exact matched record without touching Payment, Order Detail or canonical data. */
+	public function store_matched_record( int $batch_id, int $order_id, string $order_sn, int $connection_id, array $item, string $bucket, string $request_id ): void {
+		global $wpdb;
+		if ( ! Ecomkit_Vuikhoe_DB::income_schema_ready() || ! is_string( $item['order_sn'] ?? null ) || ! hash_equals( $order_sn, $item['order_sn'] ) ) { $this->fail( 'SHOPEE_INCOME_IDENTITY_MISMATCH' ); }
+		$tables = Ecomkit_Vuikhoe_DB::table_names();
+		$raw = wp_json_encode( Ecomkit_Vuikhoe_Shopee_Income_Normalizer::minimized_raw( $item ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+		$normalized = wp_json_encode( Ecomkit_Vuikhoe_Shopee_Income_Normalizer::normalize( $item, $bucket ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+		if ( ! is_string( $raw ) || ! is_string( $normalized ) ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
+		$updated = $wpdb->update( $tables['orders'], array( 'income_raw_data' => $raw, 'income_normalized_data' => $normalized, 'income_fetched_at' => current_time( 'mysql', true ), 'income_request_id' => sanitize_text_field( $request_id ) ), array( 'id' => $order_id, 'batch_id' => $batch_id, 'platform' => 'SHOPEE', 'matching_status' => 'MATCHED', 'marketplace_order_id' => $order_sn, 'connection_id' => $connection_id ) );
+		if ( false === $updated ) { $this->fail( 'SHOPEE_INCOME_PERSIST_FAILED' ); }
+		if ( 0 === $updated ) {
+			$stored = $wpdb->get_row( $wpdb->prepare( "SELECT marketplace_order_id, matching_status, connection_id, income_normalized_data FROM {$tables['orders']} WHERE id = %d AND batch_id = %d", $order_id, $batch_id ), ARRAY_A );
+			if ( ! is_array( $stored ) || ! hash_equals( $order_sn, (string) ( $stored['marketplace_order_id'] ?? '' ) ) || 'MATCHED' !== (string) ( $stored['matching_status'] ?? '' ) || $connection_id !== (int) ( $stored['connection_id'] ?? 0 ) || $normalized !== (string) ( $stored['income_normalized_data'] ?? '' ) ) { $this->fail( 'SHOPEE_INCOME_PERSIST_FAILED' ); }
+		}
+	}
+
 	public function inspect_matched_order( int $batch_id, int $order_id, string $bucket, string $from = '', string $to = '' ): array {
 		global $wpdb;
 		$this->last_diagnostic = array( 'stage' => 'WP.6D', 'api_path' => self::PATH, 'method' => 'POST', 'http_status' => null, 'request_id' => '', 'pages' => 0 );
@@ -55,7 +109,7 @@ final class Ecomkit_Vuikhoe_Shopee_Income_Service {
 			$status = (int) wp_remote_retrieve_response_code( $http ); $this->last_diagnostic['http_status'] = $status;
 			try { $data = json_decode( wp_remote_retrieve_body( $http ), true, 64, JSON_THROW_ON_ERROR ); } catch ( Throwable ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
 			if ( ! is_array( $data ) ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
-			$income = $data['income_detail_list'] ?? null;
+			$income = $data['income_detail_list'] ?? ( is_array( $data['response'] ?? null ) ? ( $data['response']['income_detail_list'] ?? null ) : null );
 			$this->last_diagnostic['top_level_keys'] = array_keys( $data );
 			$this->last_diagnostic['income_response_type'] = get_debug_type( $income );
 			$this->last_diagnostic['income_response_keys'] = is_array( $income ) ? array_keys( $income ) : array();
@@ -67,6 +121,10 @@ final class Ecomkit_Vuikhoe_Shopee_Income_Service {
 			$this->last_diagnostic['provider_message'] = self::safe_message( (string) ( $data['message'] ?? '' ), $token, $signature );
 			if ( '' !== $error ) { $this->fail( self::provider_classification( $error ) ); }
 			if ( $status < 200 || $status >= 300 ) { $this->fail( 'SHOPEE_INCOME_HTTP_ERROR' ); }
+			// Verified VN Local Shop empty-success envelope. No numeric value or absence claim is invented.
+			if ( 200 === $status && array_key_exists( 'response', $data ) && null === $data['response'] && ! array_key_exists( 'income_detail_list', $data ) && array_key_exists( 'error', $data ) && is_scalar( $data['error'] ) ) {
+				return array( 'classification' => 'SHOPEE_INCOME_EMPTY', 'order_sn' => $sn, 'incomeBucket' => $bucket, 'pages' => $page, 'request_id' => $this->last_diagnostic['request_id'] );
+			}
 			if ( ! array_key_exists( 'error', $data ) || ! is_array( $income ) || ! is_array( $income['list'] ?? null ) || ! array_is_list( $income['list'] ) || ! is_array( $income['next_page'] ?? null ) || ! is_string( $income['next_page']['cursor'] ?? null ) ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }
 			foreach ( $income['list'] as $item ) {
 				if ( ! is_array( $item ) || ! is_string( $item['order_sn'] ?? null ) || '' === $item['order_sn'] ) { $this->fail( 'SHOPEE_INCOME_RESPONSE_INVALID' ); }

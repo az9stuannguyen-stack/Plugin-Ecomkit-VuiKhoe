@@ -29,9 +29,10 @@ final class Ecomkit_Vuikhoe_Shopee_Order_Service {
 		return array( 'orders' => $orders, 'more' => $response['more'], 'next_cursor' => (string) $next, 'request_id' => (string) ( $data['request_id'] ?? '' ), 'diagnostic' => $this->last_diagnostic );
 	}
 
-	public function get_all_orders( int $connection_id, string $range_field, int $from, int $to, int $page_size = 100, ?string $status = null ): array {
+	public function get_all_orders( int $connection_id, string $range_field, int $from, int $to, int $page_size = 100, ?string $status = null, int $max_pages = self::MAX_PAGES ): array {
+		if ( $max_pages < 1 || $max_pages > self::MAX_PAGES ) { $this->fail( 'SHOPEE_ORDER_PAGE_LIMIT_INVALID' ); }
 		$cursor = null; $seen_cursors = array(); $by_sn = array(); $duplicates = 0; $conflicts = 0; $request_ids = array();
-		for ( $page = 1; $page <= self::MAX_PAGES; $page++ ) {
+		for ( $page = 1; $page <= $max_pages; $page++ ) {
 			try { $result = $this->get_order_list_page( $connection_id, $range_field, $from, $to, $page_size, $cursor, $status ); } catch ( Throwable $exception ) { $this->last_diagnostic['pagination_page'] = $page; throw $exception; } $request_ids[] = $result['request_id'];
 			foreach ( $result['orders'] as $order ) { $sn = $order['order_sn']; if ( isset( $by_sn[ $sn ] ) ) { $duplicates++; if ( (string) ( $by_sn[ $sn ]['order_status'] ?? '' ) !== (string) ( $order['order_status'] ?? '' ) ) { $conflicts++; } } $by_sn[ $sn ] = $order; }
 			if ( ! $result['more'] ) { return array( 'orders' => array_values( $by_sn ), 'duplicate_count' => $duplicates, 'conflict_count' => $conflicts, 'page_count' => $page, 'request_ids' => $request_ids ); }
@@ -52,8 +53,9 @@ final class Ecomkit_Vuikhoe_Shopee_Order_Service {
 		return array( 'orders_by_sn' => $by_sn, 'requested_count' => count( $order_sns ), 'returned_count' => count( $by_sn ), 'missing_order_sn' => $missing, 'extra_order_sn' => $extra, 'duplicate_count' => $duplicates, 'complete' => ! $missing && ! $extra && 0 === $duplicates, 'request_id' => (string) ( $data['request_id'] ?? '' ) );
 	}
 
-	public function get_order_details_batched( int $connection_id, array $order_sns, array $optional_fields = array() ): array {
+	public function get_order_details_batched( int $connection_id, array $order_sns, array $optional_fields = array(), int $max_batches = PHP_INT_MAX ): array {
 		$order_sns = $this->validate_order_sns( $order_sns, true ); $all = array(); $duplicates = 0; $request_ids = array();
+		if ( $max_batches < 1 || count( $order_sns ) > self::DETAIL_BATCH * $max_batches ) { $this->fail( 'SHOPEE_ORDER_DETAIL_BATCH_LIMIT_EXCEEDED' ); }
 		foreach ( array_chunk( $order_sns, self::DETAIL_BATCH ) as $batch ) { $result = $this->get_order_detail_page( $connection_id, $batch, $optional_fields ); $request_ids[] = $result['request_id']; $duplicates += $result['duplicate_count']; foreach ( $result['orders_by_sn'] as $sn => $order ) { if ( isset( $all[ $sn ] ) ) { $duplicates++; } $all[ $sn ] = $order; } }
 		$missing = array_values( array_diff( $order_sns, array_keys( $all ) ) ); $extra = array_values( array_diff( array_keys( $all ), $order_sns ) );
 		return array( 'orders_by_sn' => $all, 'requested_count' => count( $order_sns ), 'returned_count' => count( $all ), 'missing_order_sn' => $missing, 'extra_order_sn' => $extra, 'duplicate_count' => $duplicates, 'complete' => ! $missing && ! $extra && 0 === $duplicates, 'request_ids' => $request_ids );

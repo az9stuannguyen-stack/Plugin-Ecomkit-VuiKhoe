@@ -132,3 +132,5 @@ No network transaction spans a DB transaction. Failed/incomplete pagination cann
 # WP.6D Income diagnostic
 
 Chỉ admin có quyền quản lý và nonce hợp lệ mới chọn được một Order Shopee MATCHED từ Batch. Income POST tái sử dụng token lifecycle và shop signer; không ký body hay log token/URL/body. Tối đa 10 trang, không retry, không GET fallback. Lưu raw record đã giảm thiểu, không lưu buyer PII; thông báo lỗi chỉ gồm classification, status, path, method, request ID và tên key/type an toàn. Quyền API bị từ chối được phân loại `MANUAL_BLOCKED_EXTERNAL_PERMISSION`; traversal chưa hết không bị gọi là NOT_FOUND.
+
+WP.6E tự động chạy qua WP-Cron sau import của admin đã xác thực; không cho phép nhập order_sn/ngày tự do trong luồng bình thường. Lock và `auto_pipeline` metadata ngăn chạy trùng Batch; trạng thái `inflight` được lưu trước provider call để resume không lặp call có kết quả không rõ. Các mã cảnh báo an toàn không chứa token, signed URL, raw financial payload hay PII. Nút resume/chẩn đoán thủ công vẫn yêu cầu capability và nonce.

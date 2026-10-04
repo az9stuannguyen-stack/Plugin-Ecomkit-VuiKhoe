@@ -5,7 +5,7 @@ declare(strict_types=1);
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ARRAY_A', 'ARRAY_A' );
 define( 'ECOMKIT_VUIKHOE_DB_VERSION', 8 );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.5' );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.6' );
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 $GLOBALS['migration_options'] = array();
 function get_option( string $key, mixed $default = false ): mixed { return $GLOBALS['migration_options'][ $key ] ?? $default; }

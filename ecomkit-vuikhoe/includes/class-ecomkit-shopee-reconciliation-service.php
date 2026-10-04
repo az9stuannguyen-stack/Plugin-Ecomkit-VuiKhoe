@@ -16,7 +16,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 	}
 
 	/** @return array<string,mixed> */
-	public function reconcile_batch( int $batch_id, ?int $requested_connection_id = null ): array {
+	public function reconcile_batch( int $batch_id, ?int $requested_connection_id = null, ?array $auto_limits = null ): array {
 		global $wpdb;
 
 		$tables = Ecomkit_Vuikhoe_DB::table_names();
@@ -67,16 +67,21 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		}
 
 		$windows = self::derive_windows( array_values( $dates_by_id ), $timezone );
+		$all_windows_count = count( $windows );
+		$window_offset = is_array( $auto_limits ) ? max( 0, (int) ( $auto_limits['window_offset'] ?? 0 ) ) : 0;
+		if ( $window_offset > 0 ) { $planning_errors = array(); } // Already persisted on the first bounded window.
+		if ( is_array( $auto_limits ) ) { $windows = array_slice( $windows, $window_offset, max( 1, min( 2, (int) ( $auto_limits['max_windows'] ?? 1 ) ) ) ); }
 		$started_at = current_time( 'mysql', true );
 		$provider_by_sn = array();
 		$complete_order_ids = array();
 		$provider_errors = array();
 		$window_results = array();
 		$api_calls = 0;
+		if ( is_array( $auto_limits ) && $window_offset >= $all_windows_count && $all_windows_count > 0 ) { $this->fail( 'SHOPEE_RECON_WINDOW_OFFSET_INVALID', 'RECON_PLAN' ); }
 		foreach ( $windows as $window ) {
 			$window_ids = array_keys( array_filter( $dates_by_id, static fn( string $date ): bool => $date >= $window['start_date'] && $date <= $window['end_date'] ) );
 			try {
-				$result = $this->orders->get_all_orders( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100 );
+				$result = $this->orders->get_all_orders( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100, null, is_array( $auto_limits ) ? max( 1, min( 3, (int) ( $auto_limits['max_pages'] ?? 2 ) ) ) : 100 );
 				$api_calls += (int) $result['page_count'];
 				foreach ( $result['orders'] as $provider_order ) {
 					$provider_by_sn[ $provider_order['order_sn'] ] = $provider_order;
@@ -114,7 +119,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		$detail_failed = false;
 		if ( $matched ) {
 			try {
-				$detail = $this->orders->get_order_details_batched( $connection_id, array_keys( $matched ), self::DETAIL_FIELDS );
+				$detail = $this->orders->get_order_details_batched( $connection_id, array_keys( $matched ), self::DETAIL_FIELDS, is_array( $auto_limits ) ? max( 1, min( 2, (int) ( $auto_limits['max_detail_batches'] ?? 1 ) ) ) : PHP_INT_MAX );
 				$api_calls += count( $detail['request_ids'] );
 				$details_by_sn = $detail['orders_by_sn'];
 				$detail_missing = $detail['missing_order_sn'];
@@ -153,7 +158,16 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 			'missing_date_count'  => count( array_filter( $planning_errors, static fn( array $error ): bool => 'SHOPEE_RECON_ORDER_DATE_MISSING' === $error['error_code'] ) ),
 			'extra_order_sns'     => array_slice( $extra, 0, 100 ),
 			'status'              => $status,
+			'total_windows'       => $all_windows_count,
+			'next_window_offset'  => $window_offset + count( $windows ),
 		);
+		if ( is_array( $auto_limits ) && $window_offset > 0 && is_array( $batch_metadata['shopee_reconciliation'] ?? null ) ) {
+			$previous = $batch_metadata['shopee_reconciliation'];
+			foreach ( array( 'provider_windows_executed', 'shopee_api_calls', 'provider_count', 'matched_count', 'missing_count', 'extra_count', 'detail_count', 'detail_missing_count', 'missing_date_count' ) as $count_key ) { $summary[ $count_key ] += (int) ( $previous[ $count_key ] ?? 0 ); }
+			$summary['windows'] = array_merge( (array) ( $previous['windows'] ?? array() ), $summary['windows'] );
+			$summary['extra_order_sns'] = array_slice( array_unique( array_merge( (array) ( $previous['extra_order_sns'] ?? array() ), $summary['extra_order_sns'] ) ), 0, 100 );
+			if ( 'SUCCESS' !== (string) ( $previous['status'] ?? 'SUCCESS' ) && 'SUCCESS' === $summary['status'] ) { $summary['status'] = (string) $previous['status']; }
+		}
 
 		$this->persist( $batch, $batch_metadata, $connection_id, $complete_order_ids, $matched, $missing, $details_by_sn, $detail_missing, $detail_failed, $all_errors, $summary );
 		return $summary;

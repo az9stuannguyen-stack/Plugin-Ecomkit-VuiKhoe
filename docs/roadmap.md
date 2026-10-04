@@ -202,3 +202,7 @@ Runtime `0.6.3`, schema giữ `7`, canonical `v3`. Live Payment POST đã đư�
 
 Runtime `0.6.5`, schema `8`, canonical giữ `v3`. Admin chọn một Order Shopee MATCHED, truy vấn PENDING hoặc RELEASED bằng `POST /api/v2/payment/get_income_detail`, so khớp `order_sn` chính xác trên tối đa 10 trang cursor (30 bản ghi/trang theo ví dụ schema). RELEASED dùng cửa sổ payout date tối đa 14 ngày; PENDING bắt buộc gửi hai ngày hợp lệ nhưng hai ngày này **không lọc** record. Chỉ record tìm đúng được lưu ở Income snapshot riêng. Không map Đã Thu Tiền/Trạng Thái Công Nợ, không tự đồng bộ Batch. Cần live shop review trước WP.6E; WP.7 chưa bắt đầu.
 
+## WP.6E — One Upload → Automatic 24-column Result
+
+Runtime `0.6.6`, schema giữ `8`, canonical giữ `v3`. Một upload tự lập lịch Batch pipeline: WP.5 reconciliation/detail, Payment từng Order (snapshot hợp lệ được tái dùng), Income shared-list best-effort, cuối cùng canonical materialization. WP-Cron chia Payment theo từng Order và Income theo từng page/cửa sổ; Result hiển thị tiến độ rồi tự cập nhật. Income HTTP 200 `response:null` là `SHOPEE_INCOME_EMPTY`, không là dữ liệu lỗi hay số 0. Không có cột kế toán mới được map. Cần kiểm tra một file production trên WordPress thật trước khi tuyên bố live PASS; WP.7 chưa bắt đầu.
+
