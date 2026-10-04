@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ARRAY_A', 'ARRAY_A' );
-define( 'ECOMKIT_VUIKHOE_DB_VERSION', 5 );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.5.1' );
+define( 'ECOMKIT_VUIKHOE_DB_VERSION', 6 );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.0' );
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 $GLOBALS['migration_options'] = array();
 function get_option( string $key, mixed $default = false ): mixed { return $GLOBALS['migration_options'][ $key ] ?? $default; }
@@ -37,6 +37,7 @@ final class MigrationWpdb {
 		}
 		$this->order_columns['connection_id'] = array( 'Field' => 'connection_id', 'Type' => 'bigint(20) unsigned', 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
 		$this->order_columns['matching_status'] = array( 'Field' => 'matching_status', 'Type' => 'varchar(32)', 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
+		$this->order_columns['canonical_data'] = array( 'Field' => 'canonical_data', 'Type' => 'longtext', 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
 	}
 	public function db_server_info(): string { return '10.11-MariaDB'; }
 	public function esc_like( string $value ): string { return $value; }
@@ -74,6 +75,10 @@ final class MigrationWpdb {
 		}
 		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` ADD COLUMN `(provider_raw_data|provider_normalized_data|provider_updated_at|matched_at)` (.+)$/', $query, $match ) ) {
 			$type = str_starts_with( $match[3], 'longtext' ) ? 'longtext' : 'datetime';
+			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
+		}
+		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` ADD COLUMN `(canonical_result_version|canonical_materialized_at|canonical_source_fingerprint)` (.+)$/', $query, $match ) ) {
+			$type = str_starts_with( $match[3], 'datetime' ) ? 'datetime' : 'varchar';
 			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
 		}
 		return 1;
@@ -149,5 +154,12 @@ migration_check( $provider_counts === $provider_schema->counts, 'WP.5 provider s
 migration_check( Ecomkit_Vuikhoe_DB::provider_evidence_schema_ready(), 'WP.5 provider evidence schema did not verify after migration.' );
 $provider_query_count = count( $provider_schema->queries );
 migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_provider_evidence_columns()['added'] && $provider_query_count === count( $provider_schema->queries ), 'WP.5 provider schema migration is not idempotent.' );
+
+$canonical_schema = new MigrationWpdb( 'InnoDB' ); $canonical_counts = $canonical_schema->counts; $GLOBALS['wpdb'] = $canonical_schema;
+$canonical_result = Ecomkit_Vuikhoe_DB::migrate_canonical_result_columns();
+migration_check( array( 'canonical_result_version', 'canonical_materialized_at', 'canonical_source_fingerprint' ) === $canonical_result['added'], 'WP.6 canonical metadata columns were not added exactly.' );
+migration_check( $canonical_counts === $canonical_schema->counts && Ecomkit_Vuikhoe_DB::canonical_result_schema_ready(), 'WP.6 canonical migration did not preserve/verify Orders.' );
+$canonical_query_count = count( $canonical_schema->queries );
+migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_canonical_result_columns()['added'] && $canonical_query_count === count( $canonical_schema->queries ), 'WP.6 canonical migration is not idempotent.' );
 
 echo "WP.2D database migration checks passed.\n";

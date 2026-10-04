@@ -6,8 +6,8 @@
 declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
-define('ECOMKIT_VUIKHOE_DB_VERSION', 5);
-define('ECOMKIT_VUIKHOE_VERSION', '0.5.1');
+define('ECOMKIT_VUIKHOE_DB_VERSION', 6);
+define('ECOMKIT_VUIKHOE_VERSION', '0.6.0');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -47,6 +47,9 @@ foreach ($sql as $statement) {
 $orders = $sql[2];
 check(str_contains($orders, 'UNIQUE KEY connection_order (connection_id,marketplace_order_id)'), 'Multi-shop uniqueness is missing.');
 check(str_contains($orders, 'matching_status varchar(32) DEFAULT NULL'), 'Pre-matching order status must remain nullable.');
+foreach ( array( 'canonical_data longtext DEFAULT NULL', 'canonical_result_version varchar(16) DEFAULT NULL', 'canonical_materialized_at datetime DEFAULT NULL', 'canonical_source_fingerprint varchar(64) DEFAULT NULL' ) as $canonical_column ) {
+    check(str_contains($orders, $canonical_column), "Canonical schema mismatch: {$canonical_column}.");
+}
 $items = $sql[3];
 foreach ( array( 'order_id bigint(20) unsigned NOT NULL', 'product_name varchar(255) DEFAULT NULL', 'sku varchar(191) DEFAULT NULL', 'quantity int(11) DEFAULT NULL', 'raw_product_metadata longtext DEFAULT NULL' ) as $required_item_column ) {
     check(str_contains($items, $required_item_column), "OrderItem schema mismatch: {$required_item_column}.");
@@ -80,6 +83,8 @@ check(str_contains((string) $admin, 'Ecomkit_Vuikhoe_Security::require_managemen
 check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_import_excel', 'ecomkit_nonce' )"), 'Excel action nonce validation is missing.');
 check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_import_excel'), 'Authenticated Excel action is missing.');
 check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_test_excel_runtime'), 'Authenticated Excel runtime-test action is missing.');
+check(str_contains((string) $admin, 'admin_post_ecomkit_vuikhoe_materialize_results'), 'Authenticated canonical materialization action is missing.');
+check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_materialize_results', 'ecomkit_result_nonce' )"), 'Canonical materialization nonce validation is missing.');
 check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_vuikhoe_test_excel_runtime', 'ecomkit_runtime_nonce' )"), 'Excel runtime-test nonce validation is missing.');
 check(str_contains((string) $admin, "check_admin_referer( 'ecomkit_shopee_save_config', 'ecomkit_shopee_nonce' )"), 'Shopee config nonce validation is missing.');
 check(str_contains((string) $admin, 'handle_shopee_save_config'), 'Shopee provider config handler is missing.');
@@ -89,8 +94,8 @@ check(substr_count((string) $admin, 'Ecomkit_Vuikhoe_Security::require_managemen
 check(str_contains((string) $oauth, "check_admin_referer( 'ecomkit_shopee_oauth_start', 'ecomkit_shopee_nonce' )"), 'Shopee OAuth start nonce validation is missing.');
 check(str_contains((string) $oauth, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Shopee OAuth start capability validation is missing.');
 check(str_contains((string) $oauth, "'permission_callback' => '__return_true'"), 'Public Shopee callback route is missing.');
-check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.5.1' )"), 'WP.5A plugin version is wrong.');
-check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 5 )"), 'WP.5 database schema version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.0' )"), 'WP.6 plugin version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 6 )"), 'WP.6 database schema version is wrong.');
 check(str_contains((string) $key_resolver, "hash_hkdf( 'sha256'"), 'Credential resolver must use HKDF-SHA256.');
 check(str_contains((string) $key_resolver, "'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'"), 'Canonical WordPress secret order changed.');
 check(!preg_match('/get_option|update_option|set_transient|file_put_contents|wp-config\.php/i', (string) $key_resolver), 'Credential resolver persists key material or edits configuration.');

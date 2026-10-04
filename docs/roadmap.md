@@ -178,3 +178,11 @@ Runtime `0.5.1`, schema `5`: repair production `Ngày đặt` extraction for Exc
 
 Invalid non-empty dates produce `EXCEL_INVALID_ORDER_DATE`. Missing dates remain unresolved under `SHOPEE_RECON_ORDER_DATE_MISSING`; when no window can be planned, provider calls remain zero, the UI reports `WARNING`, and no green completed notice or false `NOT_FOUND_IN_SHOPEE` is allowed. WP.6 remains blocked until the production re-import and live reconciliation pass.
 
+## WP.6 — Reconciliation Result UI + canonical 24 cột
+
+Trạng thái: **AUTOMATED PASS / MANUAL_REQUIRED**.
+
+Runtime `0.6.0`, schema `6`: mỗi Excel Order có một canonical snapshot `v1` đúng 24 cột trong `orders.canonical_data`. Migration chỉ thêm nullable version/timestamp/fingerprint. Result admin materialize lại local, phát hiện stale, lọc platform/matching và giữ cả Shopee, CANCELLED, missing/detail-missing và Lazada. Payment/Escrow, Lazada API và export chưa triển khai.
+
+Next: **WP.7 — XLSX/CSV Export from Canonical Results**.
+

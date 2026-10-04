@@ -180,7 +180,7 @@ recon_check( $calls_before_ambiguous === count( $GLOBALS['recon_get_calls'] ), '
 $admin_source = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-admin.php' );
 $process_view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/process.php' );
 $results_view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/results.php' );
-recon_check( str_contains( (string) $admin_source, "require_management_capability();\n\t\tcheck_admin_referer( 'ecomkit_shopee_reconcile_batch'" ), 'Reconciliation capability/nonce enforcement is missing.' );
+recon_check( 1 === preg_match( "/require_management_capability\(\);\\R\\s*check_admin_referer\( 'ecomkit_shopee_reconcile_batch'/", (string) $admin_source ), 'Reconciliation capability/nonce enforcement is missing.' );
 recon_check( str_contains( (string) $process_view, 'ecomkit_shopee_reconcile_batch' ) && ! str_contains( (string) $process_view, 'time_from' ) && ! str_contains( (string) $process_view, 'time_to' ) && ! str_contains( (string) $process_view, 'order_sn_list' ), 'Admin reconciliation asks for manual dates or order IDs.' );
 recon_check( str_contains( (string) $process_view, 'order_date_display' ), 'Batch preview does not expose the safely formatted order date.' );
 recon_check( ! str_contains( (string) $results_view, 'provider_raw_data' ) && ! str_contains( (string) $results_view, 'recipientPhone' ), 'Provider raw data or PII reached the summary view.' );

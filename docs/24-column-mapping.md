@@ -14,34 +14,36 @@
 
 | # | Header export | Canonical key | Kiểu logic | Nguồn file matching | Shopee hiện hành | Quy tắc NULL |
 | ---: | --- | --- | --- | --- | --- | --- |
-| 1 | Ngày Lên Đơn | `order_date` | date/datetime | Excel `Ngày đặt`, parse strict trong timezone WordPress và lưu UTC | `create_time` → ISO → date | Trống nếu thiếu |
-| 2 | Mã đơn ESHOP | `eshop_order_code` | text | Chưa map | Chưa map | Trống |
-| 3 | Mã đơn sàn | `raw_order_code` | text | Mã nguồn primary | `order_sn` chính xác | Bắt buộc với record hợp lệ |
-| 4 | Kênh Bán Hàng | `sales_channel` | text | Chưa map | Hằng `SHOPEE` | Trống nếu nguồn chưa xác định |
-| 5 | Trạng Thái Đơn Hàng | `order_status` | text | Chưa map | `order_status` nguyên bản, nếu không rỗng | Trống nếu thiếu |
-| 6 | Tên Khách Hàng | `customer_name` | text | Chưa map | Chưa materialize | Trống |
-| 7 | SĐT | `phone` | text | Chưa map | Chưa materialize | Trống |
-| 8 | Địa Chỉ | `address` | text | Chưa map | Chưa materialize | Trống |
-| 9 | Tỉnh/TP | `province_city` | text | Chưa map | Chưa materialize | Trống |
-| 10 | Ngày Xuất VAT | `vat_issued_date` | date/datetime | Chưa map | Chưa map | Trống |
-| 11 | Ghi Chú | `note` | text | Chưa map | Chưa materialize | Trống |
-| 12 | Đã Thu Tiền | `amount_collected` | decimal(20,4) | Chưa map | Không suy từ COD/total | Trống |
-| 13 | Trạng Thái Công Nợ | `receivable_status` | text | Chưa map | Chưa map | Trống |
-| 14 | Chênh lệch | `difference_amount` | decimal(20,4) | Chưa map | Không tính | Trống |
-| 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | Chưa map | Không tính từ item price | Trống |
-| 16 | % Tổng Chi Phí | `total_cost_percent` | decimal(9,4) | Chưa map | Không tính | Trống |
-| 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal(20,4) | Chưa map | Không suy từ `total_amount` | Trống |
-| 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | Chưa map | Không tính | Trống |
-| 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | Chưa map | Không tính | Trống |
-| 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | decimal(9,4) | Chưa map | Không tính | Trống |
-| 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | Chưa map | Không tính | Trống |
-| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | Chưa map | Không tính | Trống |
-| 23 | Phí Giao Dịch (TMĐT) | `transaction_platform_fee` | decimal(20,4) | Chưa map | Không tính | Trống |
-| 24 | % Chi Phí Sàn TMĐT | `platform_cost_percent` | decimal(9,4) | Chưa map | Không tính | Trống |
+| 1 | Ngày Lên Đơn | `order_date` | date/datetime | `EXCEL > SHOPEE_ORDER_DETAIL`: Excel `Ngày đặt` luôn thắng; chỉ khi Excel NULL, Order SHOPEE `MATCHED` mới fallback `providerCreatedAt`; sau cùng NULL | `create_time` đã normalize thành `providerCreatedAt` | Trống nếu cả hai thiếu/không hợp lệ |
+| 2 | Mã đơn ESHOP | `eshop_order_code` | text | `UNMAPPED` | `UNMAPPED` | Trống |
+| 3 | Mã đơn sàn | `raw_order_code` | text | `EXCEL > SHOPEE_ORDER_DETAIL`: mã nguồn primary luôn thắng | `order_sn` exact chỉ là fallback | Bắt buộc với record hợp lệ |
+| 4 | Kênh Bán Hàng | `sales_channel` | text | `EXCEL > SHOPEE_ORDER_DETAIL`: platform Excel luôn thắng | Provider hằng `SHOPEE` chỉ là fallback | Trống nếu nguồn chưa xác định |
+| 5 | Trạng Thái Đơn Hàng | `order_status` | text | `SHOPEE_ORDER_DETAIL` | `providerStatus` nguyên bản khi `MATCHED` | Trống nếu thiếu |
+| 6 | Tên Khách Hàng | `customer_name` | text | Excel chưa map | `SHOPEE_ORDER_DETAIL`: `recipientName` khi `MATCHED` | Trống nếu thiếu detail/giá trị |
+| 7 | SĐT | `phone` | text | Excel chưa map | `SHOPEE_ORDER_DETAIL`: `recipientPhone` khi `MATCHED` | Trống; không fallback buyer username |
+| 8 | Địa Chỉ | `address` | text | Excel chưa map | `SHOPEE_ORDER_DETAIL`: `recipientFullAddress` khi `MATCHED` | Trống; không tự ghép component |
+| 9 | Tỉnh/TP | `province_city` | text | Excel chưa map | `SHOPEE_ORDER_DETAIL`: `recipientState` > `recipientCity` > `recipientRegion` khi `MATCHED` | Trống; không suy từ full address |
+| 10 | Ngày Xuất VAT | `vat_issued_date` | date/datetime | `UNMAPPED` | Không có nguồn duyệt | Trống |
+| 11 | Ghi Chú | `note` | text | `UNMAPPED` | Không có nguồn duyệt | Trống |
+| 12 | Đã Thu Tiền | `amount_collected` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không suy từ COD/total | Trống |
+| 13 | Trạng Thái Công Nợ | `receivable_status` | text | `FUTURE_PAYMENT_ESCROW` | Chưa có payment evidence | Trống |
+| 14 | Chênh lệch | `difference_amount` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
+| 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | `UNMAPPED` | Không tính từ item price | Trống |
+| 16 | % Tổng Chi Phí | `total_cost_percent` | decimal(9,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
+| 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không suy từ `total_amount` | Trống |
+| 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | `UNMAPPED` | Không tính | Trống |
+| 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | `UNMAPPED` | Không tính | Trống |
+| 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | decimal(9,4) | `UNMAPPED` | Không tính | Trống |
+| 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
+| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
+| 23 | Phí Giao Dịch (TMĐT) | `transaction_platform_fee` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
+| 24 | % Chi Phí Sàn TMĐT | `platform_cost_percent` | decimal(9,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
 
 ### Lưu ý Shopee quan trọng
 
-Shopee normalizer tham chiếu giữ `recipient_address`, `message_to_seller`, `total_amount`, `cod`, payment/shipping và buyer username trong metadata. Tuy nhiên materializer hiện hành tìm các key generic khác (`shippingAddress`, `buyerNote`). Vì vậy không được tuyên bố các trường SĐT, Tỉnh/TP hoặc Ghi Chú đã map cho Shopee. WP runtime chỉ được bổ sung mapping sau khi có quyết định field-source, PII policy và fixture/test xác nhận.
+WP.6 dùng đúng các key phẳng do WP.5 normalizer đã persist: `recipientName`, `recipientPhone`, `recipientFullAddress`, `recipientState`, `recipientCity`, `recipientRegion`. PII này chỉ được hiển thị trong trang Result admin `manage_options`; không vào log, diagnostic, error payload, public REST hay frontend. Không hiển thị raw provider JSON.
+
+OrderItem không bao giờ nhân số dòng canonical. Nếu một phiên bản contract sau map nhiều cột product textual, các giá trị source-backed được nối theo thứ tự OrderItem bằng ` | ` và giữ alignment; không cộng giá nếu contract không yêu cầu. V1 chưa map cột product nào nên các cột đó vẫn NULL.
 
 ## 3. Khóa đối chiếu và normalization V1
 
@@ -95,36 +97,9 @@ Hợp đồng canonical vẫn có đúng 24 cột với thứ tự không đổi
 - Với Shopee ở stage sau, invariant vẫn là `Mã đơn sàn = order_sn`.
 - Dòng sản phẩm continuation không tạo thêm Order và không làm thay đổi sequence 24 cột; chúng được lưu dưới dạng OrderItem.
 
-## 8. Ma trận nguồn khả dụng tại WP.5
+## 8. Phân loại nguồn canonical v1
 
-Các nhãn dưới đây mô tả **nguồn đã có**, không đồng nghĩa WP.5 đã materialize kết quả export. Hợp đồng vẫn đúng 24 cột và giữ nguyên thứ tự.
-
-| # | Header export | Trạng thái nguồn WP.5 | Ghi chú |
-| ---: | --- | --- | --- |
-| 1 | Ngày Lên Đơn | `EXCEL` / `SHOPEE_ORDER_DETAIL` | Excel `Ngày đặt`; provider `create_time` được giữ riêng |
-| 2 | Mã đơn ESHOP | `UNMAPPED` | Có thể tồn tại trong raw Excel nhưng chưa materialize |
-| 3 | Mã đơn sàn | `EXCEL` / `SHOPEE_ORDER_DETAIL` | Exact `marketplace_order_id === order_sn` |
-| 4 | Kênh Bán Hàng | `EXCEL` / `SHOPEE_ORDER_DETAIL` | Platform source-backed là SHOPEE; chưa export |
-| 5 | Trạng Thái Đơn Hàng | `SHOPEE_ORDER_DETAIL` | Giữ raw `order_status` khi có |
-| 6 | Tên Khách Hàng | `SHOPEE_ORDER_DETAIL` | Recipient name trong normalized provider data; PII |
-| 7 | SĐT | `SHOPEE_ORDER_DETAIL` | Recipient phone trong normalized provider data; PII |
-| 8 | Địa Chỉ | `SHOPEE_ORDER_DETAIL` | Chỉ full address/component provider cung cấp; không tự ghép |
-| 9 | Tỉnh/TP | `SHOPEE_ORDER_DETAIL` | Component provider-backed; không suy đoán |
-| 10 | Ngày Xuất VAT | `UNMAPPED` | Chưa có nguồn được duyệt |
-| 11 | Ghi Chú | `UNMAPPED` | WP.5 chưa materialize note |
-| 12 | Đã Thu Tiền | `FUTURE_PAYMENT_ESCROW` | Không suy từ COD hoặc total amount |
-| 13 | Trạng Thái Công Nợ | `FUTURE_PAYMENT_ESCROW` | Chưa có payment evidence |
-| 14 | Chênh lệch | `FUTURE_PAYMENT_ESCROW` | Không tính tại WP.5 |
-| 15 | Giá SP (VAT 8%) | `UNMAPPED` | Item price không được đổi nghĩa thành VAT price |
-| 16 | % Tổng Chi Phí | `FUTURE_PAYMENT_ESCROW` | Không tính tại WP.5 |
-| 17 | Tổng Tiền Sẽ Thu | `FUTURE_PAYMENT_ESCROW` | `total_amount` không phải seller settlement |
-| 18 | Phí Affiliate (Vui Khỏe) | `UNMAPPED` | Không có nguồn provider được duyệt |
-| 19 | Chiết Khấu (Vui Khỏe) | `UNMAPPED` | Không có công thức được duyệt |
-| 20 | % Chiết Khấu Vui Khỏe | `UNMAPPED` | Không có công thức được duyệt |
-| 21 | Phí Cố Định (TMĐT) | `FUTURE_PAYMENT_ESCROW` | Không tính từ Order Detail |
-| 22 | Phí dịch vụ (TMĐT) | `FUTURE_PAYMENT_ESCROW` | Không tính từ Order Detail |
-| 23 | Phí Giao Dịch (TMĐT) | `FUTURE_PAYMENT_ESCROW` | Không tính từ Order Detail |
-| 24 | % Chi Phí Sàn TMĐT | `FUTURE_PAYMENT_ESCROW` | Không tính tại WP.5 |
+Bảng duy nhất tại mục 2 là hợp đồng có thẩm quyền. Cột 1, 3 và 4 có nguồn `EXCEL` với provider fallback nêu rõ trong từng dòng; cột 5–9 là `SHOPEE_ORDER_DETAIL`; cột 2, 10, 11, 15, 18–20 là `UNMAPPED`; cột 12–14, 16, 17, 21–24 là `FUTURE_PAYMENT_ESCROW`. Mọi nguồn không khả dụng materialize thành NULL.
 
 Shopee Order Detail raw fields như `total_amount`, shipping fee hoặc `escrow_amount` chỉ được giữ đúng nghĩa provider nếu thực sự xuất hiện. WP.5 không diễn giải chúng thành settlement, platform fee, affiliate fee, commission hay final receivable.
 

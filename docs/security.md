@@ -1,5 +1,9 @@
 # Bảo mật
 
+## WP.6 canonical Result
+
+Materialization là POST admin-only (`manage_options`) với nonce và PRG, chỉ đọc dữ liệu đã persist và không gọi network/token/Payment/Escrow. Tên, SĐT và địa chỉ source-backed được phép trong bảng Result admin và luôn HTML-escape; không được ghi log, diagnostic, error, transient, public REST hay frontend. Raw Excel/provider JSON không hiển thị.
+
 ## 1. Mô hình quyền WordPress
 
 - Mọi admin page và REST mutation phải kiểm tra capability phía server; ẩn nút UI không phải authorization.

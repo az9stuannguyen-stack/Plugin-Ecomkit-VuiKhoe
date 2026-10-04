@@ -22,6 +22,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_refresh_token', array( $this, 'handle_shopee_refresh_token' ) );
 		add_action( 'admin_post_ecomkit_shopee_test_order_api', array( $this, 'handle_shopee_test_order_api' ) );
 		add_action( 'admin_post_ecomkit_shopee_reconcile_batch', array( $this, 'handle_shopee_reconcile_batch' ) );
+		add_action( 'admin_post_ecomkit_vuikhoe_materialize_results', array( $this, 'handle_materialize_results' ) );
 	}
 
 	public function add_menu(): void {
@@ -58,7 +59,25 @@ final class Ecomkit_Vuikhoe_Admin {
 
 	public function results_page(): void {
 		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
-		$this->render( 'results', array( 'batch_id' => $batch_id, 'reconciliation' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service() )->get_batch_result( $batch_id ) : null ) );
+		$platform = isset( $_GET['platform'] ) && in_array( (string) $_GET['platform'], array( 'SHOPEE', 'LAZADA' ), true ) ? (string) $_GET['platform'] : '';
+		$matching = isset( $_GET['matching'] ) && in_array( (string) $_GET['matching'], array( 'MATCHED', 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING', '__BLANK__' ), true ) ? (string) $_GET['matching'] : '';
+		$service = new Ecomkit_Vuikhoe_Canonical_Result_Service();
+		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching ) );
+	}
+
+	public function handle_materialize_results(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_vuikhoe_materialize_results', 'ecomkit_result_nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		try {
+			( new Ecomkit_Vuikhoe_Canonical_Result_Service() )->materialize_batch( $batch_id );
+			$args = array( 'page' => 'ecomkit-vuikhoe-results', 'batch_id' => $batch_id, 'materialize_notice' => 'success' );
+		} catch ( Throwable $exception ) {
+			$allowed = array( 'CANONICAL_MAPPING_CONTRACT_INVALID', 'CANONICAL_ROW_BUILD_FAILED', 'CANONICAL_RESULT_PERSIST_FAILED', 'CANONICAL_SOURCE_INVALID' );
+			$code = in_array( $exception->getMessage(), $allowed, true ) ? $exception->getMessage() : 'CANONICAL_ROW_BUILD_FAILED';
+			$args = array( 'page' => 'ecomkit-vuikhoe-results', 'batch_id' => $batch_id, 'materialize_error' => strtolower( $code ) );
+		}
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) ); exit;
 	}
 
 	public function handle_shopee_reconcile_batch(): void {

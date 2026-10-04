@@ -55,6 +55,7 @@ final class Ecomkit_Vuikhoe_DB {
 			self::migrate_tables_to_innodb();
 			self::migrate_orders_contract();
 			self::migrate_provider_evidence_columns();
+			self::migrate_canonical_result_columns();
 		}
 		$collate = $wpdb->get_charset_collate();
 		$sql     = self::schema_sql( $tables, $collate );
@@ -81,6 +82,10 @@ final class Ecomkit_Vuikhoe_DB {
 		if ( ! self::provider_evidence_schema_ready() ) {
 			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_PROVIDER_SCHEMA_INCOMPATIBLE', false );
 			throw new RuntimeException( 'ECOMKIT_PROVIDER_SCHEMA_INCOMPATIBLE' );
+		}
+		if ( ! self::canonical_result_schema_ready() ) {
+			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_CANONICAL_SCHEMA_INCOMPATIBLE', false );
+			throw new RuntimeException( 'ECOMKIT_CANONICAL_SCHEMA_INCOMPATIBLE' );
 		}
 
 		update_option( self::SCHEMA_OPTION, ECOMKIT_VUIKHOE_DB_VERSION, false );
@@ -315,6 +320,33 @@ final class Ecomkit_Vuikhoe_DB {
 		return true;
 	}
 
+	/** Adds only nullable WP.6 metadata around the existing canonical_data snapshot. */
+	public static function migrate_canonical_result_columns(): array {
+		global $wpdb;
+		$tables = self::table_names(); $orders = self::safe_table_identifier( $tables['orders'], $tables );
+		$before_count = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$orders`" );
+		$indexes_before = self::table_index_fingerprint( $orders );
+		$definitions = array( 'canonical_result_version' => 'varchar(16) NULL DEFAULT NULL', 'canonical_materialized_at' => 'datetime NULL DEFAULT NULL', 'canonical_source_fingerprint' => 'varchar(64) NULL DEFAULT NULL' );
+		$columns = self::orders_columns(); $added = array();
+		foreach ( $definitions as $name => $definition ) {
+			if ( isset( $columns[ $name ] ) ) { continue; }
+			if ( false === $wpdb->query( "ALTER TABLE `$orders` ADD COLUMN `$name` $definition" ) ) { throw new RuntimeException( 'ECOMKIT_CANONICAL_SCHEMA_ALTER_FAILED_' . strtoupper( $name ) ); }
+			$added[] = $name; $columns = self::orders_columns();
+			if ( ! isset( $columns[ $name ] ) || 'YES' !== strtoupper( (string) ( $columns[ $name ]['Null'] ?? '' ) ) ) { throw new RuntimeException( 'ECOMKIT_CANONICAL_SCHEMA_VERIFY_FAILED_' . strtoupper( $name ) ); }
+		}
+		if ( $before_count !== (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$orders`" ) ) { throw new RuntimeException( 'ECOMKIT_CANONICAL_SCHEMA_ROW_COUNT_MISMATCH' ); }
+		if ( $indexes_before !== self::table_index_fingerprint( $orders ) ) { throw new RuntimeException( 'ECOMKIT_CANONICAL_SCHEMA_INDEX_MISMATCH' ); }
+		return array( 'added' => $added, 'count' => $before_count );
+	}
+
+	public static function canonical_result_schema_ready(): bool {
+		$columns = self::orders_columns();
+		foreach ( array( 'canonical_data', 'canonical_result_version', 'canonical_materialized_at', 'canonical_source_fingerprint' ) as $name ) {
+			if ( ! isset( $columns[ $name ] ) || 'YES' !== strtoupper( (string) ( $columns[ $name ]['Null'] ?? '' ) ) ) { return false; }
+		}
+		return true;
+	}
+
 	private static function table_index_fingerprint( string $table ): string {
 		global $wpdb;
 		$indexes = $wpdb->get_results( "SHOW INDEX FROM `$table`", ARRAY_A );
@@ -521,6 +553,9 @@ final class Ecomkit_Vuikhoe_DB {
 	transaction_platform_fee decimal(20,4) DEFAULT NULL,
 	platform_cost_percent decimal(9,4) DEFAULT NULL,
 	canonical_data longtext DEFAULT NULL,
+	canonical_result_version varchar(16) DEFAULT NULL,
+	canonical_materialized_at datetime DEFAULT NULL,
+	canonical_source_fingerprint varchar(64) DEFAULT NULL,
 	raw_source_metadata longtext DEFAULT NULL,
 	provider_raw_data longtext DEFAULT NULL,
 	provider_normalized_data longtext DEFAULT NULL,

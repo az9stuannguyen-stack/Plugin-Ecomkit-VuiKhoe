@@ -4,11 +4,11 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.5A — Production Excel Order Date Persistence Fix**, plugin `0.5.1`, database schema `5`. `Ngày đặt` được parse nghiêm ngặt trong timezone WordPress, lưu UTC và dùng để tự dẫn xuất cửa sổ `create_time`; reconciliation vẫn đối chiếu chính xác `marketplace_order_id === order_sn`.
+Hiện tại: **WP.6 — Reconciliation Result UI + Canonical 24-Column Materialization**, plugin `0.6.0`, database schema `6`. Mỗi Excel Order materialize thành đúng một snapshot canonical `v1` gồm 24 cột; Result admin hỗ trợ Batch, platform/matching filter, stale fingerprint và không gọi provider.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
-Repo cũ tại `C:\Users\nkluck\ecomkit` chỉ là nguồn tham chiếu read-only. Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ không được sao chép nguyên trạng sang plugin.
+Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ cũ không được sao chép nguyên trạng sang plugin.
 
 ## Tài liệu WP.0
 
@@ -39,9 +39,9 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.5.1`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.6.0`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
-- Sáu bảng custom có prefix động, schema version `5`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
+- Sáu bảng custom có prefix động, schema version `6`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
 - Activation idempotent; deactivation và uninstall mặc định không phá hủy dữ liệu.
 - Menu Ecomkit với Tổng quan, Xử lý đơn hàng, Kết quả, Lỗi, Lịch sử, Marketplace và Cài đặt.
@@ -76,7 +76,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 ## Chưa được triển khai
 
 - Parse PDF và sinh kết quả 24 cột cuối.
-- Result reconciliation và export XLSX/CSV thực tế.
+- Export XLSX/CSV thực tế (WP.7 sẽ dùng trực tiếp canonical snapshot).
 - Payment/Escrow, Lazada API và materialization/export tài chính 24 cột.
 
 ## Cấu hình khóa credential WP.3B

@@ -1,5 +1,9 @@
 # Kiến trúc WordPress mục tiêu
 
+## WP.6 canonical Result
+
+`Ecomkit_Vuikhoe_Canonical_Columns::all()` là nguồn code duy nhất cho 24 key/label/thứ tự. Pure materializer nhận Order, OrderItems và provider normalized snapshot đã persist; không DB/HTTP. Service ghi JSON `v1` vào `orders.canonical_data`, cùng version, UTC materialized timestamp và SHA-256 source fingerprint. Một Order luôn là một row; Result UI và WP.7 dùng cùng definition.
+
 ## 1. Mục tiêu
 
 Ecomkit - Vui Khỏe là plugin WordPress quản lý luồng nhập dữ liệu, đồng bộ Marketplace, chuẩn hóa, đối chiếu, xem kết quả/lỗi/lịch sử và xuất file. WordPress chịu trách nhiệm xác thực, phân quyền, giao diện quản trị, REST endpoints, lịch tác vụ và persistence. Plugin không sao chép mô hình nhiều service của hệ thống Node cũ.
