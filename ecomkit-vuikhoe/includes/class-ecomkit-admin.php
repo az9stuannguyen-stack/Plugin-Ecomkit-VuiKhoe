@@ -26,6 +26,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_payment_test', array( $this, 'handle_shopee_payment_test' ) );
 		add_action( 'admin_post_ecomkit_shopee_income_test', array( $this, 'handle_shopee_income_test' ) );
 		add_action( 'admin_post_ecomkit_pipeline_resume', array( $this, 'handle_pipeline_resume' ) );
+		add_action( 'wp_ajax_ecomkit_pipeline_progress', array( $this, 'handle_pipeline_progress' ) );
 		add_action( 'admin_post_ecomkit_shopee_financial_enrich', array( $this, 'handle_shopee_financial_enrich' ) );
 	}
 
@@ -89,15 +90,30 @@ final class Ecomkit_Vuikhoe_Admin {
 		}
 		$pipeline = null;
 		if ( $batch_id ) { try { $automatic = new Ecomkit_Vuikhoe_Auto_Pipeline(); $pipeline = $automatic->state( $batch_id ); if ( is_array( $pipeline ) && ! in_array( (string) ( $pipeline['status'] ?? '' ), array( 'SUCCESS', 'WARNING', 'ERROR' ), true ) ) { $pipeline = $automatic->start( $batch_id ); } } catch ( Throwable ) { /* Retain ordinary Result access if scheduling is unavailable. */ } }
-		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'pipeline' => $pipeline, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test, 'income_test' => $income_test, 'financial_run' => $financial_run ) );
+		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'pipeline' => $pipeline, 'progress' => is_array( $pipeline ) ? Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test, 'income_test' => $income_test, 'financial_run' => $financial_run ) );
 	}
 
 	public function handle_pipeline_resume(): void {
 		Ecomkit_Vuikhoe_Security::require_management_capability();
 		check_admin_referer( 'ecomkit_pipeline_resume', 'ecomkit_pipeline_nonce' );
 		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
-		try { ( new Ecomkit_Vuikhoe_Auto_Pipeline() )->start( $batch_id, true ); } catch ( Throwable ) { /* Show persisted Batch/Result without exposing internals. */ }
+		try { $pipeline = new Ecomkit_Vuikhoe_Auto_Pipeline(); $state = $pipeline->state( $batch_id ); if ( is_array( $state ) && in_array( (string) ( $state['status'] ?? '' ), array( 'WARNING', 'ERROR' ), true ) ) { $pipeline->start( $batch_id, true ); } } catch ( Throwable ) { /* Show persisted Batch/Result without exposing internals. */ }
 		wp_safe_redirect( add_query_arg( array( 'page' => 'ecomkit-vuikhoe-results', 'batch_id' => $batch_id ), admin_url( 'admin.php' ) ) ); exit;
+	}
+
+	/** Read-only admin polling; no scheduling, provider access, or DB writes. */
+	public function handle_pipeline_progress(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_ajax_referer( 'ecomkit_pipeline_progress', 'nonce' );
+		$batch_id = absint( wp_unslash( $_GET['batch_id'] ?? 0 ) );
+		try {
+			$state = ( new Ecomkit_Vuikhoe_Auto_Pipeline() )->state( $batch_id );
+		} catch ( Throwable ) { wp_send_json_error( array( 'message' => 'Chưa thể đọc tiến độ. Vui lòng thử lại.' ), 500 ); }
+		if ( ! is_array( $state ) ) { wp_send_json_error( array( 'message' => 'Không tìm thấy tiến trình của Batch.' ), 404 ); }
+		$progress = Ecomkit_Vuikhoe_Auto_Pipeline::progress( $state );
+		$time = strtotime( $progress['updated_at'] . ' UTC' );
+		$progress['updated_local'] = false === $time ? '' : wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $time, wp_timezone() );
+		wp_send_json_success( array( 'batch_id' => $batch_id, 'progress' => $progress ) );
 	}
 
 	public function handle_shopee_income_test(): void {

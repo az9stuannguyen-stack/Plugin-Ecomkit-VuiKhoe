@@ -210,3 +210,7 @@ Runtime `0.6.6`, schema giữ `8`, canonical giữ `v3`. Một upload tự lập
 
 Runtime `0.6.7`, schema giữ `8`, canonical giữ `v3`. Workbook legacy phê duyệt `% Tổng Chi Phí=(L+M+N+I+J)/F`, `Tổng Tiền Sẽ Thu=F-(L+M+N+I+J)` (chỉ fallback sau Shopee escrow), `% Chiết Khấu Vui Khỏe=(I+J)/F`, `% Chi Phí Sàn TMĐT=(L+M+N)/F`. `Chênh lệch` có `#REF!`, chưa có công thức tin cậy. Production Excel không có `Giá SP (VAT 8%)`, affiliate hoặc discount nội bộ; Order Detail/Payment không chứng minh tương đương. Vì vậy chưa kích hoạt bất kỳ phép tính canonical mới; giữ NULL và one-upload pipeline. Quy ước tương lai: ratio `0.0393=3.93%`, không float/zero-fill/round âm thầm. Cần quyết định nguồn nội bộ, quy tắc multi-item và biểu diễn thập phân trước khi triển khai; WP.7 chưa bắt đầu.
 
+## WP.6E.1 — Automatic Pipeline Progress UX
+
+Runtime `0.6.8`, schema `8`, canonical `v3`. Result có progress card responsive, phần trăm/counters từ persisted Batch state, nhãn tiếng Việt, AJAX admin read-only poll 2,5 giây và cảnh báo Cron sau 90 giây thiếu heartbeat. Trạng thái SUCCESS/WARNING đạt 100% khi Result rows sẵn sàng; Income EMPTY và ô thiếu nguồn không ngăn hoàn tất; hard ERROR không giả 100%. Lịch sử có trạng thái pipeline và tỷ lệ. Không thêm provider API, thay mapping, schema hoặc nút nghiệp vụ. Cần kiểm tra upload thật trên WordPress; WP.7 chưa bắt đầu.
+

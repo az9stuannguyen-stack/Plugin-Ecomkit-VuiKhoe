@@ -395,7 +395,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 	public function list_batches(): array {
 		global $wpdb;
 		$table = Ecomkit_Vuikhoe_DB::table_names()['batches'];
-		return $wpdb->get_results( $wpdb->prepare( "SELECT id, created_at, source_filename, source_type, status, order_count, error_count FROM $table WHERE source_type = %s ORDER BY created_at DESC, id DESC LIMIT 100", 'EXCEL' ), ARRAY_A ) ?: array();
+		return $wpdb->get_results( $wpdb->prepare( "SELECT id, created_at, source_filename, source_type, status, order_count, error_count, source_metadata FROM $table WHERE source_type = %s ORDER BY created_at DESC, id DESC LIMIT 100", 'EXCEL' ), ARRAY_A ) ?: array();
 	}
 
 	/** @return array<int,array<string,mixed>> */

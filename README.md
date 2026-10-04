@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6F — Legacy Financial Formula Contract / Giá SP source audit**, plugin `0.6.7`, database schema giữ `8`, canonical giữ `v3`. Công thức workbook cũ đã được ghi thành hợp đồng, nhưng chưa kích hoạt: upload production hiện tại không có nguồn xác thực cho `Giá SP (VAT 8%)`, `Phí Affiliate (Vui Khỏe)` và `Chiết Khấu (Vui Khỏe)`. Shopee Escrow vẫn là nguồn `Tổng Tiền Sẽ Thu`; các phần trăm phụ thuộc toán hạng còn NULL. Quy trình một upload của WP.6E không đổi; cần kiểm tra WordPress thủ công. WP.7 chưa bắt đầu.
+Hiện tại: **WP.6E.1 — Automatic Pipeline Progress UX**, plugin `0.6.8`, database schema giữ `8`, canonical giữ `v3`. Sau một upload, trang Kết quả hiển thị tiến độ 0–100% từ Batch metadata thực, nhãn bước và số đơn/dòng sản phẩm; admin polling 2,5 giây chỉ đọc trạng thái đã lưu và dừng ở trạng thái cuối. Hoàn tất có thể kèm cảnh báo hoặc ô trống chưa có nguồn xác thực; không đồng nghĩa đang tải dở. Công thức WP.6F chưa kích hoạt, quy trình một upload không đổi. Cần kiểm tra WordPress thủ công; WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.6.7`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.6.8`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `8`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
