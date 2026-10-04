@@ -107,7 +107,7 @@ WP.5A không materialize export 24 cột. Nó chỉ làm rõ nguồn cột 1: Ex
 
 ## 9. Ma trận nguồn WP.6A cho đủ 24 cột
 
-`EXCEL_AVAILABLE` = 1; `SHOPEE_ORDER_DETAIL_AVAILABLE` = 5; đa nguồn Excel rồi Shopee = 3; `SHOPEE_PAYMENT_ESCROW` = 4; `FUTURE_PAYMENT_ESCROW` = 5; `UNMAPPED_NO_SOURCE` = 6. Tổng 24. NULL được phép ở mọi cột khi nguồn thực thiếu; riêng mã đơn sàn là bắt buộc đối với Order hợp lệ đầu vào.
+Sau audit WP.6F: `EXCEL_AVAILABLE` = 1; `SHOPEE_ORDER_DETAIL_AVAILABLE` = 5; đa nguồn Excel rồi Shopee = 3; `SHOPEE_PAYMENT_ESCROW` = 4; `FUTURE_PAYMENT_ESCROW` = 2; `UNMAPPED_NO_SOURCE` = 5; `DERIVED_LEGACY_FORMULA_GATED` = 3; `UNRESOLVED_BROKEN_LEGACY_REFERENCE` = 1. Tổng 24. Source class `DERIVED_LEGACY_FORMULA_GATED` là hợp đồng, **chưa** là giá trị materialized. NULL được phép ở mọi cột khi nguồn thực thiếu; riêng mã đơn sàn là bắt buộc đối với Order hợp lệ đầu vào.
 
 | # | Nhãn canonical | Nguồn hiện tại | Key chính xác | Fallback | Hành vi WP.6A / phụ thuộc tương lai |
 | ---: | --- | --- | --- | --- | --- |
@@ -124,17 +124,17 @@ WP.5A không materialize export 24 cột. Nó chỉ làm rõ nguồn cột 1: Ex
 | 11 | Ghi Chú | UNMAPPED_NO_SOURCE | Không có header Excel đã xác minh; WP.5 không yêu cầu Shopee `note` | Không | NULL; cần duyệt ngữ nghĩa note trước khi map |
 | 12 | Đã Thu Tiền | FUTURE_PAYMENT_ESCROW | Chưa có payment evidence | Không | NULL; COMPLETED không chứng minh đã thu |
 | 13 | Trạng Thái Công Nợ | FUTURE_PAYMENT_ESCROW | Chưa có receivable evidence | Không | NULL; không suy từ order/matching status |
-| 14 | Chênh lệch | FUTURE_PAYMENT_ESCROW | Chưa có đủ toán hạng/công thức duyệt | Không | NULL |
+| 14 | Chênh lệch | UNRESOLVED_BROKEN_LEGACY_REFERENCE | Workbook cũ có `#REF!`, không có công thức tin cậy | Không | NULL; chờ định nghĩa kế toán độc lập |
 | 15 | Giá SP (VAT 8%) | UNMAPPED_NO_SOURCE | OrderItem có SKU/name/quantity; `price` không được parser điền và không phải giá VAT 8% | Không | NULL; không tự nhân 1.08 |
-| 16 | % Tổng Chi Phí | FUTURE_PAYMENT_ESCROW | Chưa có fee breakdown và công thức | Không | NULL |
-| 17 | Tổng Tiền Sẽ Thu | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.escrowAmountAfterAdjustment` | `escrowAmount`, sau đó NULL | Seller receivable nguồn Shopee; không dùng buyerTotalAmount |
+| 16 | % Tổng Chi Phí | DERIVED_LEGACY_FORMULA_GATED | `(L+M+N+I+J)/F` đã xác minh | Không kích hoạt khi thiếu F/I/J | NULL hiện tại; lưu ratio khi có đủ nguồn và decimal engine |
+| 17 | Tổng Tiền Sẽ Thu | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.escrowAmountAfterAdjustment` | `escrowAmount`; legacy `F-(L+M+N+I+J)` chỉ khi đủ nguồn | Escrow giữ ưu tiên; fallback legacy chưa kích hoạt vì thiếu F/I/J |
 | 18 | Phí Affiliate (Vui Khỏe) | UNMAPPED_NO_SOURCE | Không có internal affiliate source đã xác minh | Không | NULL |
 | 19 | Chiết Khấu (Vui Khỏe) | UNMAPPED_NO_SOURCE | Không có internal discount source đã xác minh | Không | NULL; không dùng Shopee promotion |
-| 20 | % Chiết Khấu Vui Khỏe | UNMAPPED_NO_SOURCE | Không có internal discount rate đã xác minh | Không | NULL |
+| 20 | % Chiết Khấu Vui Khỏe | DERIVED_LEGACY_FORMULA_GATED | `(I+J)/F` đã xác minh | Không kích hoạt khi thiếu F/I/J | NULL hiện tại; không rút gọn thành `J/F` |
 | 21 | Phí Cố Định (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.commissionFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
 | 22 | Phí dịch vụ (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.serviceFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
 | 23 | Phí Giao Dịch (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.sellerTransactionFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
-| 24 | % Chi Phí Sàn TMĐT | FUTURE_PAYMENT_ESCROW | Chưa có fee breakdown và công thức | Không | NULL |
+| 24 | % Chi Phí Sàn TMĐT | DERIVED_LEGACY_FORMULA_GATED | `(L+M+N)/F` đã xác minh | Không kích hoạt khi thiếu F hoặc bất kỳ phí nào | NULL hiện tại; không thay phí thiếu bằng 0 |
 
 Nguồn Excel persist: `orders.order_date`, `platform`, `raw_order_code`, `eshop_order_code` (từ import mới), `raw_source_metadata.cells`, `column_map` (từ import mới), `source_refs` (sheet/row) và OrderItems `sku`, `product_name`, `quantity`. Parser đọc cell theo chỉ số **một-based**: Excel D là `cells['4']`. Import mới tìm header bằng cơ chế hiện hữu (không giả định row 1/3), lưu `header_row` trong Batch metadata và `column_map` gồm ít nhất sáu header production trong Order raw metadata. Continuation item không ghi đè eShop identity của Order.
 
@@ -142,9 +142,38 @@ Workbook production đã được xác minh: sheet `DANH SÁCH ĐƠN HÀNG`, row
 
 Nguồn Shopee WP.5 persist trong `provider_normalized_data`: `providerStatus`, `providerCreatedAt`, `recipientName`, `recipientPhone`, `recipientFullAddress`, `recipientState`, `recipientCity`, `recipientRegion`, `totalAmount`, `estimatedShippingFee`, `actualShippingFee`, `escrowAmount` và danh sách items. `provider_raw_data` có thể chứa `note` hoặc field khác tùy response nhưng WP.5 không yêu cầu note trong detail, và chưa có quyết định ngữ nghĩa canonical cho nó. Các số tiền Order Detail này không tương đương phí sàn hay seller settlement.
 
-WP.6B lưu riêng `payment_raw_data`/`payment_normalized_data` từ `POST /api/v2/payment/get_escrow_detail` cho Shopee `marketplace_order_id` đã MATCHED. WP.6C phê duyệt bốn ánh xạ trực tiếp trong bảng trên. `% Chi Phí Sàn TMĐT`, `% Tổng Chi Phí`, Chênh lệch chưa có công thức/toán hạng duyệt. Đã Thu Tiền/Trạng Thái Công Nợ cần bằng chứng giải ngân và quy tắc kế toán riêng; không suy từ COMPLETED. `order_ams_commission_fee` là Shopee Affiliate, không phải Phí Affiliate (Vui Khỏe).
+WP.6B lưu riêng `payment_raw_data`/`payment_normalized_data` từ `POST /api/v2/payment/get_escrow_detail` cho Shopee `marketplace_order_id` đã MATCHED. WP.6C phê duyệt bốn ánh xạ trực tiếp trong bảng trên. WP.6F xác minh công thức legacy của các tỷ lệ nhưng chưa có đủ nguồn để kích hoạt; Chênh lệch vẫn chưa có công thức tin cậy. Đã Thu Tiền/Trạng Thái Công Nợ cần bằng chứng giải ngân và quy tắc kế toán riêng; không suy từ COMPLETED. `order_ams_commission_fee` là Shopee Affiliate, không phải Phí Affiliate (Vui Khỏe).
 
 WP.6C đã phê duyệt bốn ánh xạ trực tiếp ghi trong bảng. Canonical v3 chỉ đọc `payment_normalized_data` khi `marketplaceOrderId` khớp `orders.marketplace_order_id` của Shopee MATCHED; fingerprint bao gồm Payment normalized evidence. Field thiếu là NULL, số 0 từ provider được giữ nguyên. Các phần trăm, Đã Thu Tiền, Trạng Thái Công Nợ, Chênh lệch, Phí Affiliate và chiết khấu nội bộ vẫn NULL; shipping và buyerTotalAmount chỉ giữ ở Payment snapshot.
+
+## WP.6F — Legacy Financial Formula Contract và audit Giá SP
+
+Workbook legacy là chứng cứ công thức, **không** chứng minh rằng workbook upload production hiện tại có đủ các toán hạng. Các cột legacy: A `Ngày Lên Đơn`, B `Mã đơn ESHOP`, C `Mã đơn sàn`, D `Kênh Bán Hàng`, E `Chênh lệch`, F `Giá SP (VAT 8%)`, G `% Tổng Chi Phí`, H `Tổng Tiền Sẽ Thu`, I `Phí Affiliate (Vui Khỏe)`, J `Chiết Khấu (Vui Khỏe)`, K `% Chiết Khấu Vui Khỏe`, L `Phí Cố Định (TMĐT)`, M `Phí dịch vụ (TMĐT)`, N `Phí Giao Dịch (TMĐT)`, O `% Chi Phí Sàn TMĐT`. F là **ô đầu vào độc lập**, không suy ngược từ H và phí.
+
+| Canonical | Công thức workbook đã xác minh | Quy tắc kích hoạt |
+| --- | --- | --- |
+| `% Tổng Chi Phí` | `=((L3+M3+N3+I3+J3)/F3*100%)` = `(L+M+N+I+J)/F` | F khác 0; cả năm phí/chiết khấu có nguồn và khác NULL |
+| `Tổng Tiền Sẽ Thu` | `=F3-(L3+M3+N3+I3+J3)` | Chỉ fallback sau `escrowAmountAfterAdjustment`, `escrowAmount`; F và cả năm toán hạng khác NULL |
+| `% Chiết Khấu Vui Khỏe` | K3 `=((I3+J3)/F3)*100%` = `(I+J)/F` | F khác 0; I và J khác NULL. K4–K5 là giá trị lưu `0.0393`, nhất quán với công thức vì I=0; không suy thành `J/F` toàn cục |
+| `% Chi Phí Sàn TMĐT` | `=((L3+M3+N3)/F3)*100%` = `(L+M+N)/F` | F khác 0; L, M, N khác NULL |
+| `Chênh lệch` | `#REF!` | **Không có công thức được duyệt**; luôn NULL |
+
+Quy ước percentage dự kiến là **ratio**: `0.0393` biểu thị `3.93%`; Excel `*100%` không phải nhân thêm 100 vào giá trị lưu. Không làm tròn canonical hoặc dùng binary float để tính tiền/tỷ lệ. Hợp đồng toán hạng trong `Ecomkit_Vuikhoe_Canonical_Columns::legacy_formula_contract()` chỉ là metadata; `legacy_operands_ready()` từ chối NULL, float và mẫu thập phân không chính xác, từ chối mẫu số 0. Chưa có decimal arithmetic engine/nguồn đầu vào hoàn chỉnh nên **không có công thức nào được thực thi trong canonical v3**. Khi kích hoạt sau này phải dùng decimal string-safe arithmetic, quyết định biểu diễn tỷ lệ không hữu hạn, bump canonical version, rồi rematerialize; không làm tròn âm thầm.
+
+### Source audit — `Giá SP (VAT 8%)`
+
+| Ứng viên; key/header | Ngữ nghĩa; cấp | Gross/net, VAT, discount | Phạm vi | Độ tin cậy / map F? |
+| --- | --- | --- | --- | --- |
+| Excel production `Sàn & Mã Đơn`, `Ngày đặt`, `Mã đơn hàng eShop`, `Mã hàng hóa`, `Tên hàng hóa`, `Số lg` | Danh tính/ngày/sản phẩm/số lượng; không có giá | Không xác định | Shopee + Lazada | Cao về sự **vắng mặt**; **NO** |
+| `orders.product_price_vat_8` | Cột DB nullable nhưng importer không ghi; không phải bằng chứng nguồn | Không xác định | Cả hai | Cao về trạng thái NULL; **NO** |
+| `order_items.price` | Cột item nullable, parser `build_item()` và import không ghi | Không chứng minh VAT 8%, chưa có tổng Order | Cả hai | Cao về trạng thái chưa có dữ liệu; **NO** |
+| `raw_source_metadata.cells` + `column_map`; `source_refs`; `raw_product_metadata.cells` | Raw Excel/header map/provenance, production hiện có 7 header, không có F | Không xác định | Cả hai | Cao về cấu trúc; **NO**. Không đoán cột vật lý |
+| Shopee Order Detail `items[].originalPrice`/`discountedPrice`, `totalAmount`, raw `model_original_price`/`model_discounted_price`/`total_amount` | Giá item hoặc gross order provider | VAT 8% nội bộ chưa xác minh; discount khác nhau | Chỉ Shopee | Cao về key, thấp về tương đương F; **NO** |
+| Payment `orderOriginalPrice`, `orderSellingPrice`, `orderDiscountedPrice`, `buyerTotalAmount` (raw `order_income.*`) | Giá và buyer total theo provider, có thể chịu phí ship/voucher/discount | Không chứng minh VAT 8% nội bộ | Chỉ Shopee | Cao về key, thấp về tương đương F; **NO** |
+| Internal metadata khác (`orders.*`, Batch) | Không có bảng giá Vui Khỏe đã xác minh | Không xác định | Cả hai | Cao về thiếu nguồn; **NO** |
+| Legacy workbook F `Giá SP (VAT 8%)` | Đầu vào order-level của workbook *khác* | Nhãn nói VAT 8%; gross/net và discount chưa được định nghĩa thêm | Chỉ các dòng workbook legacy | Cao cho công thức, **không** chứng minh giá trị trong upload hiện tại; **NO** |
+
+Giá SP hiện `UNRESOLVED`: cần nguồn giá Vui Khỏe order-level VAT 8% đã duyệt (ví dụ header chính xác trong export mở rộng hoặc nguồn nội bộ), quy tắc multi-item/discount, và provenance trước khi mapping. `Phí Affiliate (Vui Khỏe)` và `Chiết Khấu (Vui Khỏe)` cũng không có header production/nguồn nội bộ; Shopee `affiliateCommissionFee`/`order_ams_commission_fee` **không** phải affiliate Vui Khỏe, Shopee promotions **không** phải chiết khấu Vui Khỏe. NULL khác 0. `Ngày Xuất VAT` và `Ghi Chú` thiếu nguồn Excel được xác minh; provider note chưa được duyệt ngữ nghĩa. `Chênh lệch` cần công thức kế toán mới ngoài `#REF!`. Shopee Escrow vẫn được materialize như trước; Lazada không được chế phí. Không đổi one-upload pipeline, schema 8 hoặc canonical v3.
 
 WP.6D lưu riêng Income evidence từ `POST /api/v2/payment/get_income_detail` khi admin tìm thấy đúng `order_sn`. `released_amount` và provider `status` là **ứng viên nguồn** cho Đã Thu Tiền / Trạng Thái Công Nợ, chưa được phê duyệt mapping; hai cột này tiếp tục NULL trong canonical v3. `estimated_escrow_amount` của PENDING không phải tiền đã thu. Không đổi 24 nhãn/cột hoặc phiên bản canonical ở giai đoạn này.
 

@@ -206,3 +206,7 @@ Runtime `0.6.5`, schema `8`, canonical giữ `v3`. Admin chọn một Order Shop
 
 Runtime `0.6.6`, schema giữ `8`, canonical giữ `v3`. Một upload tự lập lịch Batch pipeline: WP.5 reconciliation/detail, Payment từng Order (snapshot hợp lệ được tái dùng), Income shared-list best-effort, cuối cùng canonical materialization. WP-Cron chia Payment theo từng Order và Income theo từng page/cửa sổ; Result hiển thị tiến độ rồi tự cập nhật. Income HTTP 200 `response:null` là `SHOPEE_INCOME_EMPTY`, không là dữ liệu lỗi hay số 0. Không có cột kế toán mới được map. Cần kiểm tra một file production trên WordPress thật trước khi tuyên bố live PASS; WP.7 chưa bắt đầu.
 
+## WP.6F — Legacy Financial Formula Contract + Giá SP source audit
+
+Runtime `0.6.7`, schema giữ `8`, canonical giữ `v3`. Workbook legacy phê duyệt `% Tổng Chi Phí=(L+M+N+I+J)/F`, `Tổng Tiền Sẽ Thu=F-(L+M+N+I+J)` (chỉ fallback sau Shopee escrow), `% Chiết Khấu Vui Khỏe=(I+J)/F`, `% Chi Phí Sàn TMĐT=(L+M+N)/F`. `Chênh lệch` có `#REF!`, chưa có công thức tin cậy. Production Excel không có `Giá SP (VAT 8%)`, affiliate hoặc discount nội bộ; Order Detail/Payment không chứng minh tương đương. Vì vậy chưa kích hoạt bất kỳ phép tính canonical mới; giữ NULL và one-upload pipeline. Quy ước tương lai: ratio `0.0393=3.93%`, không float/zero-fill/round âm thầm. Cần quyết định nguồn nội bộ, quy tắc multi-item và biểu diễn thập phân trước khi triển khai; WP.7 chưa bắt đầu.
+

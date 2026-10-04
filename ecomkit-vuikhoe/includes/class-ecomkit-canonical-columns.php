@@ -9,6 +9,41 @@ final class Ecomkit_Vuikhoe_Canonical_Columns {
 
 	public static function is_money( string $key ): bool { return in_array( $key, self::MONEY_KEYS, true ); }
 
+	/**
+	 * Verified legacy workbook formulas. Metadata only: no source for all internal
+	 * operands exists today, so canonical v3 must not evaluate these formulas.
+	 * Ratios are fractions (0.0393 = 3.93%), never multiplied by 100 here.
+	 *
+	 * @return array<string,array{numerator:array<int,string>,denominator:?string,subtract_from:?string}>
+	 */
+	public static function legacy_formula_contract(): array {
+		$platform_fees = array( 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
+		$all_costs = array_merge( $platform_fees, array( 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ) );
+		return array(
+			'total_cost_percent' => array( 'numerator' => $all_costs, 'denominator' => 'product_price_vat_8', 'subtract_from' => null ),
+			'total_amount_to_collect' => array( 'numerator' => $all_costs, 'denominator' => null, 'subtract_from' => 'product_price_vat_8' ),
+			'discount_percent_vuikhoe' => array( 'numerator' => array( 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ), 'denominator' => 'product_price_vat_8', 'subtract_from' => null ),
+			'platform_cost_percent' => array( 'numerator' => $platform_fees, 'denominator' => 'product_price_vat_8', 'subtract_from' => null ),
+		);
+	}
+
+	/** A source gate, not a calculation. Missing is never treated as zero. */
+	public static function legacy_operands_ready( array $values, string $target ): bool {
+		$contract = self::legacy_formula_contract()[ $target ] ?? null;
+		if ( null === $contract ) { return false; }
+		$keys = $contract['numerator'];
+		if ( null !== $contract['denominator'] ) { $keys[] = $contract['denominator']; }
+		if ( null !== $contract['subtract_from'] ) { $keys[] = $contract['subtract_from']; }
+		foreach ( $keys as $key ) {
+			$value = $values[ $key ] ?? null;
+			if ( ! is_int( $value ) && ! ( is_string( $value ) && 1 === preg_match( '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/', $value ) ) ) {
+				return false;
+			}
+		}
+		$denominator = $contract['denominator'];
+		return null === $denominator || 1 !== preg_match( '/^-?0+(?:\.0+)?$/', (string) $values[ $denominator ] );
+	}
+
 	/** @return array<int,array{index:int,key:string,label:string,source:string}> */
 	public static function all(): array {
 		$rows = array(
@@ -25,17 +60,17 @@ final class Ecomkit_Vuikhoe_Canonical_Columns {
 			array( 'note', 'Ghi Chú', 'UNMAPPED_NO_SOURCE' ),
 			array( 'amount_collected', 'Đã Thu Tiền', 'FUTURE_PAYMENT_ESCROW' ),
 			array( 'receivable_status', 'Trạng Thái Công Nợ', 'FUTURE_PAYMENT_ESCROW' ),
-			array( 'difference_amount', 'Chênh lệch', 'FUTURE_PAYMENT_ESCROW' ),
+			array( 'difference_amount', 'Chênh lệch', 'UNRESOLVED_BROKEN_LEGACY_REFERENCE' ),
 			array( 'product_price_vat_8', 'Giá SP (VAT 8%)', 'UNMAPPED_NO_SOURCE' ),
-			array( 'total_cost_percent', '% Tổng Chi Phí', 'FUTURE_PAYMENT_ESCROW' ),
+			array( 'total_cost_percent', '% Tổng Chi Phí', 'DERIVED_LEGACY_FORMULA_GATED' ),
 			array( 'total_amount_to_collect', 'Tổng Tiền Sẽ Thu', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'affiliate_fee_vuikhoe', 'Phí Affiliate (Vui Khỏe)', 'UNMAPPED_NO_SOURCE' ),
 			array( 'discount_vuikhoe', 'Chiết Khấu (Vui Khỏe)', 'UNMAPPED_NO_SOURCE' ),
-			array( 'discount_percent_vuikhoe', '% Chiết Khấu Vui Khỏe', 'UNMAPPED_NO_SOURCE' ),
+			array( 'discount_percent_vuikhoe', '% Chiết Khấu Vui Khỏe', 'DERIVED_LEGACY_FORMULA_GATED' ),
 			array( 'fixed_platform_fee', 'Phí Cố Định (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'service_platform_fee', 'Phí dịch vụ (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'transaction_platform_fee', 'Phí Giao Dịch (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
-			array( 'platform_cost_percent', '% Chi Phí Sàn TMĐT', 'FUTURE_PAYMENT_ESCROW' ),
+			array( 'platform_cost_percent', '% Chi Phí Sàn TMĐT', 'DERIVED_LEGACY_FORMULA_GATED' ),
 		);
 		return array_map(
 			static fn( array $row, int $index ): array => array( 'index' => $index + 1, 'key' => $row[0], 'label' => $row[1], 'source' => $row[2] ),
