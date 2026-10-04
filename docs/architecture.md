@@ -217,3 +217,6 @@ WP.6B thêm ranh giới Payment riêng: chỉ một Order đã `MATCHED` trong E
 
 The low-level methods make exactly one request. Higher-level list pagination preserves opaque cursors, rejects non-progress/cycles, deduplicates exact `order_sn` with latest-page-wins plus conflict counters, and has a 100-page local guard. Higher-level detail reads split exact identities into batches of 50 and report completeness. No provider response is written to application tables.
 
+# WP.6D Income evidence
+
+`Shopee_Income_Service` truy vấn read-only `POST /api/v2/payment/get_income_detail` bằng shop token/signature hiện hữu. Cursor opaque, tối đa 10 trang; chỉ `order_sn` khớp chính xác với `orders.marketplace_order_id` mới lưu `income_raw_data`, `income_normalized_data`, `income_fetched_at` (thời điểm lấy, không phải provider update) và `income_request_id` trong Orders. Migration schema 8 chỉ thêm bốn cột nullable; Order Detail, Payment snapshot, matching, OrderItems và canonical v3 không đổi. Normalizer thuần giữ queried bucket tách biệt provider `status`, giữ amount NULL khác 0 và Unix time chuyển ISO UTC trong normalized snapshot. WP.6E mới đánh giá mapping kế toán.

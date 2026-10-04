@@ -198,3 +198,7 @@ Runtime `0.6.2`, schema `7`, canonical giữ `v2`. Admin chọn một Order Shop
 
 Runtime `0.6.3`, schema giữ `7`, canonical `v3`. Live Payment POST đã được xác nhận ngoài giai đoạn code. Action Batch "Cập nhật tài chính Shopee" gọi tối đa một lần cho mỗi Order Shopee MATCHED thiếu snapshot (hoặc mỗi Order khi admin chọn refresh), không gọi cho Lazada; lỗi từng Order độc lập, snapshot cũ được giữ. Sau đó materialize local toàn Batch. `commissionFee`, `serviceFee`, `sellerTransactionFee` map trực tiếp vào ba phí sàn; seller receivable dùng `escrowAmountAfterAdjustment` rồi `escrowAmount`. V1/v2 stale. Các phần trăm, công nợ, đã thu, chênh lệch, affiliate/discount nội bộ vẫn NULL. WP.7 chưa bắt đầu.
 
+## WP.6D — Shopee Income Status foundation
+
+Runtime `0.6.5`, schema `8`, canonical giữ `v3`. Admin chọn một Order Shopee MATCHED, truy vấn PENDING hoặc RELEASED bằng `POST /api/v2/payment/get_income_detail`, so khớp `order_sn` chính xác trên tối đa 10 trang cursor (30 bản ghi/trang theo ví dụ schema). RELEASED dùng cửa sổ payout date tối đa 14 ngày; PENDING bắt buộc gửi hai ngày hợp lệ nhưng hai ngày này **không lọc** record. Chỉ record tìm đúng được lưu ở Income snapshot riêng. Không map Đã Thu Tiền/Trạng Thái Công Nợ, không tự đồng bộ Batch. Cần live shop review trước WP.6E; WP.7 chưa bắt đầu.
+

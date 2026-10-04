@@ -1,0 +1,63 @@
+<?php
+/** WP.6D fake-transport Income API contract; never contacts Shopee. */
+declare(strict_types=1);
+define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' ); define( 'ARRAY_A', 'ARRAY_A' ); define( 'ECOMKIT_CREDENTIAL_KEY', base64_encode( str_repeat( 'P', 32 ) ) );
+function wp_json_encode( mixed $v, int $f = 0 ): string|false { return json_encode( $v, $f ); }
+function get_option( string $k, mixed $d = false ): mixed { return $GLOBALS['opts'][ $k ] ?? $d; }
+function update_option( string $k, mixed $v, bool $a = false ): bool { $GLOBALS['opts'][ $k ] = $v; return true; }
+function current_time( string $t, bool $g = false ): string { return gmdate( 'Y-m-d H:i:s' ); }
+function wp_timezone(): DateTimeZone { return new DateTimeZone( 'Asia/Bangkok' ); }
+function rest_url( string $p ): string { return 'https://example.test/wp-json/' . $p; }
+function wp_http_validate_url( string $u ): string|false { return filter_var( $u, FILTER_VALIDATE_URL ); }
+function wp_parse_url( string $u, int $c = -1 ): mixed { return parse_url( $u, $c ); }
+function add_query_arg( array $a, string $u ): string { return $u . '?' . http_build_query( $a ); }
+function sanitize_text_field( string $v ): string { return trim( $v ); }
+function sanitize_key( string $v ): string { return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( $v ) ); }
+final class IncomeWpError {}
+function is_wp_error( mixed $v ): bool { return $v instanceof IncomeWpError; }
+function wp_remote_post( string $url, array $args ): mixed { $GLOBALS['posts'][] = compact( 'url', 'args' ); if ( ! $GLOBALS['responses'] ) { throw new RuntimeException( 'Unexpected provider call.' ); } return array_shift( $GLOBALS['responses'] ); }
+function wp_remote_retrieve_response_code( array $r ): int { return $r['status']; }
+function wp_remote_retrieve_body( array $r ): string { return $r['body']; }
+function income_check( bool $v, string $m ): void { if ( ! $v ) { throw new RuntimeException( $m ); } }
+final class IncomeWpdb {
+	public string $prefix = 'inc_'; public array $order = array(); public array $connection = array(); public array $updates = array();
+	public function prepare( string $q, mixed ...$a ): string { return json_encode( array( 'q' => $q, 'a' => $a ) ); }
+	public function get_row( string $q, string $mode ): ?array { $p = json_decode( $q, true ); return str_contains( $p['q'], 'ecomkit_orders' ) ? ( (int) ( $p['a'][0] ?? 0 ) === (int) ( $this->order['id'] ?? 0 ) && (int) ( $p['a'][1] ?? 0 ) === (int) ( $this->order['batch_id'] ?? 0 ) ? $this->order : null ) : $this->connection; }
+	public function get_results( string $q, string $mode ): array { return str_starts_with( $q, 'SHOW FULL COLUMNS' ) ? array_map( static fn( string $name ): array => array( 'Field' => $name, 'Null' => 'YES' ), array( 'income_raw_data', 'income_normalized_data', 'income_fetched_at', 'income_request_id' ) ) : array(); }
+	public function get_var( string $q ): int { return 1; }
+	public function update( string $table, array $data, array $where ): int { if ( str_contains( $table, 'ecomkit_marketplace_connections' ) ) { $this->connection = array_merge( $this->connection, $data ); return 1; } income_check( ! array_diff( array_keys( $data ), array( 'income_raw_data', 'income_normalized_data', 'income_fetched_at', 'income_request_id' ) ), 'Income write touched unrelated fields.' ); $this->updates[] = $data; $this->order = array_merge( $this->order, $data ); return 1; }
+}
+$GLOBALS['opts'] = array(); $GLOBALS['posts'] = array(); $GLOBALS['responses'] = array(); $GLOBALS['wpdb'] = new IncomeWpdb();
+foreach ( array( 'class-ecomkit-db.php', 'class-ecomkit-credential-key-resolver.php', 'class-ecomkit-credential-encryption.php', 'class-ecomkit-credential-mutation-lock.php', 'class-ecomkit-shopee-environment.php', 'class-ecomkit-shopee-signer.php', 'class-ecomkit-shopee-config.php', 'class-ecomkit-shopee-http-client.php', 'class-ecomkit-shopee-token-service.php', 'class-ecomkit-shopee-income-normalizer.php', 'class-ecomkit-shopee-income-service.php' ) as $file ) { require __DIR__ . '/../ecomkit-vuikhoe/includes/' . $file; }
+$config = ( new Ecomkit_Vuikhoe_Shopee_Config() )->save( 'sandbox', '123', 'synthetic-partner-key' );
+$crypto = new Ecomkit_Vuikhoe_Credential_Encryption(); $credential = array( 'access_token' => 'ACCESS_VALID', 'refresh_token' => 'REFRESH_VALID', 'access_expires_at' => gmdate( 'Y-m-d H:i:s', time() + 3600 ) ); $db = $GLOBALS['wpdb'];
+$db->connection = array( 'id' => 9, 'platform' => 'SHOPEE', 'external_shop_id' => '456', 'status' => 'ACTIVE', 'credential_source' => 'OAUTH', 'credential_envelope' => $crypto->encrypt( $credential, 'ecomkit|shopee|shop:456' ), 'metadata' => json_encode( array( 'refresh_ownership' => 'ECOMKIT', 'credential_lifecycle' => 'READY', 'provider_config_fingerprint' => $config['fingerprint'] ) ) );
+$db->order = array( 'id' => 7, 'batch_id' => 8, 'platform' => 'SHOPEE', 'matching_status' => 'MATCHED', 'marketplace_order_id' => 'TEST-SHP-001', 'eshop_order_code' => 'ĐH0001', 'connection_id' => 9, 'payment_raw_data' => 'payment-raw', 'provider_raw_data' => 'order-raw', 'canonical_data' => 'canonical-v3' );
+function income_response( array $items, string $cursor = '', string $error = '' ): array { return array( 'status' => 200, 'body' => json_encode( array( 'error' => $error, 'request_id' => 'req-safe', 'income_detail_list' => array( 'list' => $items, 'next_page' => array( 'cursor' => $cursor ) ) ) ) ); }
+$service = new Ecomkit_Vuikhoe_Shopee_Income_Service();
+income_check( array( '2026-09-17', '2026-09-30' ) === $service::query_dates( 'RELEASED', '2026-09-17', '2026-09-30' ), 'Released dates changed.' );
+try { $service::query_dates( 'TO_RELEASE' ); throw new RuntimeException( 'Cross-border status accepted.' ); } catch ( InvalidArgumentException ) {}
+foreach ( array( array( '2026-09-17', '2026-10-02' ), array( '2026-09-17', '2026-09-17' ), array( '2026-02-30', '2026-03-01' ) ) as $dates ) { try { $service::query_dates( 'RELEASED', ...$dates ); throw new RuntimeException( 'Invalid range accepted.' ); } catch ( InvalidArgumentException ) {} }
+$GLOBALS['responses'][] = income_response( array( array( 'order_sn' => 'test-shp-001' ) ), 'cursor-2' );
+$GLOBALS['responses'][] = income_response( array( array( 'order_sn' => 'TEST-SHP-001', 'status' => 'RELEASED', 'released_amount' => 218940, 'actual_payout_time' => 1790100000 ) ) );
+$found = $service->inspect_matched_order( 8, 7, 'RELEASED', '2026-09-17', '2026-09-30' );
+income_check( 'FOUND' === $found['classification'] && 2 === $found['pages'] && 218940 === $found['normalized']['releasedAmount'] && null === $found['normalized']['estimatedEscrowAmount'] && 'RELEASED' === $found['normalized']['incomeBucket'] && 'RELEASED' === $found['normalized']['providerStatus'], 'Released normalization or pagination failed.' );
+$post = $GLOBALS['posts'][0]; $body = json_decode( $post['args']['body'], true ); parse_str( (string) parse_url( $post['url'], PHP_URL_QUERY ), $query );
+income_check( str_contains( $post['url'], '/api/v2/payment/get_income_detail?' ) && array( 'cursor' => '', 'date_from' => '2026-09-17', 'date_to' => '2026-09-30', 'income_status' => 1, 'page_size' => 30 ) === $body && 'application/json' === $post['args']['headers']['Content-Type'] && 15 === $post['args']['timeout'] && true === $post['args']['sslverify'] && 0 === $post['args']['redirection'], 'Released POST contract failed.' );
+income_check( isset( $query['partner_id'], $query['timestamp'], $query['access_token'], $query['shop_id'], $query['sign'] ) && Ecomkit_Vuikhoe_Shopee_Signer::sign_shop( '123', Ecomkit_Vuikhoe_Shopee_Income_Service::PATH, (int) $query['timestamp'], 'ACCESS_VALID', '456', 'synthetic-partner-key' ) === $query['sign'] && ! isset( $query['income_status'] ) && ! str_contains( $post['args']['body'], 'ĐH0001' ), 'Signing or eShop identity isolation failed.' );
+income_check( 'cursor-2' === json_decode( $GLOBALS['posts'][1]['args']['body'], true )['cursor'] && 'payment-raw' === $db->order['payment_raw_data'] && 'order-raw' === $db->order['provider_raw_data'] && 'canonical-v3' === $db->order['canonical_data'], 'Pagination or existing snapshot changed.' );
+$pending = Ecomkit_Vuikhoe_Shopee_Income_Normalizer::normalize( array( 'order_sn' => 'TEST-SHP-001', 'estimated_escrow_amount' => 218940, 'estimated_payout_time' => 1790100000 ), 'PENDING' );
+income_check( 218940 === $pending['estimatedEscrowAmount'] && null === $pending['releasedAmount'] && is_string( $pending['estimatedPayoutTime'] ), 'Pending value invented or lost.' );
+income_check( null === Ecomkit_Vuikhoe_Shopee_Income_Normalizer::normalize( array(), 'RELEASED' )['releasedAmount'] && 0 === Ecomkit_Vuikhoe_Shopee_Income_Normalizer::normalize( array( 'released_amount' => 0 ), 'RELEASED' )['releasedAmount'], 'Missing and zero collapsed.' );
+$GLOBALS['responses'][] = income_response( array( array( 'order_sn' => 'TEST-SHP-001', 'estimated_escrow_amount' => 0 ) ) ); $pending_result = $service->inspect_matched_order( 8, 7, 'PENDING' );
+$pending_body = json_decode( $GLOBALS['posts'][2]['args']['body'], true ); income_check( 2 === $pending_body['income_status'] && $pending_body['date_to'] > $pending_body['date_from'] && 'PENDING' === $pending_result['normalized']['incomeBucket'], 'Pending request contract failed.' );
+$GLOBALS['responses'][] = income_response( array( array( 'order_sn' => 'test-shp-001' ) ) ); $not_found = $service->inspect_matched_order( 8, 7, 'RELEASED', '2026-09-17', '2026-09-30' ); income_check( 'NOT_FOUND_IN_THIS_INCOME_QUERY' === $not_found['classification'], 'Complete query absence failed.' );
+$before = count( $db->updates ); $GLOBALS['responses'][] = new IncomeWpError(); try { $service->inspect_matched_order( 8, 7, 'PENDING' ); throw new RuntimeException( 'Network accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Income_Exception $e ) { income_check( 'SHOPEE_INCOME_NETWORK_ERROR' === $e->getMessage() && $before === count( $db->updates ), 'Network failure persisted or gave false absence.' ); }
+$GLOBALS['responses'][] = income_response( array(), '', 'error_api_permission' ); try { $service->inspect_matched_order( 8, 7, 'PENDING' ); throw new RuntimeException( 'Permission accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Income_Exception $e ) { income_check( 'MANUAL_BLOCKED_EXTERNAL_PERMISSION' === $e->getMessage(), 'Permission classification failed.' ); }
+$GLOBALS['responses'][] = income_response( array(), 'repeat' ); $GLOBALS['responses'][] = income_response( array(), 'repeat' ); try { $service->inspect_matched_order( 8, 7, 'PENDING' ); throw new RuntimeException( 'Cursor loop accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Income_Exception $e ) { income_check( 'SHOPEE_INCOME_PAGINATION_INCOMPLETE' === $e->getMessage(), 'Cursor loop called absence.' ); }
+for ( $i = 1; $i <= Ecomkit_Vuikhoe_Shopee_Income_Service::MAX_PAGES; $i++ ) { $GLOBALS['responses'][] = income_response( array(), 'cursor-' . $i ); }
+$before = count( $GLOBALS['posts'] ); try { $service->inspect_matched_order( 8, 7, 'PENDING' ); throw new RuntimeException( 'Page limit accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Income_Exception $e ) { income_check( 'SHOPEE_INCOME_PAGINATION_INCOMPLETE' === $e->getMessage() && Ecomkit_Vuikhoe_Shopee_Income_Service::MAX_PAGES === count( $GLOBALS['posts'] ) - $before, 'Page limit falsely concluded absence or exceeded bound.' ); }
+$db->order['platform'] = 'LAZADA'; $calls = count( $GLOBALS['posts'] ); try { $service->inspect_matched_order( 8, 7, 'PENDING' ); throw new RuntimeException( 'Lazada accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Income_Exception $e ) { income_check( 'SHOPEE_INCOME_ORDER_NOT_ELIGIBLE' === $e->getMessage() && $calls === count( $GLOBALS['posts'] ), 'Ineligible order called provider.' ); }
+$db->order['platform'] = 'SHOPEE'; $credential['access_expires_at'] = gmdate( 'Y-m-d H:i:s', time() + 10 ); $db->connection['credential_envelope'] = $crypto->encrypt( $credential, 'ecomkit|shopee|shop:456' );
+$GLOBALS['responses'][] = array( 'status' => 200, 'body' => json_encode( array( 'error' => '', 'access_token' => 'ACCESS_NEW', 'refresh_token' => 'REFRESH_NEW', 'expire_in' => 3600 ) ) ); $GLOBALS['responses'][] = income_response( array( array( 'order_sn' => 'TEST-SHP-001' ) ) ); $before = count( $GLOBALS['posts'] ); $service->inspect_matched_order( 8, 7, 'PENDING' ); income_check( 2 === count( $GLOBALS['posts'] ) - $before && str_contains( $GLOBALS['posts'][ $before + 1 ]['url'], 'access_token=ACCESS_NEW' ), 'Refreshed token not used.' );
+echo "WP.6D Income fake-transport checks passed.\n";

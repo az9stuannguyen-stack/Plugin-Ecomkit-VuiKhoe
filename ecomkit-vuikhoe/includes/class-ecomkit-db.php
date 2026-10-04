@@ -57,6 +57,7 @@ final class Ecomkit_Vuikhoe_DB {
 			self::migrate_provider_evidence_columns();
 			self::migrate_canonical_result_columns();
 			self::migrate_payment_columns();
+			self::migrate_income_columns();
 		}
 		$collate = $wpdb->get_charset_collate();
 		$sql     = self::schema_sql( $tables, $collate );
@@ -91,6 +92,10 @@ final class Ecomkit_Vuikhoe_DB {
 		if ( ! self::payment_schema_ready() ) {
 			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_PAYMENT_SCHEMA_INCOMPATIBLE', false );
 			throw new RuntimeException( 'ECOMKIT_PAYMENT_SCHEMA_INCOMPATIBLE' );
+		}
+		if ( ! self::income_schema_ready() ) {
+			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_INCOME_SCHEMA_INCOMPATIBLE', false );
+			throw new RuntimeException( 'ECOMKIT_INCOME_SCHEMA_INCOMPATIBLE' );
 		}
 
 		update_option( self::SCHEMA_OPTION, ECOMKIT_VUIKHOE_DB_VERSION, false );
@@ -378,6 +383,32 @@ final class Ecomkit_Vuikhoe_DB {
 		return true;
 	}
 
+	/** Nullable, additive WP.6D income snapshot migration. */
+	public static function migrate_income_columns(): array {
+		global $wpdb;
+		$tables = self::table_names(); $orders = self::safe_table_identifier( $tables['orders'], $tables );
+		$before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$orders`" );
+		$indexes = self::table_index_fingerprint( $orders );
+		$definitions = array( 'income_raw_data' => 'longtext NULL DEFAULT NULL', 'income_normalized_data' => 'longtext NULL DEFAULT NULL', 'income_fetched_at' => 'datetime NULL DEFAULT NULL', 'income_request_id' => 'varchar(191) NULL DEFAULT NULL' );
+		$columns = self::orders_columns(); $added = array();
+		foreach ( $definitions as $name => $definition ) {
+			if ( isset( $columns[ $name ] ) ) { continue; }
+			if ( false === $wpdb->query( "ALTER TABLE `$orders` ADD COLUMN `$name` $definition" ) ) { throw new RuntimeException( 'ECOMKIT_INCOME_SCHEMA_ALTER_FAILED' ); }
+			$added[] = $name; $columns = self::orders_columns();
+			if ( ! isset( $columns[ $name ] ) || 'YES' !== strtoupper( (string) ( $columns[ $name ]['Null'] ?? '' ) ) ) { throw new RuntimeException( 'ECOMKIT_INCOME_SCHEMA_VERIFY_FAILED' ); }
+		}
+		if ( $before !== (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$orders`" ) || $indexes !== self::table_index_fingerprint( $orders ) ) { throw new RuntimeException( 'ECOMKIT_INCOME_SCHEMA_PRESERVATION_FAILED' ); }
+		return array( 'added' => $added, 'count' => $before );
+	}
+
+	public static function income_schema_ready(): bool {
+		$columns = self::orders_columns();
+		foreach ( array( 'income_raw_data', 'income_normalized_data', 'income_fetched_at', 'income_request_id' ) as $name ) {
+			if ( ! isset( $columns[ $name ] ) || 'YES' !== strtoupper( (string) ( $columns[ $name ]['Null'] ?? '' ) ) ) { return false; }
+		}
+		return true;
+	}
+
 	private static function table_index_fingerprint( string $table ): string {
 		global $wpdb;
 		$indexes = $wpdb->get_results( "SHOW INDEX FROM `$table`", ARRAY_A );
@@ -595,6 +626,10 @@ final class Ecomkit_Vuikhoe_DB {
 	payment_normalized_data longtext DEFAULT NULL,
 	payment_fetched_at datetime DEFAULT NULL,
 	payment_request_id varchar(191) DEFAULT NULL,
+	income_raw_data longtext DEFAULT NULL,
+	income_normalized_data longtext DEFAULT NULL,
+	income_fetched_at datetime DEFAULT NULL,
+	income_request_id varchar(191) DEFAULT NULL,
 	matched_at datetime DEFAULT NULL,
 	source_refs longtext DEFAULT NULL,
 	created_at datetime NOT NULL,

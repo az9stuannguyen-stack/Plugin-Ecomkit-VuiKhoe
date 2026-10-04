@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ARRAY_A', 'ARRAY_A' );
-define( 'ECOMKIT_VUIKHOE_DB_VERSION', 7 );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.4' );
+define( 'ECOMKIT_VUIKHOE_DB_VERSION', 8 );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.6.5' );
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 $GLOBALS['migration_options'] = array();
 function get_option( string $key, mixed $default = false ): mixed { return $GLOBALS['migration_options'][ $key ] ?? $default; }
@@ -82,6 +82,10 @@ final class MigrationWpdb {
 			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
 		}
 		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` ADD COLUMN `(payment_raw_data|payment_normalized_data|payment_fetched_at|payment_request_id)` (.+)$/', $query, $match ) ) {
+			$type = str_starts_with( $match[3], 'longtext' ) ? 'longtext' : ( str_starts_with( $match[3], 'datetime' ) ? 'datetime' : 'varchar' );
+			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
+		}
+		if ( preg_match( '/^ALTER TABLE `([^`]+ecomkit_orders)` ADD COLUMN `(income_raw_data|income_normalized_data|income_fetched_at|income_request_id)` (.+)$/', $query, $match ) ) {
 			$type = str_starts_with( $match[3], 'longtext' ) ? 'longtext' : ( str_starts_with( $match[3], 'datetime' ) ? 'datetime' : 'varchar' );
 			$this->order_columns[ $match[2] ] = array( 'Field' => $match[2], 'Type' => $type, 'Null' => 'YES', 'Default' => null, 'Extra' => '' );
 		}
@@ -172,5 +176,12 @@ migration_check( array( 'payment_raw_data', 'payment_normalized_data', 'payment_
 migration_check( $payment_counts === $payment_schema->counts && Ecomkit_Vuikhoe_DB::payment_schema_ready(), 'WP.6B payment migration changed rows or failed readiness.' );
 $payment_query_count = count( $payment_schema->queries );
 migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_payment_columns()['added'] && $payment_query_count === count( $payment_schema->queries ), 'WP.6B payment migration is not idempotent.' );
+
+$income_schema = new MigrationWpdb( 'InnoDB' ); $income_counts = $income_schema->counts; $GLOBALS['wpdb'] = $income_schema;
+$income_result = Ecomkit_Vuikhoe_DB::migrate_income_columns();
+migration_check( array( 'income_raw_data', 'income_normalized_data', 'income_fetched_at', 'income_request_id' ) === $income_result['added'], 'WP.6D income fields were not added exactly.' );
+migration_check( $income_counts === $income_schema->counts && Ecomkit_Vuikhoe_DB::income_schema_ready(), 'WP.6D income migration changed rows or failed readiness.' );
+$income_query_count = count( $income_schema->queries );
+migration_check( array() === Ecomkit_Vuikhoe_DB::migrate_income_columns()['added'] && $income_query_count === count( $income_schema->queries ), 'WP.6D income migration is not idempotent.' );
 
 echo "WP.2D database migration checks passed.\n";

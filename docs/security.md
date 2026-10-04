@@ -129,3 +129,6 @@ The validated individual Order Detail object may contain recipient PII and is st
 
 No network transaction spans a DB transaction. Failed/incomplete pagination cannot produce negative match evidence. Older provider snapshots cannot overwrite newer `provider_updated_at`; absent provider timestamps use the conservative rule that an existing snapshot is retained. Payment/Escrow is not called and financial settlement is not inferred.
 
+# WP.6D Income diagnostic
+
+Chỉ admin có quyền quản lý và nonce hợp lệ mới chọn được một Order Shopee MATCHED từ Batch. Income POST tái sử dụng token lifecycle và shop signer; không ký body hay log token/URL/body. Tối đa 10 trang, không retry, không GET fallback. Lưu raw record đã giảm thiểu, không lưu buyer PII; thông báo lỗi chỉ gồm classification, status, path, method, request ID và tên key/type an toàn. Quyền API bị từ chối được phân loại `MANUAL_BLOCKED_EXTERNAL_PERMISSION`; traversal chưa hết không bị gọi là NOT_FOUND.

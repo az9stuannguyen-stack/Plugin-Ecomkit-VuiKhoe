@@ -146,3 +146,5 @@ WP.6B lưu riêng `payment_raw_data`/`payment_normalized_data` từ `POST /api/v
 
 WP.6C đã phê duyệt bốn ánh xạ trực tiếp ghi trong bảng. Canonical v3 chỉ đọc `payment_normalized_data` khi `marketplaceOrderId` khớp `orders.marketplace_order_id` của Shopee MATCHED; fingerprint bao gồm Payment normalized evidence. Field thiếu là NULL, số 0 từ provider được giữ nguyên. Các phần trăm, Đã Thu Tiền, Trạng Thái Công Nợ, Chênh lệch, Phí Affiliate và chiết khấu nội bộ vẫn NULL; shipping và buyerTotalAmount chỉ giữ ở Payment snapshot.
 
+WP.6D lưu riêng Income evidence từ `POST /api/v2/payment/get_income_detail` khi admin tìm thấy đúng `order_sn`. `released_amount` và provider `status` là **ứng viên nguồn** cho Đã Thu Tiền / Trạng Thái Công Nợ, chưa được phê duyệt mapping; hai cột này tiếp tục NULL trong canonical v3. `estimated_escrow_amount` của PENDING không phải tiền đã thu. Không đổi 24 nhãn/cột hoặc phiên bản canonical ở giai đoạn này.
+

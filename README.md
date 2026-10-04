@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6C.1 — exact monetary Result display**, plugin `0.6.4`, database schema `7`, canonical `v3`. Result UI chèn dấu phẩy phân tách hàng nghìn cho riêng các cột tiền, giữ nguyên chữ số thập phân và không làm tròn. Canonical/Payment snapshot lưu giá trị gốc, không có dấu phẩy; phần trăm và mã đơn không được format như tiền. WP.7 chưa bắt đầu.
+Hiện tại: **WP.6D — Shopee Income Status foundation**, plugin `0.6.5`, database schema `8`, canonical giữ `v3`. Admin có thể kiểm tra một đơn Shopee MATCHED bằng `POST /api/v2/payment/get_income_detail` qua PENDING hoặc RELEASED, tối đa 10 trang, rồi lưu Income snapshot tách biệt khi tìm đúng `order_sn`. Đây là công cụ xác minh live; chưa map Đã Thu Tiền/Trạng Thái Công Nợ vào canonical. Result UI vẫn format số tiền bằng dấu phẩy, không làm tròn hay thay đổi snapshot. WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,9 +39,9 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.6.4`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.6.5`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
-- Sáu bảng custom có prefix động, schema version `7`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
+- Sáu bảng custom có prefix động, schema version `8`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.
 - Activation idempotent; deactivation và uninstall mặc định không phá hủy dữ liệu.
 - Menu Ecomkit với Tổng quan, Xử lý đơn hàng, Kết quả, Lỗi, Lịch sử, Marketplace và Cài đặt.
