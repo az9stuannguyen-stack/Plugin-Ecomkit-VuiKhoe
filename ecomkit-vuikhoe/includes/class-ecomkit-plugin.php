@@ -19,7 +19,6 @@ final class Ecomkit_Vuikhoe_Plugin {
 	public function run(): void {
 		add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
 		add_action( 'plugins_loaded', array( 'Ecomkit_Vuikhoe_DB', 'maybe_upgrade' ), 20 );
-		add_action( 'init', array( 'Ecomkit_Vuikhoe_Security', 'provision_capabilities' ), 1 );
 		( new Ecomkit_Vuikhoe_Shopee_OAuth() )->register();
 		( new Ecomkit_Vuikhoe_Auto_Pipeline() )->register();
 

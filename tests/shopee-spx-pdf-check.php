@@ -105,7 +105,7 @@ $admin = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomki
 $view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/results.php' );
 $parser = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-shopee-spx-labels.php' );
 spx_check( str_contains( $admin, "wp_ajax_ecomkit_shopee_spx_pdf" ) && str_contains( $admin, "check_ajax_referer( 'ecomkit_shopee_spx_pdf'" ), 'PDF endpoint nonce missing.' );
-spx_check( 1 === preg_match( '/function handle_shopee_spx_pdf\(\): void\s*\{\s*Ecomkit_Vuikhoe_Security::require_use_capability\(\)/', $admin ), 'PDF endpoint capability missing.' );
+spx_check( 1 === preg_match( '/function handle_shopee_spx_pdf\(\): void\s*\{\s*Ecomkit_Vuikhoe_Security::require_management_capability\(\)/', $admin ), 'PDF endpoint capability missing.' );
 try { ( new Ecomkit_Vuikhoe_Admin() )->handle_shopee_spx_pdf(); throw new RuntimeException( 'Unauthorized PDF request accepted.' ); }
 catch ( RuntimeException $exception ) { spx_check( 'DENIED_403' === $exception->getMessage(), 'Unauthorized PDF request did not return 403.' ); }
 $GLOBALS['spx_test_admin'] = true;

@@ -94,7 +94,7 @@ check(substr_count((string) $admin, 'Ecomkit_Vuikhoe_Security::require_managemen
 check(str_contains((string) $oauth, "check_admin_referer( 'ecomkit_shopee_oauth_start', 'ecomkit_shopee_nonce' )"), 'Shopee OAuth start nonce validation is missing.');
 check(str_contains((string) $oauth, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Shopee OAuth start capability validation is missing.');
 check(str_contains((string) $oauth, "'permission_callback' => '__return_true'"), 'Public Shopee callback route is missing.');
-check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.15' )"), 'WP.6I.1 plugin version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.16' )"), 'WP.6I-R plugin version is wrong.');
 check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 9 )"), 'WP.6H.2T database schema version is wrong.');
 check(str_contains((string) $key_resolver, "hash_hkdf( 'sha256'"), 'Credential resolver must use HKDF-SHA256.');
 check(str_contains((string) $key_resolver, "'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'"), 'Canonical WordPress secret order changed.');
@@ -106,7 +106,7 @@ check(str_contains((string) $import, 'wp_delete_file'), 'Temporary upload cleanu
 check(str_contains((string) $import, "'connection_id'           => null"), 'Excel import must not create a fake connection.');
 check(str_contains((string) $import, "'platform'                => (string) \$order['platform']"), 'Excel import must persist only the parser-derived platform.');
 check(str_contains((string) $import, "\$wpdb->query( 'START TRANSACTION' )"), 'Import transaction is missing.');
-check(substr_count((string) $admin, 'add_submenu_page(') === 8, 'Exactly eight submenu registrations are required.');
+check(substr_count((string) $admin, 'add_submenu_page(') === 7, 'Exactly seven submenu registrations are required.');
 check(!preg_match('/curl_(init|exec)/i', $runtime), 'Direct cURL provider call detected.');
 check(!preg_match('/partner[_ -]?key\s*[=:]\s*[\'\"][A-Za-z0-9]{12,}|access[_ -]?token\s*[=:]\s*[\'\"][A-Za-z0-9]{12,}/i', $runtime), 'Real-looking provider secret detected.');
 

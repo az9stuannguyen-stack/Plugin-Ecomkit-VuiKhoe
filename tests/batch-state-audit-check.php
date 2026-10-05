@@ -8,7 +8,7 @@ function wp_remote_get(): never { throw new RuntimeException( 'PROVIDER_CALLED' 
 function wp_next_scheduled( string $hook, array $args ): int|false { return $GLOBALS['cron_due'] ?? false; }
 function wp_unslash( mixed $value ): mixed { return $value; }
 function absint( mixed $value ): int { return abs( (int) $value ); }
-function current_user_can( string $capability ): bool { return ! empty( $GLOBALS['admin_allowed'] ) && 'ecomkit_manage' === $capability; }
+function current_user_can( string $capability ): bool { return ! empty( $GLOBALS['admin_allowed'] ) && 'manage_options' === $capability; }
 function esc_html__( string $message, string $domain ): string { return $message; }
 function check_ajax_referer( string $action, string $field ): void { state_check( 'ecomkit_batch_state_audit' === $action && 'nonce' === $field && 'valid' === ( $_POST['nonce'] ?? '' ), 'Nonce absent.' ); }
 function wp_die(): never { throw new RuntimeException( 'DENIED' ); }

@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6I.1 — sửa cấp quyền Operator khi nâng cấp**, plugin `0.7.15`, database schema `9`, canonical `v9`. Quản trị viên gán role **Ecomkit Operator** trong WordPress → Người dùng; role này chỉ có `ecomkit_use` cho tải Excel, tiến độ, Kết quả, Lịch sử, Lỗi, sao chép và PDF nhãn SPX tạm. Administrator có thêm `ecomkit_manage` cho Marketplace, cấu hình và công cụ chẩn đoán. Cấp quyền tự động ở `init` trước khi WordPress kiểm tra menu; tài khoản Operator cũ được giữ nguyên, không cần kích hoạt lại plugin. Provisioning có marker phiên bản và chỉ ghi khi cần bổ sung quyền. Các Batch là dữ liệu dùng chung trong nội bộ cho mọi tài khoản được cấp `ecomkit_use`; plugin chưa có cách ly theo người tạo. Không cấp role này cho người không được phép xem dữ liệu khách hàng. WP.7 chưa bắt đầu.
+Hiện tại: **WP.6I-R — khôi phục quyền truy cập, chỉ đơn giản hóa UI**, plugin `0.7.16`, database schema `9`, canonical `v9`. Menu, trang và action dùng lại `manage_options` đúng baseline `778fe04`. Plugin không tạo role Operator, không yêu cầu capability Ecomkit và không provision/sync role. Các role/capability/option đã lưu bởi 0.7.14–0.7.15 được để nguyên, không còn được sử dụng; không tự sửa tài khoản hay xóa quyền WordPress. Giao diện giữ hướng dẫn upload đơn giản, lịch sử dễ đọc, copy/PDF tạm và advanced tools thu gọn. WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
