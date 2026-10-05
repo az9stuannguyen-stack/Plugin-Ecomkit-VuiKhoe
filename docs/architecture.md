@@ -252,3 +252,7 @@ Plugin 0.7.4 / schema 8 / canonical v6. Manual reconciliation và WP-Cron dùng 
 # WP.6H.2C — terminal gate for required Shopee work
 
 Plugin 0.7.5 / schema 8 / canonical v6. `auto_pipeline` là trạng thái thẩm quyền: với Batch có Shopee, hoàn tất đối chiếu đòi đủ `reconcile_checked`, hết cửa sổ và trạng thái so sánh terminal, hoặc `reconciliation_block_reason` rõ ràng. Canonical row count không thay thế điều kiện này. Lỗi lên lịch Cron giữ stage hiện tại ở trạng thái chờ; mở lại Result sẽ thử lên lịch, không gọi provider từ AJAX polling. Lỗi/gián đoạn provider được ghi bằng mã chặn và vẫn có thể tạo Result Excel với cảnh báo; trạng thái đối chiếu không đầy đủ khác sẽ dừng an toàn dưới 100%. Trạng thái terminal cũ thiếu bằng chứng chỉ được khởi chạy lại tự động khi chưa từng ghi dấu kết nối/request đối chiếu; không tự suy luận nguyên nhân production Batch #23 hoặc lặp lại provider call không rõ kết quả.
+
+# WP.6H.2S — read-only Batch state evidence
+
+Plugin 0.7.6 / schema 8 / canonical v6. Admin POST/AJAX chỉ đọc Batch được chọn, allowlist `source_metadata.auto_pipeline` và `shopee_reconciliation`, cùng kết nối và sự kiện Cron **hiện tại**. JSON không chứa raw metadata, cursor thô, token/envelope, PII hoặc response provider. Khóa thiếu giữ `NOT_PRESENT`; không backfill. Không gọi provider, không ghi DB, không đổi business workflow. Công cụ nằm trong phần quản trị nâng cao, dành để phân tích Batch production #23–#25 riêng lẻ.

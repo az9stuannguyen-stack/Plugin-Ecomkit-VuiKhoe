@@ -26,6 +26,8 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_payment_test', array( $this, 'handle_shopee_payment_test' ) );
 		add_action( 'wp_ajax_ecomkit_shopee_fee_audit', array( $this, 'handle_shopee_fee_audit' ) );
 		add_action( 'admin_post_ecomkit_shopee_fee_audit_export', array( $this, 'handle_shopee_fee_audit_export' ) );
+		add_action( 'wp_ajax_ecomkit_batch_state_audit', array( $this, 'handle_batch_state_audit' ) );
+		add_action( 'admin_post_ecomkit_batch_state_export', array( $this, 'handle_batch_state_export' ) );
 		add_action( 'admin_post_ecomkit_shopee_income_test', array( $this, 'handle_shopee_income_test' ) );
 		add_action( 'admin_post_ecomkit_pipeline_resume', array( $this, 'handle_pipeline_resume' ) );
 		add_action( 'wp_ajax_ecomkit_pipeline_progress', array( $this, 'handle_pipeline_progress' ) );
@@ -149,6 +151,35 @@ final class Ecomkit_Vuikhoe_Admin {
 		header( 'X-Content-Type-Options: nosniff' );
 		header( 'Cache-Control: private, no-store, max-age=0' );
 		echo $json; // Already projected to an explicit, PII-free allowlist.
+		exit;
+	}
+
+	/** Admin-only read of allowlisted Batch metadata; never advances the pipeline. */
+	public function handle_batch_state_audit(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_ajax_referer( 'ecomkit_batch_state_audit', 'nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		try { $data = ( new Ecomkit_Vuikhoe_Batch_State_Audit() )->inspect_batch( $batch_id ); }
+		catch ( Throwable ) { wp_send_json_error( array( 'message' => 'Không thể đọc trạng thái Batch đã lưu.' ), 400 ); }
+		wp_send_json_success( $data );
+	}
+
+	/** Direct POST download with no transient or business-state mutation. */
+	public function handle_batch_state_export(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_batch_state_export', 'ecomkit_batch_state_nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		try {
+			$data = ( new Ecomkit_Vuikhoe_Batch_State_Audit() )->inspect_batch( $batch_id );
+			$json = wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+			if ( ! is_string( $json ) ) { throw new RuntimeException( 'BATCH_STATE_ENCODE_FAILED' ); }
+		} catch ( Throwable ) { wp_die( esc_html__( 'Không thể xuất trạng thái Batch an toàn.', 'ecomkit-vuikhoe' ), '', array( 'response' => 400 ) ); }
+		nocache_headers();
+		header( 'Content-Type: application/json; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="ecomkit-batch-' . $batch_id . '-state.json"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'Cache-Control: private, no-store, max-age=0' );
+		echo $json; // Explicit allowlist projection, not raw Batch metadata.
 		exit;
 	}
 

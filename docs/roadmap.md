@@ -237,3 +237,7 @@ Plugin 0.7.4 / DB 8 / canonical v6: WP.6E từng gọi list với giới hạn h
 # WP.6H.2C — automatic pipeline completion gate; live retest pending
 
 Plugin 0.7.5 / DB 8 / canonical v6: chặn `RESULT_READY` và 100% khi còn đơn Shopee chưa được so sánh đầy đủ mà không có mã chặn cụ thể. Sửa đường lỗi lên lịch Cron từng nhảy thẳng sang materialization; giờ giữ trạng thái chờ và tự lên lịch lại khi mở Result. Kết nối chưa sẵn sàng, nhiều shop, provider lỗi hoặc yêu cầu gián đoạn có mã chặn riêng. Test 11/11, 0/11, canonical sớm, Cron chờ, kết nối chặn và phân trang tiếp tục. Cần thử lại cùng file production và xem metadata Batch #23 để xác định nguyên nhân live; WP.6I/WP.7 chưa bắt đầu.
+
+# WP.6H.2S — safe production state export; evidence pending
+
+Plugin 0.7.6 / DB 8 / canonical v6: admin có thể xuất JSON allowlist của trạng thái Batch, đối chiếu theo cửa sổ, dấu vết request và ảnh chụp kết nối/Cron hiện tại. Không có provider call, ghi business data hay suy diễn trường thiếu. Tiếp theo thu JSON riêng của Batch #23–#25 để định vị nguyên nhân production; chưa triển khai WP.6I/WP.7.

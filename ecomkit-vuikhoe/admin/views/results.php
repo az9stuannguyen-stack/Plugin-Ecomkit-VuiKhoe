@@ -72,6 +72,47 @@
 </div><?php endif; ?>
 <details><summary><?php echo esc_html__( 'Công cụ quản trị nâng cao', 'ecomkit-vuikhoe' ); ?></summary>
 <p><?php echo esc_html__( 'Chỉ dùng khi cần kiểm tra kỹ thuật. Quy trình thông thường tự xử lý sau một lần tải Excel.', 'ecomkit-vuikhoe' ); ?></p>
+<?php if ( current_user_can( 'manage_options' ) ) : ?>
+<h2><?php echo esc_html__( 'Xuất trạng thái xử lý Batch', 'ecomkit-vuikhoe' ); ?></h2>
+<p><?php echo esc_html__( 'Chỉ đọc metadata đã lưu của Batch đang chọn và trạng thái kết nối/Cron hiện tại. Không gọi Shopee hoặc thay đổi tiến trình.', 'ecomkit-vuikhoe' ); ?></p>
+<form id="ecomkit-batch-state-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" data-nonce="<?php echo esc_attr( wp_create_nonce( 'ecomkit_batch_state_audit' ) ); ?>">
+<input type="hidden" name="action" value="ecomkit_batch_state_export"><input type="hidden" name="batch_id" value="<?php echo esc_attr( (string) $batch['id'] ); ?>"><?php wp_nonce_field( 'ecomkit_batch_state_export', 'ecomkit_batch_state_nonce' ); ?>
+<button type="button" class="button button-secondary" id="ecomkit-batch-state-inspect"><?php echo esc_html__( 'Xem trạng thái Batch', 'ecomkit-vuikhoe' ); ?></button> <?php submit_button( __( 'Xuất JSON trạng thái Batch', 'ecomkit-vuikhoe' ), 'secondary', '', false ); ?>
+</form><div id="ecomkit-batch-state-output" role="status" aria-live="polite"></div>
+<script>
+(function () {
+    const form = document.getElementById('ecomkit-batch-state-form');
+    const button = document.getElementById('ecomkit-batch-state-inspect');
+    const output = document.getElementById('ecomkit-batch-state-output');
+    if (!form || !button || !output) return;
+    const section = (title, data) => {
+        const heading = document.createElement('h3'); heading.textContent = title; output.appendChild(heading);
+        const table = document.createElement('table'); table.className = 'widefat striped';
+        const body = document.createElement('tbody');
+        Object.entries(data).forEach(([key, value]) => {
+            const row = document.createElement('tr'); const label = document.createElement('th'); const cell = document.createElement('td');
+            label.textContent = key; cell.textContent = value === null ? 'null' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+            row.append(label, cell); body.appendChild(row);
+        });
+        table.appendChild(body); output.appendChild(table);
+    };
+    button.addEventListener('click', async () => {
+        button.disabled = true; output.replaceChildren();
+        const body = new URLSearchParams({action: 'ecomkit_batch_state_audit', nonce: form.dataset.nonce, batch_id: form.elements.batch_id.value});
+        try {
+            const response = await fetch(form.dataset.ajax, {method: 'POST', credentials: 'same-origin', cache: 'no-store', body});
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.data) throw new Error('Không thể đọc trạng thái Batch.');
+            section('Pipeline', payload.data.auto_pipeline);
+            section('Shopee reconciliation', payload.data.shopee_reconciliation);
+            section('CURRENT_CONNECTION_STATE', payload.data.connection_current);
+            section('Provider request evidence', payload.data.diagnostic_interpretation_inputs);
+        } catch (error) { const notice = document.createElement('p'); notice.textContent = error.message; output.appendChild(notice); }
+        finally { button.disabled = false; }
+    });
+})();
+</script>
+<?php endif; ?>
 <?php if ( is_array( $result['reconciliation'] ) ) : ?><p><?php echo esc_html( sprintf( 'Đối chiếu Shopee: %s | provider_windows_executed: %d | shopee_api_calls: %d', (string) ( $result['reconciliation']['status'] ?? '' ), (int) ( $result['reconciliation']['provider_windows_executed'] ?? 0 ), (int) ( $result['reconciliation']['shopee_api_calls'] ?? 0 ) ) ); ?></p><?php endif; ?>
 <h2><?php echo esc_html__( 'Kiểm tra nguồn phí Shopee', 'ecomkit-vuikhoe' ); ?></h2>
 <p><?php echo esc_html__( 'Chỉ đọc Payment snapshot đã lưu cho mã đơn sàn chính xác trong Batch này. Không gọi Shopee, không cập nhật dữ liệu. Nhập tối đa 10 mã, mỗi dòng một mã.', 'ecomkit-vuikhoe' ); ?></p>
