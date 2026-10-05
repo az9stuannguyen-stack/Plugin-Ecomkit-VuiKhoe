@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6H.3H — PDF nhãn Shopee tạm cho thao tác sao chép**, plugin `0.7.13`, database schema `9`, canonical `v9`. Result cho quản trị viên chọn PDF nhãn SPX để bổ sung tên/địa chỉ vào TSV theo mã đơn sàn khớp chính xác; số điện thoại và dữ liệu tài chính không đổi. PDF chỉ được đọc trong file tạm PHP và xóa sau request; dữ liệu bổ sung chỉ sống trong bộ nhớ tab, mất khi tải lại trang hoặc bấm xóa. Clipboard dịch trạng thái Shopee đã xác minh (`COMPLETED`, `SHIPPED`) sang nhãn tiếng Việt; các trạng thái chưa đủ bằng chứng giữ nguyên. WP.6I/WP.7 chưa bắt đầu.
+Hiện tại: **WP.6I — giao diện Operator một lần tải Excel**, plugin `0.7.14`, database schema `9`, canonical `v9`. Quản trị viên gán role **Ecomkit Operator** trong WordPress → Người dùng; role này chỉ có `ecomkit_use` cho tải Excel, tiến độ, Kết quả, Lịch sử, Lỗi, sao chép và PDF nhãn SPX tạm. Administrator có thêm `ecomkit_manage` cho Marketplace, cấu hình và công cụ chẩn đoán. Các Batch là dữ liệu dùng chung trong nội bộ cho mọi tài khoản được cấp `ecomkit_use`; plugin chưa có cách ly theo người tạo. Không cấp role này cho người không được phép xem dữ liệu khách hàng. WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 

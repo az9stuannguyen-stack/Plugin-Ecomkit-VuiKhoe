@@ -21,6 +21,8 @@ final class Ecomkit_Vuikhoe_Activator {
 
 		try {
 			Ecomkit_Vuikhoe_DB::install();
+			Ecomkit_Vuikhoe_Security::register_operator_role();
+			Ecomkit_Vuikhoe_Security::grant_administrator_capabilities();
 		} catch ( Throwable $exception ) {
 			deactivate_plugins( plugin_basename( ECOMKIT_VUIKHOE_FILE ) );
 			wp_die(

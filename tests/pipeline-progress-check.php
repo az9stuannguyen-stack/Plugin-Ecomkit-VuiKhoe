@@ -11,7 +11,7 @@ function wp_date( string $format, int $timestamp, ?DateTimeZone $timezone = null
 function get_option( string $key ): string { return 'Y-m-d'; }
 function absint( mixed $value ): int { return abs( (int) $value ); }
 function wp_unslash( mixed $value ): mixed { return $value; }
-function current_user_can( string $capability ): bool { return ! empty( $GLOBALS['allowed'] ) && 'manage_options' === $capability; }
+function current_user_can( string $capability ): bool { return ! empty( $GLOBALS['allowed'] ) && 'ecomkit_use' === $capability; }
 function esc_html__( string $message, string $domain ): string { return $message; }
 function wp_die( mixed $message ): never { throw new RuntimeException( 'DENIED' ); }
 function check_ajax_referer( string $action, string $field ): void { progress_check( 'ecomkit_pipeline_progress' === $action && 'nonce' === $field && 'valid' === ( $_GET['nonce'] ?? '' ), 'Nonce not enforced.' ); }

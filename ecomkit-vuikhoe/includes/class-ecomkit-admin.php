@@ -36,39 +36,43 @@ final class Ecomkit_Vuikhoe_Admin {
 	}
 
 	public function add_menu(): void {
-		$capability = Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY;
+		$capability = Ecomkit_Vuikhoe_Security::USE_CAPABILITY;
+		$management = Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY;
 
-		add_menu_page( __( 'Ecomkit - Vui Khỏe', 'ecomkit-vuikhoe' ), __( 'Ecomkit', 'ecomkit-vuikhoe' ), $capability, self::MENU_SLUG, array( $this, 'dashboard_page' ), 'dashicons-store', 56 );
-		add_submenu_page( self::MENU_SLUG, __( 'Tổng quan', 'ecomkit-vuikhoe' ), __( 'Tổng quan', 'ecomkit-vuikhoe' ), $capability, self::MENU_SLUG, array( $this, 'dashboard_page' ) );
+		add_menu_page( __( 'Ecomkit - Vui Khỏe', 'ecomkit-vuikhoe' ), __( 'Ecomkit', 'ecomkit-vuikhoe' ), $capability, self::MENU_SLUG, array( $this, 'process_page' ), 'dashicons-store', 56 );
+		add_submenu_page( self::MENU_SLUG, __( 'Xử lý đơn hàng', 'ecomkit-vuikhoe' ), __( 'Xử lý đơn hàng', 'ecomkit-vuikhoe' ), $capability, self::MENU_SLUG, array( $this, 'process_page' ) );
 		add_submenu_page( self::MENU_SLUG, __( 'Xử lý đơn hàng', 'ecomkit-vuikhoe' ), __( 'Xử lý đơn hàng', 'ecomkit-vuikhoe' ), $capability, 'ecomkit-vuikhoe-process', array( $this, 'process_page' ) );
 		add_submenu_page( self::MENU_SLUG, __( 'Kết quả', 'ecomkit-vuikhoe' ), __( 'Kết quả', 'ecomkit-vuikhoe' ), $capability, 'ecomkit-vuikhoe-results', array( $this, 'results_page' ) );
-		add_submenu_page( self::MENU_SLUG, __( 'Lỗi', 'ecomkit-vuikhoe' ), __( 'Lỗi', 'ecomkit-vuikhoe' ), $capability, 'ecomkit-vuikhoe-errors', array( $this, 'errors_page' ) );
+		add_submenu_page( self::MENU_SLUG, __( 'Lỗi cần xử lý', 'ecomkit-vuikhoe' ), __( 'Lỗi cần xử lý', 'ecomkit-vuikhoe' ), $capability, 'ecomkit-vuikhoe-errors', array( $this, 'errors_page' ) );
 		add_submenu_page( self::MENU_SLUG, __( 'Lịch sử', 'ecomkit-vuikhoe' ), __( 'Lịch sử', 'ecomkit-vuikhoe' ), $capability, 'ecomkit-vuikhoe-history', array( $this, 'history_page' ) );
-		add_submenu_page( self::MENU_SLUG, __( 'Marketplace', 'ecomkit-vuikhoe' ), __( 'Marketplace', 'ecomkit-vuikhoe' ), $capability, 'ecomkit-vuikhoe-marketplace', array( $this, 'marketplace_page' ) );
-		add_submenu_page( self::MENU_SLUG, __( 'Cài đặt', 'ecomkit-vuikhoe' ), __( 'Cài đặt', 'ecomkit-vuikhoe' ), $capability, 'ecomkit-vuikhoe-settings', array( $this, 'settings_page' ) );
+		add_submenu_page( self::MENU_SLUG, __( 'Marketplace', 'ecomkit-vuikhoe' ), __( 'Marketplace', 'ecomkit-vuikhoe' ), $management, 'ecomkit-vuikhoe-marketplace', array( $this, 'marketplace_page' ) );
+		add_submenu_page( self::MENU_SLUG, __( 'Cài đặt', 'ecomkit-vuikhoe' ), __( 'Cài đặt', 'ecomkit-vuikhoe' ), $management, 'ecomkit-vuikhoe-settings', array( $this, 'settings_page' ) );
+		add_submenu_page( self::MENU_SLUG, __( 'Công cụ quản trị', 'ecomkit-vuikhoe' ), __( 'Công cụ quản trị', 'ecomkit-vuikhoe' ), $management, 'ecomkit-vuikhoe-dashboard', array( $this, 'dashboard_page' ) );
 	}
 
 	public function dashboard_page(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
 		$this->render( 'dashboard', array( 'diagnostic' => Ecomkit_Vuikhoe_DB::diagnose() ) );
 	}
 
 	public function process_page(): void {
+		Ecomkit_Vuikhoe_Security::require_use_capability();
 		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
 		$imports  = new Ecomkit_Vuikhoe_Import_Service();
-		$reconciliation = new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service();
+		$reconciliation = current_user_can( Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY ) ? new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service() : null;
 		$this->render(
 			'process',
 			array(
 				'batch'           => $batch_id ? $imports->get_batch_summary( $batch_id ) : null,
 				'max_upload_size' => $imports->max_upload_bytes(),
 				'max_rows'        => Ecomkit_Vuikhoe_Excel_Service::MAX_ROWS,
-				'ready_connections' => $batch_id ? $reconciliation->ready_connections() : array(),
+				'ready_connections' => $batch_id && $reconciliation ? $reconciliation->ready_connections() : array(),
 			)
 		);
 	}
 
 	public function results_page(): void {
-		Ecomkit_Vuikhoe_Security::require_management_capability();
+		Ecomkit_Vuikhoe_Security::require_use_capability();
 		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
 		$platform = isset( $_GET['platform'] ) && in_array( (string) $_GET['platform'], array( 'SHOPEE', 'LAZADA' ), true ) ? (string) $_GET['platform'] : '';
 		$matching = isset( $_GET['matching'] ) && in_array( (string) $_GET['matching'], array( 'MATCHED', 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING', '__BLANK__' ), true ) ? (string) $_GET['matching'] : '';
@@ -76,19 +80,19 @@ final class Ecomkit_Vuikhoe_Admin {
 		$payment_test = null;
 		$income_test = null;
 		$financial_run = null;
-		if ( isset( $_GET['financial_run'] ) ) {
+		if ( current_user_can( Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY ) && isset( $_GET['financial_run'] ) ) {
 			$reference = sanitize_key( wp_unslash( $_GET['financial_run'] ) );
 			$stored = get_transient( 'ecomkit_shopee_financial_run_' . $reference );
 			delete_transient( 'ecomkit_shopee_financial_run_' . $reference );
 			if ( is_array( $stored ) && (int) ( $stored['user_id'] ?? 0 ) === get_current_user_id() && (int) ( $stored['batch_id'] ?? 0 ) === $batch_id ) { $financial_run = $stored['result'] ?? null; }
 		}
-		if ( isset( $_GET['payment_test'] ) ) {
+		if ( current_user_can( Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY ) && isset( $_GET['payment_test'] ) ) {
 			$reference = sanitize_key( wp_unslash( $_GET['payment_test'] ) );
 			$stored = get_transient( 'ecomkit_shopee_payment_test_' . $reference );
 			delete_transient( 'ecomkit_shopee_payment_test_' . $reference );
 			if ( is_array( $stored ) && (int) ( $stored['user_id'] ?? 0 ) === get_current_user_id() && (int) ( $stored['batch_id'] ?? 0 ) === $batch_id ) { $payment_test = $stored['result'] ?? null; }
 		}
-		if ( isset( $_GET['income_test'] ) ) {
+		if ( current_user_can( Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY ) && isset( $_GET['income_test'] ) ) {
 			$reference = sanitize_key( wp_unslash( $_GET['income_test'] ) );
 			$stored = get_transient( 'ecomkit_shopee_income_test_' . $reference );
 			delete_transient( 'ecomkit_shopee_income_test_' . $reference );
@@ -96,12 +100,12 @@ final class Ecomkit_Vuikhoe_Admin {
 		}
 		$pipeline = null;
 		if ( $batch_id ) { try { $automatic = new Ecomkit_Vuikhoe_Auto_Pipeline(); $pipeline = $automatic->state( $batch_id ); if ( is_array( $pipeline ) && ! Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline )['terminal'] ) { $pipeline = $automatic->start( $batch_id ); } } catch ( Throwable ) { /* Retain ordinary Result access if scheduling is unavailable. */ } }
-		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'pipeline' => $pipeline, 'progress' => is_array( $pipeline ) ? Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test, 'income_test' => $income_test, 'financial_run' => $financial_run ) );
+		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'pipeline' => $pipeline, 'progress' => is_array( $pipeline ) ? Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id && current_user_can( Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY ) ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test, 'income_test' => $income_test, 'financial_run' => $financial_run ) );
 	}
 
 	/** Request-only PDF text extraction; never changes Batch, Order, canonical or cron state. */
 	public function handle_shopee_spx_pdf(): void {
-		Ecomkit_Vuikhoe_Security::require_management_capability();
+		Ecomkit_Vuikhoe_Security::require_use_capability();
 		if ( false === check_ajax_referer( 'ecomkit_shopee_spx_pdf', 'nonce', false ) ) {
 			wp_send_json_error( array( 'code' => 'SHOPEE_PDF_PERMISSION_DENIED', 'message' => 'Phiên xác thực đã hết hạn. Vui lòng tải lại trang.' ), 403 );
 		}
@@ -145,7 +149,7 @@ final class Ecomkit_Vuikhoe_Admin {
 
 	/** Read-only admin polling; no scheduling, provider access, or DB writes. */
 	public function handle_pipeline_progress(): void {
-		Ecomkit_Vuikhoe_Security::require_management_capability();
+		Ecomkit_Vuikhoe_Security::require_use_capability();
 		check_ajax_referer( 'ecomkit_pipeline_progress', 'nonce' );
 		$batch_id = absint( wp_unslash( $_GET['batch_id'] ?? 0 ) );
 		try {
@@ -306,6 +310,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	}
 
 	public function marketplace_page(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
 		$config_service = new Ecomkit_Vuikhoe_Shopee_Config();
 		$config = $config_service->get();
 		$encryption = new Ecomkit_Vuikhoe_Credential_Encryption();
@@ -348,6 +353,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	}
 
 	public function settings_page(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
 		$test = null;
 		if ( isset( $_GET['runtime_result'], $_GET['runtime_stage'], $_GET['runtime_code'] ) ) {
 			$result = sanitize_key( wp_unslash( $_GET['runtime_result'] ) );
@@ -416,7 +422,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	 * Handles the only mutating WP.2 administrator action.
 	 */
 	public function handle_excel_import(): void {
-		Ecomkit_Vuikhoe_Security::require_management_capability();
+		Ecomkit_Vuikhoe_Security::require_use_capability();
 		check_admin_referer( 'ecomkit_vuikhoe_import_excel', 'ecomkit_nonce' );
 
 		$file = isset( $_FILES['excel_file'] ) && is_array( $_FILES['excel_file'] ) ? $_FILES['excel_file'] : array();
@@ -463,9 +469,10 @@ final class Ecomkit_Vuikhoe_Admin {
 	 * @param array<string,mixed>  $data Safe data passed to the view.
 	 */
 	private function render( string $view, array $data = array() ): void {
-		Ecomkit_Vuikhoe_Security::require_management_capability();
+		Ecomkit_Vuikhoe_Security::require_use_capability();
 
 		$allowed = array( 'dashboard', 'process', 'results', 'errors', 'history', 'marketplace', 'settings' );
+		if ( in_array( $view, array( 'dashboard', 'marketplace', 'settings' ), true ) ) { Ecomkit_Vuikhoe_Security::require_management_capability(); }
 		if ( ! in_array( $view, $allowed, true ) ) {
 			wp_die( esc_html__( 'Trang Ecomkit không hợp lệ.', 'ecomkit-vuikhoe' ) );
 		}

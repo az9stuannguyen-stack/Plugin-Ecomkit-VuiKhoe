@@ -64,7 +64,7 @@ foreach ( $lines as $line ) { clipboard_check( 24 === count( clipboard_cells( $l
 
 $admin = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-admin.php' );
 $view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/results.php' );
-clipboard_check( 1 === preg_match( '/function results_page\(\): void\s*\{\s*Ecomkit_Vuikhoe_Security::require_management_capability\(\)/', $admin ), 'Result permission guard missing.' );
+clipboard_check( 1 === preg_match( '/function results_page\(\): void\s*\{\s*Ecomkit_Vuikhoe_Security::require_use_capability\(\)/', $admin ), 'Result permission guard missing.' );
 clipboard_check( str_contains( $admin, 'get_batch_result( $batch_id, $platform, $matching )' ), 'Result filters are not applied before clipboard projection.' );
 clipboard_check( str_contains( $view, 'navigator.clipboard.writeText' ) && ! str_contains( $view, 'navigator.clipboard.write(' ), 'Plain-text clipboard API missing.' );
 clipboard_check( str_contains( $view, 'clipboard_tsv( $result )' ) && ! str_contains( $view, 'innerHTML' ), 'Clipboard is not projected from canonical rows.' );
