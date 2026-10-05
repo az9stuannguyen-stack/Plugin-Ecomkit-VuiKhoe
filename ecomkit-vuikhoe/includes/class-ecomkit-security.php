@@ -8,6 +8,29 @@ defined( 'ABSPATH' ) || exit;
 final class Ecomkit_Vuikhoe_Security {
 	public const USE_CAPABILITY = 'ecomkit_use';
 	public const MANAGEMENT_CAPABILITY = 'ecomkit_manage';
+	private const CAPABILITY_VERSION = '1';
+	private const CAPABILITY_VERSION_OPTION = 'ecomkit_vuikhoe_capability_version';
+
+	/** Provision before WordPress builds menus; repair existing roles additively. */
+	public static function provision_capabilities(): void {
+		$admin = get_role( 'administrator' );
+		$operator = get_role( 'ecomkit_operator' );
+		$ready = $admin && $operator
+			&& $admin->has_cap( self::USE_CAPABILITY )
+			&& $admin->has_cap( self::MANAGEMENT_CAPABILITY )
+			&& $operator->has_cap( self::USE_CAPABILITY );
+		if ( self::CAPABILITY_VERSION === get_option( self::CAPABILITY_VERSION_OPTION ) && $ready ) { return; }
+		self::register_operator_role();
+		self::grant_administrator_capabilities();
+		// WP_User caches role capabilities; refresh the already-loaded current user.
+		$user = wp_get_current_user();
+		if ( $user->exists() ) { $user->get_role_caps(); }
+		$admin = get_role( 'administrator' );
+		$operator = get_role( 'ecomkit_operator' );
+		if ( $admin && $operator && $admin->has_cap( self::USE_CAPABILITY ) && $admin->has_cap( self::MANAGEMENT_CAPABILITY ) && $operator->has_cap( self::USE_CAPABILITY ) ) {
+			update_option( self::CAPABILITY_VERSION_OPTION, self::CAPABILITY_VERSION, false );
+		}
+	}
 
 	public static function grant_administrator_capabilities(): void {
 		$role = get_role( 'administrator' );
