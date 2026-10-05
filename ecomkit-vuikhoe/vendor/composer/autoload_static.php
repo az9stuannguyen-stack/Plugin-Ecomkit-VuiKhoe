@@ -81,6 +81,7 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         'Ecomkit_Vuikhoe_Admin' => __DIR__ . '/../..' . '/includes/class-ecomkit-admin.php',
         'Ecomkit_Vuikhoe_Canonical_Columns' => __DIR__ . '/../..' . '/includes/class-ecomkit-canonical-columns.php',
         'Ecomkit_Vuikhoe_Canonical_Result_Materializer' => __DIR__ . '/../..' . '/includes/class-ecomkit-canonical-result-materializer.php',
+        'Ecomkit_Vuikhoe_Exact_Financial_Math' => __DIR__ . '/../..' . '/includes/class-ecomkit-exact-financial-math.php',
         'Ecomkit_Vuikhoe_Canonical_Result_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-canonical-result-service.php',
         'Ecomkit_Vuikhoe_Credential_Encryption' => __DIR__ . '/../..' . '/includes/class-ecomkit-credential-encryption.php',
         'Ecomkit_Vuikhoe_Credential_Key_Resolver' => __DIR__ . '/../..' . '/includes/class-ecomkit-credential-key-resolver.php',

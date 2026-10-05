@@ -8,7 +8,7 @@ function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return j
 function contract_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 
 $columns = Ecomkit_Vuikhoe_Canonical_Columns::all();
-contract_check( 24 === count( $columns ) && 'v4' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
+contract_check( 24 === count( $columns ) && 'v5' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
 $contract = Ecomkit_Vuikhoe_Canonical_Columns::legacy_formula_contract();
 $fees = array( 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
 $all = array_merge( $fees, array( 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ) );
@@ -50,9 +50,45 @@ $order = array( 'platform' => 'SHOPEE', 'matching_status' => 'MATCHED', 'marketp
 $result = $materializer->materialize( $order );
 contract_check( 218940 === $result['columns']['total_amount_to_collect'], 'Shopee Escrow lost precedence.' );
 contract_check( '308000' === $result['columns']['product_price_vat_8'] && '0' === $result['columns']['affiliate_fee_vuikhoe'] && '12108' === $result['columns']['discount_vuikhoe'], 'Verified internal source did not map directly.' );
-foreach ( array( 'total_cost_percent', 'platform_cost_percent', 'discount_percent_vuikhoe', 'difference_amount' ) as $key ) { contract_check( null === $result['columns'][ $key ], "Unapproved formula populated $key." ); }
+foreach ( array( 'total_cost_percent', 'platform_cost_percent', 'discount_percent_vuikhoe' ) as $key ) { contract_check( null !== $result['columns'][ $key ] && 'READY' === $result['formula_state'][ $key ]['status'], "Approved formula did not populate $key." ); }
+contract_check( null === $result['columns']['difference_amount'], 'Broken difference gained a formula.' );
 unset( $order['payment_normalized_data'] );
 $without_payment = $materializer->materialize( $order );
-contract_check( null === $without_payment['columns']['total_amount_to_collect'], 'Legacy fallback was activated without verified persisted operands.' );
-contract_check( 24 === count( $result['columns'] ) && 'v4' === $result['version'], 'Result contract changed.' );
+contract_check( null === $without_payment['columns']['total_amount_to_collect'], 'Legacy fallback was activated without verified platform fees.' );
+contract_check( 24 === count( $result['columns'] ) && 'v5' === $result['version'], 'Result contract changed.' );
+$math = Ecomkit_Vuikhoe_Exact_Financial_Math::class;
+$complete = $order;
+$complete['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => 50265, 'serviceFee' => 3000, 'sellerTransactionFee' => 18481, 'affiliateCommissionFee' => 5000 ) );
+$calculated = $materializer->materialize( $complete );
+contract_check( '224146' === $calculated['columns']['total_amount_to_collect'], 'Legacy receivable fallback failed.' );
+foreach ( array( 'total_cost_percent' => '83854', 'platform_cost_percent' => '71746', 'discount_percent_vuikhoe' => '12108' ) as $key => $numerator ) {
+	$rational = $calculated['rational'][ $key ];
+	contract_check( $numerator === $rational['numerator'] && '308000' === $rational['denominator'] && $math::ratio( $numerator, '308000' )['ratio'] === $calculated['columns'][ $key ], "Exact rational $key failed." );
+}
+$sample_b = $complete; $sample_b['product_price_vat_8'] = '312000'; $sample_b['discount_vuikhoe'] = '12265';
+$sample_b['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => 50918, 'serviceFee' => 3000, 'sellerTransactionFee' => 18722 ) );
+$sample_b_result = $materializer->materialize( $sample_b );
+contract_check( '227095' === $sample_b_result['columns']['total_amount_to_collect'] && '84905' === $sample_b_result['rational']['total_cost_percent']['numerator'] && '72640' === $sample_b_result['rational']['platform_cost_percent']['numerator'] && '12265' === $sample_b_result['rational']['discount_percent_vuikhoe']['numerator'], 'Legacy sample B exact formulas failed.' );
+$with_escrow = $complete; $with_escrow['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'escrowAmountAfterAdjustment' => 218940, 'escrowAmount' => 220000, 'commissionFee' => 50265, 'serviceFee' => 3000, 'sellerTransactionFee' => 18481 ) );
+contract_check( 218940 === $materializer->materialize( $with_escrow )['columns']['total_amount_to_collect'], 'Escrow was replaced by legacy formula.' );
+$missing_affiliate = $complete; $missing_affiliate['affiliate_fee_vuikhoe'] = null;
+$missing_result = $materializer->materialize( $missing_affiliate );
+contract_check( null === $missing_result['columns']['total_cost_percent'] && null === $missing_result['columns']['discount_percent_vuikhoe'] && null === $missing_result['columns']['total_amount_to_collect'] && null !== $missing_result['columns']['platform_cost_percent'], 'Missing affiliate blocked an independent platform ratio or became zero.' );
+$missing_discount = $complete; $missing_discount['discount_vuikhoe'] = null;
+$missing_result = $materializer->materialize( $missing_discount );
+contract_check( null === $missing_result['columns']['total_cost_percent'] && null === $missing_result['columns']['discount_percent_vuikhoe'] && null === $missing_result['columns']['total_amount_to_collect'] && null !== $missing_result['columns']['platform_cost_percent'], 'Missing discount dependencies failed.' );
+$missing_fee = $complete; $missing_fee['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => 50265, 'sellerTransactionFee' => 18481 ) );
+$missing_result = $materializer->materialize( $missing_fee );
+contract_check( null === $missing_result['columns']['total_cost_percent'] && null === $missing_result['columns']['platform_cost_percent'] && null === $missing_result['columns']['total_amount_to_collect'] && null !== $missing_result['columns']['discount_percent_vuikhoe'], 'Missing marketplace fee dependencies failed.' );
+$zero_fee = $complete; $zero_fee['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => 0, 'serviceFee' => 3000, 'sellerTransactionFee' => 18481 ) );
+contract_check( null !== $materializer->materialize( $zero_fee )['columns']['platform_cost_percent'], 'Explicit zero fee was treated as missing.' );
+$zero_price = $complete; $zero_price['product_price_vat_8'] = '0';
+$zero_result = $materializer->materialize( $zero_price );
+contract_check( null === $zero_result['columns']['total_cost_percent'] && null === $zero_result['columns']['platform_cost_percent'] && null === $zero_result['columns']['discount_percent_vuikhoe'] && 'ZERO_DIVISOR' === $zero_result['formula_state']['total_cost_percent']['status'], 'Zero price was divided or misclassified.' );
+$no_price = $complete; $no_price['product_price_vat_8'] = null;
+contract_check( null === $materializer->materialize( $no_price )['columns']['total_amount_to_collect'], 'Missing price became legacy receivable.' );
+$decimal = $complete; $decimal['product_price_vat_8'] = '100000.50'; $decimal['affiliate_fee_vuikhoe'] = '0'; $decimal['discount_vuikhoe'] = '0'; $decimal['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => '1000.25', 'serviceFee' => '0', 'sellerTransactionFee' => '0' ) );
+contract_check( '99000.25' === $materializer->materialize( $decimal )['columns']['total_amount_to_collect'], 'Decimal legacy receivable rounded.' );
+$lazada = $complete; $lazada['platform'] = 'LAZADA';
+contract_check( null === $materializer->materialize( $lazada )['columns']['platform_cost_percent'], 'Lazada fees were fabricated from Shopee snapshot.' );
 echo "WP.6F legacy contract and source gates: PASS\n";

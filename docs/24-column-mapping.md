@@ -1,6 +1,14 @@
 # Hợp đồng canonical 24 cột
 
-> Trạng thái hiện hành WP.6G: canonical `v4`. Các đoạn lịch sử bên dưới mô tả quyết định ở stage trước; bảng WP.6G ngay sau đây là nguồn hiệu lực cho năm trường nội bộ.
+## WP.6H — Exact Financial Formula Engine (hiện hành)
+
+Canonical `v5` giữ đúng 24 scalar columns. Công thức legacy đã duyệt hoạt động tự động khi tất cả toán hạng của **từng công thức** có nguồn: `% Tổng Chi Phí=(L+M+N+I+J)/F`, `% Chiết Khấu Vui Khỏe=(I+J)/F`, `% Chi Phí Sàn TMĐT=(L+M+N)/F`; tỷ lệ lưu dưới dạng ratio, không nhân 100. F là Giá SP VAT 8%, I/J là hai field nội bộ Excel, L/M/N là ba phí Payment Shopee đã duyệt. NULL không phải 0; riêng F=0 làm ba tỷ lệ NULL với trạng thái `ZERO_DIVISOR`. Thiếu I/J không cản tỷ lệ phí sàn nếu F/L/M/N đầy đủ.
+
+`Tổng Tiền Sẽ Thu` ưu tiên `escrowAmountAfterAdjustment`, sau đó `escrowAmount`, rồi mới fallback chính xác `F-(L+M+N+I+J)` khi đủ mọi toán hạng. `Chênh lệch` giữ NULL vì workbook legacy có `#REF!`. Không lấy Shopee Affiliate thay cho I; không chế phí Lazada.
+
+Engine `Ecomkit_Vuikhoe_Exact_Financial_Math` tính cộng/trừ/so sánh/chia bằng chuỗi số nguyên, không PHP float, BCMath hay GMP. Snapshot v5 lưu trong `canonical_data` ba nhánh: `columns` (24 scalar values), `rational` (tử số/mẫu số chính xác, decimal prefix tối đa 18 chữ số và cờ `decimal_exact`), `formula_state` (READY/MISSING_OPERANDS/ZERO_DIVISOR + field dependency). Với tỷ lệ vô hạn, decimal prefix là **truncated, không phải giá trị phân số chính xác**; tử số/mẫu số là nguồn chân lý. UI tính phần trăm trực tiếp từ phân số ×100 bằng cùng engine, cắt tối đa 12 chữ số sau dấu thập phân và thêm `…%` nếu còn dư; không round hoặc thay đổi snapshot. Money formatter chỉ dùng cho cột tiền. Snapshot v1–v4 stale, cần rematerialize; không migration DB. Các mục stage cũ bên dưới là lịch sử.
+
+> WP.6G xác lập năm nguồn Excel nội bộ trong canonical v4; các ánh xạ trực tiếp đó tiếp tục có hiệu lực trong v5. Phần ghi chú v4 bên dưới là lịch sử; phần WP.6H phía trên là quy tắc công thức hiện hành.
 
 ## WP.6G — nguồn nội bộ Excel tùy chọn
 
@@ -47,15 +55,15 @@ Snapshot `v1`/`v2`/`v3` trở thành stale, materialize lại từ Orders đã l
 | 13 | Trạng Thái Công Nợ | `receivable_status` | text | `FUTURE_PAYMENT_ESCROW` | Chưa có payment evidence | Trống |
 | 14 | Chênh lệch | `difference_amount` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
 | 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.product_price_vat_8` | Không tính từ giá Shopee/Payment | Trống nếu thiếu/không hợp lệ |
-| 16 | % Tổng Chi Phí | `total_cost_percent` | decimal(9,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
-| 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `escrowAmountAfterAdjustment` > `escrowAmount` | Không suy từ buyerTotalAmount | NULL nếu cả hai thiếu |
+| 16 | % Tổng Chi Phí | `total_cost_percent` | ratio string + exact rational metadata | `(L+M+N+I+J)/F` khi đủ nguồn | Không dùng float | Trống nếu thiếu toán hạng hoặc F=0 |
+| 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal string/source value | `escrowAmountAfterAdjustment` > `escrowAmount` > `F-(L+M+N+I+J)` khi đủ nguồn | Không suy từ buyerTotalAmount | NULL nếu cả hai Escrow và toàn bộ công thức thiếu |
 | 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.affiliate_fee_vuikhoe` | Không dùng Shopee Affiliate | Trống nếu thiếu/không hợp lệ |
 | 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.discount_vuikhoe` | Không dùng Shopee voucher/discount | Trống nếu thiếu/không hợp lệ |
-| 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | decimal(9,4) | `UNMAPPED` | Không tính | Trống |
+| 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | ratio string + exact rational metadata | `(I+J)/F` khi đủ nguồn | Không dùng Shopee Affiliate | Trống nếu thiếu toán hạng hoặc F=0 |
 | 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `commissionFee` | Trực tiếp, không tính | NULL nếu thiếu |
 | 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `serviceFee` | Trực tiếp, không tính | NULL nếu thiếu |
 | 23 | Phí Giao Dịch (TMĐT) | `transaction_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `sellerTransactionFee` | Trực tiếp, không tính | NULL nếu thiếu |
-| 24 | % Chi Phí Sàn TMĐT | `platform_cost_percent` | decimal(9,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
+| 24 | % Chi Phí Sàn TMĐT | `platform_cost_percent` | ratio string + exact rational metadata | `(L+M+N)/F` khi đủ nguồn | Không chế phí Lazada | Trống nếu thiếu toán hạng hoặc F=0 |
 
 ### Lưu ý Shopee quan trọng
 

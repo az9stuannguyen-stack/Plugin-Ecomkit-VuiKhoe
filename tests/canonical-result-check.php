@@ -14,7 +14,7 @@ $columns = Ecomkit_Vuikhoe_Canonical_Columns::all();
 $expected = array( 'Ngày Lên Đơn', 'Mã đơn ESHOP', 'Mã đơn sàn', 'Kênh Bán Hàng', 'Trạng Thái Đơn Hàng', 'Tên Khách Hàng', 'SĐT', 'Địa Chỉ', 'Tỉnh/TP', 'Ngày Xuất VAT', 'Ghi Chú', 'Đã Thu Tiền', 'Trạng Thái Công Nợ', 'Chênh lệch', 'Giá SP (VAT 8%)', '% Tổng Chi Phí', 'Tổng Tiền Sẽ Thu', 'Phí Affiliate (Vui Khỏe)', 'Chiết Khấu (Vui Khỏe)', '% Chiết Khấu Vui Khỏe', 'Phí Cố Định (TMĐT)', 'Phí dịch vụ (TMĐT)', 'Phí Giao Dịch (TMĐT)', '% Chi Phí Sàn TMĐT' );
 canonical_check( 24 === count( $columns ) && $expected === array_column( $columns, 'label' ), 'Exact 24 labels/order changed.' );
 canonical_check( 24 === count( array_unique( array_column( $columns, 'key' ) ) ), 'Canonical keys are not unique.' );
-$expected_sources = array( 'EXCEL_THEN_SHOPEE_FALLBACK', 'EXCEL_AVAILABLE', 'EXCEL_THEN_SHOPEE_FALLBACK', 'EXCEL_THEN_SHOPEE_FALLBACK', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'INTERNAL_EXCEL', 'INTERNAL_EXCEL', 'FUTURE_PAYMENT_ESCROW', 'FUTURE_PAYMENT_ESCROW', 'UNRESOLVED_BROKEN_LEGACY_REFERENCE', 'INTERNAL_EXCEL', 'DERIVED_LEGACY_FORMULA_GATED', 'SHOPEE_PAYMENT_ESCROW', 'INTERNAL_EXCEL', 'INTERNAL_EXCEL', 'DERIVED_LEGACY_FORMULA_GATED', 'SHOPEE_PAYMENT_ESCROW', 'SHOPEE_PAYMENT_ESCROW', 'SHOPEE_PAYMENT_ESCROW', 'DERIVED_LEGACY_FORMULA_GATED' );
+$expected_sources = array( 'EXCEL_THEN_SHOPEE_FALLBACK', 'EXCEL_AVAILABLE', 'EXCEL_THEN_SHOPEE_FALLBACK', 'EXCEL_THEN_SHOPEE_FALLBACK', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'SHOPEE_ORDER_DETAIL_AVAILABLE', 'INTERNAL_EXCEL', 'INTERNAL_EXCEL', 'FUTURE_PAYMENT_ESCROW', 'FUTURE_PAYMENT_ESCROW', 'UNRESOLVED_BROKEN_LEGACY_REFERENCE', 'INTERNAL_EXCEL', 'DERIVED_LEGACY_FORMULA', 'SHOPEE_PAYMENT_ESCROW', 'INTERNAL_EXCEL', 'INTERNAL_EXCEL', 'DERIVED_LEGACY_FORMULA', 'SHOPEE_PAYMENT_ESCROW', 'SHOPEE_PAYMENT_ESCROW', 'SHOPEE_PAYMENT_ESCROW', 'DERIVED_LEGACY_FORMULA' );
 canonical_check( $expected_sources === array_column( $columns, 'source' ), 'Per-column source matrix changed.' );
 
 $provider = array( 'providerCreatedAt' => '2026-09-19T03:30:00Z', 'providerStatus' => 'CANCELLED', 'recipientName' => 'Nguyen A', 'recipientPhone' => '0900', 'recipientFullAddress' => 'Source address', 'recipientState' => 'State', 'recipientCity' => 'City', 'recipientRegion' => 'Region', 'totalAmount' => 1000, 'escrowAmount' => 800 );
@@ -66,7 +66,7 @@ $internal_order = array_merge( $base, array( 'marketplace_order_id' => 'SHP-1', 
 $internal_result = $materializer->materialize( $internal_order );
 canonical_check( '308000.00' === $internal_result['columns']['product_price_vat_8'] && '0' === $internal_result['columns']['affiliate_fee_vuikhoe'] && '12108' === $internal_result['columns']['discount_vuikhoe'], 'Internal money direct mapping or NULL/zero failed.' );
 canonical_check( '2026-10-01' === $internal_result['columns']['vat_issued_date'] && '<script>Excel note</script>' === $internal_result['columns']['note'], 'VAT calendar date or note direct mapping failed.' );
-canonical_check( 218940 === $internal_result['columns']['total_amount_to_collect'] && null === $internal_result['columns']['difference_amount'] && null === $internal_result['columns']['total_cost_percent'] && null === $internal_result['columns']['discount_percent_vuikhoe'] && null === $internal_result['columns']['platform_cost_percent'], 'Escrow precedence or formula gate failed.' );
+canonical_check( 218940 === $internal_result['columns']['total_amount_to_collect'] && null === $internal_result['columns']['difference_amount'] && null === $internal_result['columns']['total_cost_percent'] && null !== $internal_result['columns']['discount_percent_vuikhoe'] && null === $internal_result['columns']['platform_cost_percent'], 'Escrow precedence or independent formula dependencies failed.' );
 $without_affiliate = $internal_order; $without_affiliate['affiliate_fee_vuikhoe'] = null;
 canonical_check( null === $materializer->materialize( $without_affiliate )['columns']['affiliate_fee_vuikhoe'], 'Shopee affiliate leaked into Vui Khỏe field.' );
 canonical_check( $materializer->fingerprint( $internal_order ) !== $materializer->fingerprint( $without_affiliate ), 'Internal source change did not stale canonical snapshot.' );
@@ -75,7 +75,7 @@ $completed = $materializer->materialize( array_merge( $base, array( 'provider_no
 canonical_check( null === $completed['columns']['amount_collected'] && null === $completed['columns']['total_amount_to_collect'], 'COMPLETED or gross total was reinterpreted as collected/settlement.' );
 canonical_check( $excel === $materializer->materialize( $base + array( 'order_date' => '2026-09-17 23:00:00' ), $items ), 'Materializer is not deterministic.' );
 canonical_check( 64 === strlen( $materializer->fingerprint( $base, $items ) ) && $materializer->fingerprint( $base, $items ) !== $materializer->fingerprint( array_merge( $base, array( 'provider_normalized_data' => json_encode( array_merge( $provider, array( 'recipientState' => 'Changed' ) ) ) ) ), $items ), 'Source fingerprint stale detection failed.' );
-canonical_check( 24 === count( $excel['columns'] ) && 'v4' === $excel['version'], 'Canonical row shape/version failed.' );
+canonical_check( 24 === count( $excel['columns'] ) && 'v5' === $excel['version'], 'Canonical row shape/version failed.' );
 $financial_base = array_merge( $base, array( 'marketplace_order_id' => 'SHP-1', 'payment_normalized_data' => json_encode( array( 'marketplaceOrderId' => 'SHP-1', 'commissionFee' => 51480, 'serviceFee' => 20160, 'sellerTransactionFee' => 18720, 'escrowAmountAfterAdjustment' => 218940, 'escrowAmount' => 220000, 'buyerTotalAmount' => 250000, 'affiliateCommissionFee' => 900, 'actualShippingFee' => 5000 ) ) ) );
 $financial = $materializer->materialize( $financial_base );
 canonical_check( 51480 === $financial['columns']['fixed_platform_fee'] && 20160 === $financial['columns']['service_platform_fee'] && 18720 === $financial['columns']['transaction_platform_fee'] && 218940 === $financial['columns']['total_amount_to_collect'], 'Approved Payment mapping or adjustment precedence failed.' );
@@ -89,7 +89,7 @@ canonical_check( null === $wrong_identity['columns']['fixed_platform_fee'] && $m
 foreach ( array( 'platform_cost_percent', 'total_cost_percent', 'amount_collected', 'receivable_status', 'difference_amount', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'discount_percent_vuikhoe' ) as $key ) { canonical_check( null === $financial['columns'][ $key ], "Unsafe financial derivation populated $key." ); }
 foreach ( $columns as $column ) {
 	$key = $column['key']; $source = $column['source'];
-	if ( in_array( $source, array( 'FUTURE_PAYMENT_ESCROW', 'UNMAPPED_NO_SOURCE', 'DERIVED_LEGACY_FORMULA_GATED', 'UNRESOLVED_BROKEN_LEGACY_REFERENCE' ), true ) ) { canonical_check( null === $excel['columns'][ $key ], "Unauthorized source populated $key." ); }
+	if ( in_array( $source, array( 'FUTURE_PAYMENT_ESCROW', 'UNMAPPED_NO_SOURCE', 'DERIVED_LEGACY_FORMULA', 'UNRESOLVED_BROKEN_LEGACY_REFERENCE' ), true ) ) { canonical_check( null === $excel['columns'][ $key ], "Unauthorized source populated $key." ); }
 }
 $fixture_items = array_fill( 0, 18, array( 'sku' => 'SKU', 'product_name' => 'Product', 'quantity' => 1 ) );
 $fixture_orders = array_fill( 0, 8, array( 'platform' => 'LAZADA', 'matching_status' => null, 'raw_order_code' => 'LZ', 'order_date' => null ) );
@@ -110,15 +110,24 @@ final class CanonicalWpdb {
 $old_snapshot = array( 'version' => 'v1', 'columns' => $excel['columns'] );
 $GLOBALS['wpdb'] = new CanonicalWpdb( array( array_merge( $base, array( 'canonical_data' => json_encode( $old_snapshot ), 'canonical_result_version' => 'v1', 'canonical_source_fingerprint' => 'old' ) ) ) );
 $old_result = ( new Ecomkit_Vuikhoe_Canonical_Result_Service() )->get_batch_result( 7 );
-canonical_check( 1 === count( $old_result['rows'] ) && $old_result['rows'][0]['stale'] && ! $old_result['rows'][0]['ready'], 'v1 snapshot was presented as current v3.' );
+canonical_check( 1 === count( $old_result['rows'] ) && $old_result['rows'][0]['stale'] && ! $old_result['rows'][0]['ready'], 'v1 snapshot was presented as current v5.' );
 $GLOBALS['wpdb'] = new CanonicalWpdb( array( array_merge( $base, array( 'canonical_data' => json_encode( array( 'version' => 'v2', 'columns' => $excel['columns'] ) ), 'canonical_result_version' => 'v2', 'canonical_source_fingerprint' => 'old' ) ) ) );
 $v2_result = ( new Ecomkit_Vuikhoe_Canonical_Result_Service() )->get_batch_result( 7 );
-canonical_check( $v2_result['rows'][0]['stale'] && ! $v2_result['rows'][0]['ready'], 'v2 snapshot was presented as current v3.' );
+canonical_check( $v2_result['rows'][0]['stale'] && ! $v2_result['rows'][0]['ready'], 'v2 snapshot was presented as current v5.' );
+$GLOBALS['wpdb'] = new CanonicalWpdb( array( array_merge( $base, array( 'canonical_data' => json_encode( array( 'version' => 'v4', 'columns' => $excel['columns'] ) ), 'canonical_result_version' => 'v4', 'canonical_source_fingerprint' => 'old' ) ) ) );
+$v4_result = ( new Ecomkit_Vuikhoe_Canonical_Result_Service() )->get_batch_result( 7 );
+canonical_check( $v4_result['rows'][0]['stale'] && ! $v4_result['rows'][0]['ready'], 'v4 snapshot was presented as current v5.' );
 $GLOBALS['wpdb'] = new CanonicalWpdb( array( $legacy_order ) );
 $GLOBALS['wpdb']->batch_source = $legacy_batch;
 function current_time( string $type, bool $gmt = false ): string { return '2026-10-04 00:00:00'; }
 $service = new Ecomkit_Vuikhoe_Canonical_Result_Service();
 $persisted = $service->materialize_batch( 7 );
 $rematerialized = $service->get_batch_result( 7 );
-canonical_check( 1 === $persisted['rows'] && 'ĐH-SYNTH-001' === $rematerialized['rows'][0]['columns']['eshop_order_code'] && ! $rematerialized['rows'][0]['stale'], 'Legacy Batch did not rematerialize to a current v2 snapshot.' );
+canonical_check( 1 === $persisted['rows'] && 'ĐH-SYNTH-001' === $rematerialized['rows'][0]['columns']['eshop_order_code'] && ! $rematerialized['rows'][0]['stale'], 'Legacy Batch did not rematerialize to a current v5 snapshot.' );
+$complete_order = array_merge( $internal_order, array( 'id' => 2, 'payment_normalized_data' => json_encode( array( 'marketplaceOrderId' => 'SHP-1', 'commissionFee' => 50265, 'serviceFee' => 3000, 'sellerTransactionFee' => 18481 ) ) ) );
+$GLOBALS['wpdb'] = new CanonicalWpdb( array( $complete_order ) );
+$ready_service = new Ecomkit_Vuikhoe_Canonical_Result_Service();
+$ready_service->materialize_batch( 7 );
+$ready_result = $ready_service->get_batch_result( 7 );
+canonical_check( '308000' === $ready_result['rows'][0]['rational']['total_cost_percent']['denominator'] && 'READY' === $ready_result['rows'][0]['formula_state']['total_cost_percent']['status'] && 24 === count( $ready_result['rows'][0]['columns'] ), 'Rational/formula metadata was not persisted alongside 24 visible columns.' );
 echo "WP.6 canonical result checks passed.\n";

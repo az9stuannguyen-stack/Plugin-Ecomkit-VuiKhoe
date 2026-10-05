@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6G — Internal Vui Khỏe Source Integration**, plugin `0.6.9`, database schema giữ `8`, canonical `v4`. Cùng một file Excel upload có thể thêm tùy chọn `Giá SP (VAT 8%)`, `Phí Affiliate (Vui Khỏe)`, `Chiết Khấu (Vui Khỏe)`, `Ngày Xuất VAT`, `Ghi Chú`; file production bảy cột cũ vẫn hợp lệ. Giá trị nội bộ được lưu trên Order và đưa trực tiếp vào Result 24 cột; thiếu nguồn vẫn NULL, số 0 thật vẫn là 0. Không lấy Shopee Affiliate/voucher thay thế. Các tỷ lệ legacy vẫn chờ chính sách tính thập phân chính xác; Escrow Shopee giữ ưu tiên. Một upload, tiến độ tự động và WP.7 chưa bắt đầu.
+Hiện tại: **WP.6H — Exact Financial Formula Engine**, plugin `0.7.0`, database schema giữ `8`, canonical `v5`. Cùng một upload Excel, ba tỷ lệ legacy tự tính khi đủ Giá SP VAT 8%, hai nguồn nội bộ và phí sàn Shopee. Engine dùng chuỗi thập phân và phân số chính xác, không phụ thuộc BCMath/GMP hoặc PHP float; snapshot giữ tử số/mẫu số gốc và chuỗi tỷ lệ hiển thị được cắt có dấu `…` khi vô hạn. Tổng Tiền Sẽ Thu ưu tiên Shopee Escrow, chỉ dùng công thức legacy khi không có Escrow và đủ mọi toán hạng. Thiếu nguồn giữ NULL, số 0 thật được tính, giá bằng 0 không chia. Một upload, tiến độ tự động; WP.7 chưa bắt đầu. Cần kiểm tra WordPress thủ công.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.6.9`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.7.0`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `8`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

@@ -1,5 +1,5 @@
 <?php
-/** Pure deterministic projection from persisted Order evidence to canonical v4. */
+/** Pure deterministic projection from persisted Order evidence to canonical v5. */
 
 defined( 'ABSPATH' ) || exit;
 
@@ -17,6 +17,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 		$provider = $this->decode_provider( $order['provider_normalized_data'] ?? null );
 		$matched = 'SHOPEE' === (string) ( $order['platform'] ?? '' ) && 'MATCHED' === (string) ( $order['matching_status'] ?? '' );
 		$values = array_fill_keys( array_column( $columns, 'key' ), null );
+		$rationals = array(); $formula_states = array();
 		$values['eshop_order_code'] = $this->eshop_code( $order['eshop_order_code'] ?? null );
 		if ( null === $values['eshop_order_code'] ) {
 			$raw = $this->decode_provider( $order['raw_source_metadata'] ?? null );
@@ -58,10 +59,28 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 				$values['total_amount_to_collect'] ??= $this->payment_number( $payment['escrowAmount'] ?? null );
 			}
 		}
+		$math = Ecomkit_Vuikhoe_Exact_Financial_Math::class;
+		foreach ( Ecomkit_Vuikhoe_Canonical_Columns::legacy_formula_contract() as $target => $contract ) {
+			$required = $contract['numerator'];
+			if ( null !== $contract['denominator'] ) { $required[] = $contract['denominator']; }
+			if ( null !== $contract['subtract_from'] ) { $required[] = $contract['subtract_from']; }
+			$missing = array_values( array_filter( $required, static fn( string $key ): bool => ! ( is_int( $values[ $key ] ?? null ) || ( is_string( $values[ $key ] ?? null ) && 1 === preg_match( '/\A-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\z/D', $values[ $key ] ) ) ) ) );
+			if ( $missing ) { $formula_states[ $target ] = array( 'status' => 'MISSING_OPERANDS', 'fields' => $missing ); continue; }
+			if ( null !== $contract['denominator'] && $math::is_zero( $values[ $contract['denominator'] ] ) ) { $formula_states[ $target ] = array( 'status' => 'ZERO_DIVISOR', 'fields' => array( $contract['denominator'] ) ); continue; }
+			$sum = '0';
+			foreach ( $contract['numerator'] as $key ) { $sum = $math::add( $sum, $values[ $key ] ); }
+			if ( null !== $contract['denominator'] ) {
+				$rationals[ $target ] = $math::ratio( $sum, $values[ $contract['denominator'] ] );
+				$values[ $target ] = $rationals[ $target ]['ratio'];
+			} elseif ( null === $values[ $target ] ) {
+				$values[ $target ] = $math::subtract( $values[ $contract['subtract_from'] ], $sum );
+			}
+			$formula_states[ $target ] = array( 'status' => 'READY', 'fields' => array() );
+		}
 		foreach ( $values as $value ) {
 			if ( null !== $value && ! is_scalar( $value ) ) { throw new RuntimeException( 'CANONICAL_SOURCE_INVALID' ); }
 		}
-		return array( 'version' => Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'columns' => $values );
+		return array( 'version' => Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'columns' => $values, 'rational' => $rationals, 'formula_state' => $formula_states );
 	}
 
 	/** @param array<string,mixed> $order @param array<int,array<string,mixed>> $items @param array<string,mixed> $batch_source */

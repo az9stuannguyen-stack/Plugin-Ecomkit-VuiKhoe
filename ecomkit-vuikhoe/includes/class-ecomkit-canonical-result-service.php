@@ -67,7 +67,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 			$stale = is_array( $snapshot ) && ( ! $version_current || ( $ready && ! hash_equals( (string) ( $order['canonical_source_fingerprint'] ?? '' ), $materializer->fingerprint( $order, $items[ (int) $order['id'] ] ?? array(), $batch_source ) ) ) );
 			if ( $ready ) { $counts['ready']++; } if ( $stale || in_array( $m, array( 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING' ), true ) ) { $counts['warnings']++; }
 			if ( ( '' !== $platform && $platform !== $p ) || ( '__BLANK__' === $matching ? '' !== $m : ( '' !== $matching && $matching !== $m ) ) ) { continue; }
-			$rows[] = array( 'id' => (int) $order['id'], 'platform' => $p, 'matching_status' => $m, 'stale' => $stale, 'ready' => $ready, 'columns' => $ready ? $snapshot['columns'] : array() );
+			$rows[] = array( 'id' => (int) $order['id'], 'platform' => $p, 'matching_status' => $m, 'stale' => $stale, 'ready' => $ready, 'columns' => $ready ? $snapshot['columns'] : array(), 'rational' => $ready ? (array) ( $snapshot['rational'] ?? array() ) : array(), 'formula_state' => $ready ? (array) ( $snapshot['formula_state'] ?? array() ) : array() );
 		}
 		$metadata = json_decode( (string) ( $batch['source_metadata'] ?? '' ), true );
 		return array( 'batch' => $batch, 'reconciliation' => is_array( $metadata ) ? ( $metadata['shopee_reconciliation'] ?? null ) : null, 'counts' => $counts, 'columns' => Ecomkit_Vuikhoe_Canonical_Columns::all(), 'rows' => $rows );

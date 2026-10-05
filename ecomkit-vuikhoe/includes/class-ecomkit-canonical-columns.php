@@ -4,15 +4,14 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Canonical_Columns {
-	public const VERSION = 'v4';
+	public const VERSION = 'v5';
 	private const MONEY_KEYS = array( 'amount_collected', 'difference_amount', 'product_price_vat_8', 'total_amount_to_collect', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
 
 	public static function is_money( string $key ): bool { return in_array( $key, self::MONEY_KEYS, true ); }
 
 	/**
 	 * Verified legacy workbook formulas. Metadata only: no source for all internal
-	 * No approved exact-decimal arithmetic/precision policy exists yet, so v4
-	 * must not evaluate these formulas even when the direct sources exist.
+	 * Approved legacy formulas, evaluated by the exact decimal-string engine.
 	 * Ratios are fractions (0.0393 = 3.93%), never multiplied by 100 here.
 	 *
 	 * @return array<string,array{numerator:array<int,string>,denominator:?string,subtract_from:?string}>
@@ -63,15 +62,15 @@ final class Ecomkit_Vuikhoe_Canonical_Columns {
 			array( 'receivable_status', 'Trạng Thái Công Nợ', 'FUTURE_PAYMENT_ESCROW' ),
 			array( 'difference_amount', 'Chênh lệch', 'UNRESOLVED_BROKEN_LEGACY_REFERENCE' ),
 			array( 'product_price_vat_8', 'Giá SP (VAT 8%)', 'INTERNAL_EXCEL' ),
-			array( 'total_cost_percent', '% Tổng Chi Phí', 'DERIVED_LEGACY_FORMULA_GATED' ),
+			array( 'total_cost_percent', '% Tổng Chi Phí', 'DERIVED_LEGACY_FORMULA' ),
 			array( 'total_amount_to_collect', 'Tổng Tiền Sẽ Thu', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'affiliate_fee_vuikhoe', 'Phí Affiliate (Vui Khỏe)', 'INTERNAL_EXCEL' ),
 			array( 'discount_vuikhoe', 'Chiết Khấu (Vui Khỏe)', 'INTERNAL_EXCEL' ),
-			array( 'discount_percent_vuikhoe', '% Chiết Khấu Vui Khỏe', 'DERIVED_LEGACY_FORMULA_GATED' ),
+			array( 'discount_percent_vuikhoe', '% Chiết Khấu Vui Khỏe', 'DERIVED_LEGACY_FORMULA' ),
 			array( 'fixed_platform_fee', 'Phí Cố Định (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'service_platform_fee', 'Phí dịch vụ (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'transaction_platform_fee', 'Phí Giao Dịch (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
-			array( 'platform_cost_percent', '% Chi Phí Sàn TMĐT', 'DERIVED_LEGACY_FORMULA_GATED' ),
+			array( 'platform_cost_percent', '% Chi Phí Sàn TMĐT', 'DERIVED_LEGACY_FORMULA' ),
 		);
 		return array_map(
 			static fn( array $row, int $index ): array => array( 'index' => $index + 1, 'key' => $row[0], 'label' => $row[1], 'source' => $row[2] ),
