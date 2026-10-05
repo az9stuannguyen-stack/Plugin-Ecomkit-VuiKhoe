@@ -181,6 +181,50 @@
 </details>
 <form method="get" style="margin:16px 0"><input type="hidden" name="page" value="ecomkit-vuikhoe-results"><input type="hidden" name="batch_id" value="<?php echo esc_attr( (string) $batch['id'] ); ?>"><label><?php echo esc_html__( 'Nền tảng', 'ecomkit-vuikhoe' ); ?> <select name="platform"><option value="">ALL</option><?php foreach ( array( 'SHOPEE', 'LAZADA' ) as $value ) : ?><option <?php selected( $data['platform_filter'], $value ); ?>><?php echo esc_html( $value ); ?></option><?php endforeach; ?></select></label> <label><?php echo esc_html__( 'Matching', 'ecomkit-vuikhoe' ); ?> <select name="matching"><option value="">ALL</option><?php foreach ( array( 'MATCHED', 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING', '__BLANK__' ) as $value ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $data['matching_filter'], $value ); ?>><?php echo esc_html( '__BLANK__' === $value ? '(blank)' : $value ); ?></option><?php endforeach; ?></select></label> <?php submit_button( __( 'Lọc', 'ecomkit-vuikhoe' ), 'secondary', '', false ); ?></form>
 <div class="notice notice-info inline"><p><?php echo esc_html__( 'Kết quả v9 ưu tiên Giá SP, Affiliate và Chiết Khấu Vui Khỏe từ Excel; Shopee Payment đúng đơn cung cấp fallback khi nguồn tương ứng thiếu. Phí dịch vụ dùng Phí Hạ Tầng suy ra từ serviceFee cộng PiShip. Ba tỷ lệ legacy hiển thị với 2 chữ số thập phân HALF-UP; ratio canonical không đổi. Công nợ/Chênh lệch chưa có quy tắc duyệt.', 'ecomkit-vuikhoe' ); ?></p></div>
+<?php
+$clipboard_values = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( $result );
+$clipboard_headers = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( array( 'rows' => array() ), true );
+$clipboard_count = count( $result['rows'] );
+$clipboard_json_flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+?>
+<div style="margin:12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<button type="button" class="button button-primary" id="ecomkit-copy-values" <?php disabled( 0 === $clipboard_count ); ?>><?php echo esc_html__( 'Sao chép dữ liệu', 'ecomkit-vuikhoe' ); ?></button>
+<button type="button" class="button" id="ecomkit-copy-with-headers" <?php disabled( 0 === $clipboard_count ); ?>><?php echo esc_html__( 'Sao chép kèm tiêu đề', 'ecomkit-vuikhoe' ); ?></button>
+<span id="ecomkit-copy-feedback" role="status" aria-live="polite"></span>
+</div>
+<script>
+(function () {
+    const values = <?php echo wp_json_encode( $clipboard_values, $clipboard_json_flags ); ?>;
+    const headers = <?php echo wp_json_encode( $clipboard_headers, $clipboard_json_flags ); ?>;
+    const count = <?php echo (int) $clipboard_count; ?>;
+    const feedback = document.getElementById('ecomkit-copy-feedback');
+    async function copyPlainText(value) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try { await navigator.clipboard.writeText(value); return; } catch (error) { /* Try the text-only fallback. */ }
+        }
+        const area = document.createElement('textarea');
+        area.value = value;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        document.body.appendChild(area);
+        try {
+            area.focus(); area.select();
+            if (!document.execCommand('copy')) throw new Error('COPY_FAILED');
+        } finally { area.remove(); }
+    }
+    for (const [id, withHeaders] of [['ecomkit-copy-values', false], ['ecomkit-copy-with-headers', true]]) {
+        document.getElementById(id).addEventListener('click', async function () {
+            this.disabled = true;
+            try {
+                await copyPlainText(withHeaders ? headers + '\n' + values : values);
+                feedback.textContent = withHeaders ? 'Đã sao chép ' + count + ' đơn + tiêu đề.' : 'Đã sao chép ' + count + ' đơn × 24 cột.';
+            } catch (error) { feedback.textContent = 'Không thể sao chép. Vui lòng kiểm tra quyền clipboard của trình duyệt.'; }
+            finally { this.disabled = false; }
+        });
+    }
+})();
+</script>
 <div style="overflow-x:auto;margin-top:12px"><table class="widefat striped" style="width:max-content;min-width:100%"><thead><tr><?php foreach ( $result['columns'] as $column ) : ?><th><?php echo esc_html( $column['label'] ); ?></th><?php endforeach; ?></tr></thead><tbody>
 <?php foreach ( $result['rows'] as $row ) : ?><tr title="<?php echo esc_attr( (string) $row['platform'] . ' / ' . (string) $row['matching_status'] . ( $row['stale'] ? ' / Kết quả cũ' : ( ! $row['ready'] ? ' / Chưa materialize' : '' ) ) ); ?>"><?php foreach ( $result['columns'] as $column ) : $value = $row['columns'][ $column['key'] ] ?? null; $rational = $row['rational'][ $column['key'] ] ?? null; $display = is_array( $rational ) ? Ecomkit_Vuikhoe_Exact_Financial_Math::format_percent_two_decimals( $rational ) : ( Ecomkit_Vuikhoe_Canonical_Columns::is_money( $column['key'] ) && ( is_int( $value ) || is_string( $value ) ) ? Ecomkit_Vuikhoe_Money_Formatter::format_exact( $value ) : $value ); $formula_state = $row['formula_state'][ $column['key'] ] ?? null; $cell_title = is_array( $formula_state ) && 'MISSING_OPERANDS' === ( $formula_state['status'] ?? '' ) ? 'Chưa tính: thiếu ' . implode( ', ', array_map( static fn( string $key ): string => $canonical_labels[ $key ] ?? $key, (array) ( $formula_state['fields'] ?? array() ) ) ) : ( is_array( $formula_state ) && 'ZERO_DIVISOR' === ( $formula_state['status'] ?? '' ) ? 'Chưa tính: Giá SP bằng 0' : '' ); ?><td title="<?php echo esc_attr( $cell_title ); ?>"><?php echo null === $display || '' === $display ? '&mdash;' : esc_html( (string) $display ); ?></td><?php endforeach; ?></tr><?php endforeach; ?>
 </tbody></table></div>

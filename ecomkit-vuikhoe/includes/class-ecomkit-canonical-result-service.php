@@ -4,6 +4,41 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Canonical_Result_Service {
+	/** Plain-text clipboard projection of the already authorized, filtered Result rows. */
+	public static function clipboard_tsv( array $result, bool $include_headers = false ): string {
+		$definitions = Ecomkit_Vuikhoe_Canonical_Columns::all();
+		if ( 24 !== count( $definitions ) ) { throw new RuntimeException( 'CANONICAL_MAPPING_CONTRACT_INVALID' ); }
+		$contracts = Ecomkit_Vuikhoe_Canonical_Columns::legacy_formula_contract();
+		$lines = array();
+		if ( $include_headers ) { $lines[] = implode( "\t", array_map( static fn( array $column ): string => self::clipboard_text( $column['label'] ), $definitions ) ); }
+		foreach ( (array) ( $result['rows'] ?? array() ) as $row ) {
+			$cells = array();
+			foreach ( $definitions as $column ) {
+				$key = $column['key']; $value = $row['columns'][ $key ] ?? null;
+				if ( null === $value ) { $cells[] = ''; continue; }
+				if ( isset( $contracts[ $key ]['denominator'] ) ) {
+					$rational = $row['rational'][ $key ] ?? null;
+					if ( ! is_array( $rational ) || ! isset( $rational['numerator'], $rational['denominator'] ) ) { $cells[] = ''; continue; }
+					try { $cells[] = Ecomkit_Vuikhoe_Exact_Financial_Math::ratio( $rational['numerator'], $rational['denominator'], 18 )['ratio']; }
+					catch ( InvalidArgumentException ) { $cells[] = ''; }
+				} elseif ( Ecomkit_Vuikhoe_Canonical_Columns::is_money( $key ) ) {
+					$cells[] = ( is_int( $value ) || is_string( $value ) ) && 1 === preg_match( '/\A-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\z/D', (string) $value ) ? (string) $value : '';
+				} elseif ( in_array( $key, array( 'order_date', 'vat_issued_date' ), true ) ) {
+					$cells[] = is_string( $value ) && 1 === preg_match( '/\A\d{4}-\d{2}-\d{2}\z/D', $value ) ? $value : '';
+				} else { $cells[] = self::clipboard_text( (string) $value ); }
+			}
+			$lines[] = implode( "\t", $cells );
+		}
+		return implode( "\n", $lines );
+	}
+
+	private static function clipboard_text( string $value ): string {
+		$value = strip_tags( html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+		$value = trim( (string) preg_replace( '/[\x00-\x1F\x7F]+/u', ' ', $value ) );
+		$check = (string) preg_replace( '/\A[\p{Z}\s]+/u', '', $value );
+		return 1 === preg_match( '/\A[=+\-@]/u', $check ) ? "'" . $value : $value;
+	}
+
 	/** @return array<string,int> */
 	public function materialize_batch( int $batch_id ): array {
 		global $wpdb;

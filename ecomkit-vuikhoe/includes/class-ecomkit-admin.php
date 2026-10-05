@@ -67,6 +67,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	}
 
 	public function results_page(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
 		$batch_id = isset( $_GET['batch_id'] ) ? absint( wp_unslash( $_GET['batch_id'] ) ) : 0;
 		$platform = isset( $_GET['platform'] ) && in_array( (string) $_GET['platform'], array( 'SHOPEE', 'LAZADA' ), true ) ? (string) $_GET['platform'] : '';
 		$matching = isset( $_GET['matching'] ) && in_array( (string) $_GET['matching'], array( 'MATCHED', 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING', '__BLANK__' ), true ) ? (string) $_GET['matching'] : '';
