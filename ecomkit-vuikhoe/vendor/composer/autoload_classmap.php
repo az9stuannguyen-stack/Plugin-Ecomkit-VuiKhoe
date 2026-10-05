@@ -48,6 +48,7 @@ return array(
     'Ecomkit_Vuikhoe_Lazada_Lock' => $baseDir . '/includes/class-ecomkit-lazada-lock.php',
     'Ecomkit_Vuikhoe_Lazada_OAuth' => $baseDir . '/includes/class-ecomkit-lazada-oauth.php',
     'Ecomkit_Vuikhoe_Lazada_Order_Client' => $baseDir . '/includes/class-ecomkit-lazada-order-client.php',
+    'Ecomkit_Vuikhoe_Lazada_Order_Diagnostic' => $baseDir . '/includes/class-ecomkit-lazada-order-diagnostic.php',
     'Ecomkit_Vuikhoe_Lazada_Order_Normalizer' => $baseDir . '/includes/class-ecomkit-lazada-order-normalizer.php',
     'Ecomkit_Vuikhoe_Lazada_Order_Query' => $baseDir . '/includes/class-ecomkit-lazada-order-query.php',
     'Ecomkit_Vuikhoe_Lazada_Provider_Exception' => $baseDir . '/includes/class-ecomkit-lazada-http-client.php',

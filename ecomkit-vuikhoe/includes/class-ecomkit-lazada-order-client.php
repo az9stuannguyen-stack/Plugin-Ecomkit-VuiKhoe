@@ -8,11 +8,30 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Client {
 	// Official route known; request/response shape intentionally deferred.
 	public const GET_MULTIPLE_ITEMS = '/orders/items/get';
 	private mixed $transport;
+	private array $evidence = array();
+	/** Safe last-response evidence in memory only; no raw payload/value capture. */
+	public function last_evidence(): array { return $this->evidence; }
+	private static function field_paths( array $data, string $prefix = '', int $depth = 0 ): array {
+		if ( $depth > 6 ) { return array(); }
+		$paths = array();
+		foreach ( $data as $key => $value ) {
+			if ( is_int( $key ) ) { $key = '[]'; } elseif ( 1 !== preg_match( '/^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/D', $key ) ) { continue; }
+			if ( preg_match( '/token|secret|sign|authorization|code$/i', $key ) ) { continue; }
+			$path = '' === $prefix ? $key : $prefix . ( '[]' === $key ? '[]' : '.' . $key ); $paths[] = $path;
+			if ( is_array( $value ) ) { $paths = array_merge( $paths, self::field_paths( $value, $path, $depth + 1 ) ); }
+			$paths = array_values( array_unique( $paths ) ); if ( count( $paths ) >= 128 ) { break; }
+			if ( '[]' === $key ) { break; } // Representative structure, never thousands of paths.
+		}
+		return array_slice( $paths, 0, 128 );
+	}
 	public function __construct( private int $connection_id, private ?Ecomkit_Vuikhoe_Lazada_Token_Service $tokens = null, private ?Ecomkit_Vuikhoe_Lazada_Config $config = null, mixed $transport = null ) {
 		if ( $connection_id < 1 ) { throw new InvalidArgumentException( 'LAZADA_ORDER_CONNECTION_INVALID' ); }
 		$this->tokens ??= new Ecomkit_Vuikhoe_Lazada_Token_Service(); $this->config ??= new Ecomkit_Vuikhoe_Lazada_Config(); $this->transport = $transport ?? 'wp_remote_post';
 	}
-	private function fail( string $code, array $diag ): never { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( $code, $diag ); }
+	private function fail( string $code, array $diag ): never {
+		if ( ! empty( $this->evidence['field_paths'] ) ) { $diag['field_paths'] = $this->evidence['field_paths']; }
+		throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( $code, $diag );
+	}
 	/** Preserve every JSON number lexeme before decode, including decimals and large IDs. */
 	private static function decode( string $body ): array {
 		$lossless = preg_replace_callback( '~"(?:[^"\\\\]|\\\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?(?=\s*[,}\]])~s', static fn( array $m ): string => '"' === $m[0][0] ? $m[0] : '"' . $m[0] . '"', $body );
@@ -21,6 +40,7 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Client {
 		return $data;
 	}
 	private function request( string $path, array $business ): array {
+		$this->evidence = array();
 		$diag = array_merge( array( 'api_path' => $path, 'connection_id' => $this->connection_id, 'http_status' => null, 'provider_code' => '', 'safe_provider_message' => '', 'request_id' => '' ), array_intersect_key( $business, array_flip( array( 'offset', 'limit', 'order_id' ) ) ) );
 		try { $token = $this->tokens->ensure_usable_access_token( $this->connection_id ); $app = $this->config->credentials(); }
 		catch ( Throwable ) { $this->fail( 'LAZADA_ORDER_AUTH_REQUIRED', $diag ); }
@@ -36,6 +56,7 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Client {
 		catch ( Throwable ) { $this->fail( 'LAZADA_ORDER_INVALID_RESPONSE', $diag ); }
 		$secrets = array( $token, $app['app_secret'], $params['sign'] );
 		foreach ( array( 'provider_code' => 'code', 'safe_provider_message' => 'message', 'request_id' => 'request_id' ) as $target => $source ) { $diag[$target] = Ecomkit_Vuikhoe_Lazada_HTTP_Client::safe_text( $data[$source] ?? '', $secrets ); }
+		$this->evidence = array( 'diagnostic' => $diag, 'field_paths' => self::field_paths( $data ) );
 		if ( ! is_string( $data['code'] ?? null ) ) { $this->fail( 'LAZADA_ORDER_INVALID_RESPONSE', $diag ); }
 		if ( '0' !== $data['code'] ) { $this->fail( 'LAZADA_ORDER_PROVIDER_ERROR', $diag ); }
 		if ( ! is_array( $data['data'] ?? null ) ) { $this->fail( 'LAZADA_ORDER_INVALID_RESPONSE', $diag ); }

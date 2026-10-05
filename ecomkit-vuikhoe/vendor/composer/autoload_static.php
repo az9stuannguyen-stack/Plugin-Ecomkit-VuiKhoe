@@ -119,6 +119,7 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         'Ecomkit_Vuikhoe_Lazada_Lock' => __DIR__ . '/../..' . '/includes/class-ecomkit-lazada-lock.php',
         'Ecomkit_Vuikhoe_Lazada_OAuth' => __DIR__ . '/../..' . '/includes/class-ecomkit-lazada-oauth.php',
         'Ecomkit_Vuikhoe_Lazada_Order_Client' => __DIR__ . '/../..' . '/includes/class-ecomkit-lazada-order-client.php',
+        'Ecomkit_Vuikhoe_Lazada_Order_Diagnostic' => __DIR__ . '/../..' . '/includes/class-ecomkit-lazada-order-diagnostic.php',
         'Ecomkit_Vuikhoe_Lazada_Order_Normalizer' => __DIR__ . '/../..' . '/includes/class-ecomkit-lazada-order-normalizer.php',
         'Ecomkit_Vuikhoe_Lazada_Order_Query' => __DIR__ . '/../..' . '/includes/class-ecomkit-lazada-order-query.php',
         'Ecomkit_Vuikhoe_Lazada_Provider_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-lazada-http-client.php',

@@ -1,6 +1,6 @@
-# Lazada authorization and Order client — WP.6J.3A
+# Lazada authorization, Order client and live diagnostic — WP.6J.3B
 
-Plugin 0.7.19, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh and an in-memory Order client are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Live seller authorization and live Order response shape remain unverified. The user explicitly authorized automated-only WP.6J.3A while seller login is unavailable.
+Plugin 0.7.20, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator has confirmed live OAuth ACTIVE/READY; live Order response validation remains PENDING. No real Order request was made from this development workspace.
 
 ## Architecture audit
 
@@ -58,7 +58,7 @@ Official references: [App parameters and privileges](https://open.lazada.com/app
 
 ## Order client contract (automated-only)
 
-`Ecomkit_Vuikhoe_Lazada_Order_Client` is deliberately not registered as an admin action or pipeline stage. Its methods `get_orders(query)`, `get_order(id)`, `get_order_items(id)` use `/orders/get`, `/order/get`, `/order/items/get` at the centralized VN base. `/orders/items/get` is a route constant only: bulk request shape is deferred, not fabricated. There is no live diagnostic button or token input in this stage.
+`Ecomkit_Vuikhoe_Lazada_Order_Client` is not a pipeline stage. Its methods `get_orders(query)`, `get_order(id)`, `get_order_items(id)` use `/orders/get`, `/order/get`, `/order/items/get` at the centralized VN base. `/orders/items/get` is a route constant only: bulk request shape is deferred, not fabricated. WP.6J.3B adds an explicit admin diagnostic around these same methods, not a second client.
 
 The client obtains access through the existing lifecycle, then signs form POST common/business parameters with the existing Lazada signer. HTTP uses TLS verification, no redirect, timeout 20 seconds, 2 MiB response limit and no automatic retries. Tokens/signature/secret never enter request URL or client logs. Diagnostics are allowlisted to API path, connection ID, validated order ID, offset/limit, HTTP status, redacted provider code/message/request ID. Auth failures stop before seller HTTP. Unknown provider errors are not assigned speculative business meanings.
 
@@ -72,6 +72,18 @@ Price/voucher/shipping_fee and item prices are exact validated decimal strings, 
 
 Official references: [Get Order tutorial: query, pagination, shop identity, item statuses and fields](https://open.lazada.com/apps/doc/doc?docId=121327&nodeId=29616), [GetOrders API](https://open.lazada.com/apps/doc/api?path=%2Forders%2Fget), [HTTP requests](https://open.lazada.com/apps/doc/doc?docId=108066&nodeId=10448), [Sensitive Data Privilege / DataMoat](https://open.lazada.com/apps/doc/doc?docId=108297&nodeId=10784). Masked/missing buyer data is not itself OAuth failure.
 
-## Next live gate — WP.6J.3B
+## Live gate — WP.6J.3B procedure
 
-First complete real WP.6J.2 authorization and verify ACTIVE/READY + actual identity path. Then, under controlled admin/developer execution, read GetOrders for a narrow starting date, inspect safe actual response shape, and read one known order plus its items. Confirm dates, IDs, statuses, PII availability, POST compatibility and pagination. Client minimum query currently has no `created_before`; do not pretend it enforces an upper date bound. Do not start automatic exact reconciliation WP.6J.4 until live Order validation passes. WP.7 remains blocked.
+1. Deploy 0.7.20. In Marketplace → Lazada Việt Nam confirm ACTIVE/READY. Optional manual refresh is a separate one-time live check; record whether performed and the resulting lifecycle. Its live result has not been reported yet.
+2. Expand **Kiểm tra Lazada Order API**. Select the connected shop; disconnected/non-usable connections are blocked both in UI and server. Native `manage_options` + AJAX nonce required; no new roles/capabilities. No raw token input.
+3. Choose a known narrow interval (at most 24 hours between input markers; defaults today in WordPress timezone). Click **Kiểm tra danh sách đơn Lazada**. Exactly one seller request reads offset 0, limit 100. IMPORTANT: only `created_after` is sent. End time is a REFERENCE ONLY and NOT enforced by provider; returned orders may lie beyond it. This is a bounded evidence sample, never claimed as a complete date-window reconciliation. Request count reports Order API calls only; lifecycle may additionally refresh a near-expiry token.
+4. Inspect order count, request ID, offset/countTotal, raw statuses and string IDs. If 100 records and more are indicated, manually enter the suggested next offset (100, 200...), only if needed for this live sample. No automatic pagination. At 5000 no next request beyond the bound; split later, never silently drop.
+5. Pick the exact returned Order ID from the text/datalist field and click **Kiểm tra chi tiết đơn** then **Kiểm tra sản phẩm đơn**. Each click uses one existing client call. Order/item IDs never pass through JS Number, float or PHP integer coercion. Same-SKU items remain distinct.
+6. Optionally paste a known Excel marketplace ID in the comparison field. Exact case-sensitive string comparison produces MATCH/NO MATCH; leading zeros matter. The pre-check does not persist matching status or normalize differing IDs into matches.
+7. Save/share only the displayed SAFE structural evidence (not browser network logs). `response_evidence.field_paths` contains representative observed JSON paths, never raw values. This can confirm paths such as `data.orders[].order_id`, `data.statuses[]`, `data[].order_item_id`, `data[].status`, `data.address_shipping.first_name`, monetary fields, `request_id`, `data.countTotal`. These are fixture expectations until seen LIVE; do not report them as production proof beforehand. Invalid normalized shape includes observed paths where decoding succeeded.
+
+The UI displays normalized provider amounts/statuses without interpreting accounting meaning. Shipping PII values are omitted from the diagnostic response; only component availability is shown: AVAILABLE/MASKED/MISSING (`*` indicates masking, presence is not a guarantee of full unmasked access). Buyer name/address missing or masked is not automatically an API failure and may require Sensitive Data Privilege. Item name/SKU is displayed only as returned and escaped as text.
+
+Response lives only in the AJAX response/browser memory; no options/transients, business tables, raw snapshots or canonical rows are written by the diagnostic. Reload clears it. The existing token lifecycle may rotate encrypted credentials as required, which is distinct from order payload persistence. No provider errors are retried blindly, and tokens/secrets/signatures are never displayed/logged by this tool. External web/APM HTTP-body logging must remain disabled/redacted as described above.
+
+Live report must record all three API outcomes, exact identity/status evidence, PII availability, offsets/request count, actual structural paths and one Excel exact comparison. No live Order call/result is available in this workspace yet; do not invent order IDs/statuses. Only after GetOrders/GetOrder/GetOrderItems and secret-safety PASS live may WP.6J.4 begin. WP.7 remains blocked.
