@@ -13,6 +13,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	 */
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
+		add_action( 'admin_post_ecomkit_lazada_save_config', array( $this, 'handle_lazada_save_config' ) );
 		add_action( 'admin_notices', array( $this, 'database_notice' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_test_excel_runtime', array( $this, 'handle_excel_runtime_test' ) );
@@ -324,6 +325,21 @@ final class Ecomkit_Vuikhoe_Admin {
 		}
 		$order_test = null; if ( isset( $_GET['order_test'] ) ) { $reference = sanitize_key( wp_unslash( $_GET['order_test'] ) ); $stored = get_transient( 'ecomkit_shopee_order_test_' . $reference ); delete_transient( 'ecomkit_shopee_order_test_' . $reference ); if ( is_array( $stored ) && (int) ( $stored['user_id'] ?? 0 ) === get_current_user_id() && is_array( $stored['result'] ?? null ) ) { $order_test = $stored['result']; } }
 		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => $encryption->ready(), 'key_source' => $encryption->ready() ? $encryption->key_source_label() : '', 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ), 'oauth_diagnostic' => $oauth_diagnostic, 'order_test' => $order_test ) );
+	}
+
+	/** Application configuration only: POST, capability, nonce and safe PRG feedback. */
+	public function handle_lazada_save_config(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_lazada_save_config', 'ecomkit_lazada_nonce' );
+		try {
+			$key = wp_unslash( $_POST['app_key'] ?? '' );
+			$secret = wp_unslash( $_POST['app_secret'] ?? '' );
+			if ( ! is_string( $key ) || ! is_string( $secret ) ) { throw new InvalidArgumentException(); }
+			( new Ecomkit_Vuikhoe_Lazada_Config() )->save( trim( $key ), $secret );
+			$notice = 'saved';
+		} catch ( Throwable ) { $notice = 'failed'; }
+		wp_safe_redirect( add_query_arg( array( 'page' => 'ecomkit-vuikhoe-marketplace', 'lazada_notice' => $notice ), admin_url( 'admin.php' ) ) );
+		exit;
 	}
 
 	public function handle_shopee_refresh_token(): void {

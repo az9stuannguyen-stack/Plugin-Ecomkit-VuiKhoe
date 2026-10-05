@@ -1,5 +1,18 @@
 <?php defined( 'ABSPATH' ) || exit; $config = $data['shopee_config']; $ready = $data['shopee_readiness']; $key_ui = $data['partner_key_ui']; ?>
 <div class="wrap"><h1><?php echo esc_html__( 'Marketplace', 'ecomkit-vuikhoe' ); ?></h1>
+<?php $lazada = ( new Ecomkit_Vuikhoe_Lazada_Config() )->safe_state(); ?>
+<section style="max-width:900px;padding:20px;background:#fff;border:1px solid #c3c4c7;margin:16px 0">
+<h2>Lazada Việt Nam</h2>
+<p><?php echo esc_html( $lazada['status'] ); ?></p>
+<p>Foundation: chỉ lưu cấu hình ứng dụng. Chưa thực hiện OAuth, lấy đơn hoặc lấy dữ liệu phí.</p>
+<?php if ( isset( $_GET['lazada_notice'] ) ) : ?><p role="status"><?php echo esc_html( 'saved' === (string) $_GET['lazada_notice'] ? 'Đã lưu cấu hình Lazada an toàn.' : 'Không thể lưu cấu hình. Kiểm tra App Key, nhập lại App Secret nếu thay ứng dụng và xác nhận khóa bảo mật WordPress.' ); ?></p><?php endif; ?>
+<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+<input type="hidden" name="action" value="ecomkit_lazada_save_config"><?php wp_nonce_field( 'ecomkit_lazada_save_config', 'ecomkit_lazada_nonce' ); ?>
+<p><label for="ecomkit-lazada-key">App Key</label><br><input id="ecomkit-lazada-key" name="app_key" type="text" value="<?php echo esc_attr( $lazada['app_key'] ); ?>" maxlength="128" required></p>
+<p><label for="ecomkit-lazada-secret">App Secret</label><br><input id="ecomkit-lazada-secret" name="app_secret" type="password" value="" autocomplete="new-password" maxlength="4096"><br><?php echo esc_html( $lazada['secret_status'] ); ?>. Để trống để giữ nguyên; nhập giá trị mới để thay thế.</p>
+<p>Quốc gia: Việt Nam. Kết nối shop sẽ được thực hiện ở bước OAuth tiếp theo.</p>
+<?php submit_button( 'Lưu cấu hình Lazada', 'secondary' ); ?>
+</form></section>
 <?php if ( is_array( $data['oauth_diagnostic'] ?? null ) ) : $oauth_diag = $data['oauth_diagnostic']; ?><div class="notice notice-error inline"><p><strong>Safe OAuth diagnostics</strong></p><table class="widefat striped" style="max-width:760px"><tbody>
 <tr><th>Stage</th><td><code><?php echo esc_html( (string) ( $oauth_diag['stage'] ?? '' ) ); ?></code></td></tr>
 <tr><th>Classification</th><td><code><?php echo esc_html( (string) ( $oauth_diag['classification'] ?? '' ) ); ?></code></td></tr>

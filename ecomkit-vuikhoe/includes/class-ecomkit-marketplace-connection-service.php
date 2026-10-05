@@ -3,6 +3,25 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Marketplace_Connection_Service {
+	/** Safe cross-platform lookup; never returns encrypted credentials to views. */
+	public function list_platform( string $platform ): array {
+		global $wpdb;
+		Ecomkit_Vuikhoe_Marketplace_Platform::validate( $platform );
+		$table = Ecomkit_Vuikhoe_DB::table_names()['marketplace_connections'];
+		return (array) $wpdb->get_results( $wpdb->prepare( "SELECT id, platform, external_shop_id, status, credential_source, updated_at FROM $table WHERE platform = %s ORDER BY id ASC", $platform ), ARRAY_A );
+	}
+	/** Reserve an actual known account identity only; never implies authorization. */
+	public function create_pending( string $platform, string $external_shop_id ): int {
+		global $wpdb;
+		Ecomkit_Vuikhoe_Marketplace_Platform::validate( $platform );
+		if ( '' === $external_shop_id || strlen( $external_shop_id ) > 191 || preg_match( '/[\x00-\x20\x7F]/', $external_shop_id ) ) { throw new InvalidArgumentException( 'ECOMKIT_SHOP_ID_INVALID' ); }
+		$table = Ecomkit_Vuikhoe_DB::table_names()['marketplace_connections'];
+		$id = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $table WHERE platform = %s AND external_shop_id = %s", $platform, $external_shop_id ) );
+		if ( $id ) { return $id; }
+		$now = current_time( 'mysql', true );
+		if ( false === $wpdb->insert( $table, array( 'platform' => $platform, 'external_shop_id' => $external_shop_id, 'status' => 'PENDING_AUTH', 'credential_source' => null, 'credential_envelope' => null, 'metadata' => wp_json_encode( array( 'v' => 1, 'credential_lifecycle' => 'PENDING_AUTH' ) ), 'created_at' => $now, 'updated_at' => $now ) ) ) { throw new RuntimeException( 'ECOMKIT_CONNECTION_PERSIST_FAILED' ); }
+		return (int) $wpdb->insert_id;
+	}
 	public function __construct( private ?Ecomkit_Vuikhoe_Credential_Encryption $encryption = null, private ?Ecomkit_Vuikhoe_Credential_Mutation_Lock $lock = null ) { $this->encryption ??= new Ecomkit_Vuikhoe_Credential_Encryption(); $this->lock ??= new Ecomkit_Vuikhoe_Credential_Mutation_Lock(); }
 	private function aad( string $shop_id ): string { return 'ecomkit|shopee|shop:' . $shop_id; }
 
