@@ -10,9 +10,9 @@ $payment = array( 'marketplaceOrderId' => $id, 'orderSellingPrice' => 312000, 'v
 $base = array( 'platform' => 'SHOPEE', 'matching_status' => 'MATCHED', 'marketplace_order_id' => $id, 'product_price_vat_8' => null, 'affiliate_fee_vuikhoe' => null, 'discount_vuikhoe' => null, 'payment_normalized_data' => json_encode( $payment ) );
 $m = new Ecomkit_Vuikhoe_Canonical_Result_Materializer();
 $fallback = $m->materialize( $base );
-price_check( 'v7' === $fallback['version'] && 24 === count( $fallback['columns'] ), 'Canonical shape/version failed.' );
+price_check( 'v8' === $fallback['version'] && 24 === count( $fallback['columns'] ), 'Canonical shape/version failed.' );
 price_check( '312000' === $fallback['columns']['product_price_vat_8'] && 'SHOPEE_OPENAPI_PAYMENT/order_selling_price' === $fallback['source_metadata']['productPrice']['source'], 'Provider fallback/provenance failed.' );
-price_check( null === $fallback['columns']['discount_vuikhoe'] && null === $fallback['columns']['service_platform_fee'] && null === $fallback['columns']['discount_percent_vuikhoe'] && null === $fallback['columns']['platform_cost_percent'], 'Shopee buyer voucher or missing internal operands leaked.' );
+price_check( '17160' === $fallback['columns']['discount_vuikhoe'] && '5700' === $fallback['columns']['service_platform_fee'] && null === $fallback['columns']['discount_percent_vuikhoe'] && '75900' === $fallback['rational']['platform_cost_percent']['numerator'], 'Service-derived voucher or missing Affiliate gate failed.' );
 price_check( 51480 === $fallback['columns']['fixed_platform_fee'] && 18720 === $fallback['columns']['transaction_platform_fee'] && 218940 === $fallback['columns']['total_amount_to_collect'], 'Payment direct mapping/escrow failed.' );
 $excel = $base; $excel['product_price_vat_8'] = '310000';
 $priority = $m->materialize( $excel );
@@ -27,5 +27,5 @@ $trusted = $base; $trusted['affiliate_fee_vuikhoe'] = '0'; $trusted['discount_vu
 $trusted['raw_source_metadata'] = json_encode( array( 'source' => 'EXCEL', 'discount_vuikhoe_source' => 'Voucher Xtra' ) );
 $golden = $m->materialize( $trusted );
 price_check( '5700' === $golden['columns']['service_platform_fee'] && '0.055' === $golden['columns']['discount_percent_vuikhoe'] && '75900' === $golden['rational']['platform_cost_percent']['numerator'] && '93060' === $golden['rational']['total_cost_percent']['numerator'], 'Trusted discount golden formula failed.' );
-price_check( 'EXCEL/Voucher Xtra' === $golden['source_metadata']['discountVuikhoe']['source'] && 'NULL_NO_VERIFIED_SOURCE' === $fallback['source_metadata']['discountVuikhoe']['source'], 'Discount provenance/NULL source failed.' );
+price_check( 'EXCEL/Voucher Xtra' === $golden['source_metadata']['discountVuikhoe']['source'] && 'SHOPEE_OPENAPI_PAYMENT_DERIVED/serviceFee-minus-infrastructure' === $fallback['source_metadata']['discountVuikhoe']['source'], 'Discount provenance failed.' );
 echo "WP.6H.3B Shopee product fallback: PASS\n";

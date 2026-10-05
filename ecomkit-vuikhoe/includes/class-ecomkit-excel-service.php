@@ -179,6 +179,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 				}
 			}
 			$discount_source = null;
+			$discount_conflict = false;
 			$discount_values = array();
 			foreach ( array( 'Chiết Khấu (Vui Khỏe)', self::DISCOUNT_ALIAS ) as $label ) {
 				if ( ! isset( $columns[ $label ] ) ) { continue; }
@@ -190,12 +191,13 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 				if ( null !== $parsed_discount['value'] ) { $discount_values[ $label ] = $parsed_discount['value']; }
 			}
 			if ( 2 === count( $discount_values ) && 0 !== Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $discount_values['Chiết Khấu (Vui Khỏe)'], $discount_values[ self::DISCOUNT_ALIAS ] ) ) {
+				$discount_conflict = true;
 				$errors[] = $this->row_error( 'DISCOUNT_VUIKHOE_SOURCE_CONFLICT', sprintf( 'Hai nguồn Chiết Khấu Vui Khỏe ở dòng %d không trùng nhau.', $row_number ), 'Giữ một cột chiết khấu hoặc sửa hai giá trị cho trùng nhau.', $sheet->getTitle(), $row_number, null, array(), 'Chiết Khấu (Vui Khỏe)' );
 			} elseif ( $discount_values ) {
 				$discount_source = array_key_first( $discount_values );
 				$internal['discount_vuikhoe'] = $discount_values[ $discount_source ];
 			}
-			$orders[] = array_merge( array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'eshop_order_code' => isset( $columns['Mã đơn hàng eShop'] ) ? $this->column_text( $row['cells'], $columns, 'Mã đơn hàng eShop' ) : null, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'discount_vuikhoe_source' => $discount_source, 'items' => array() ), $internal );
+			$orders[] = array_merge( array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'eshop_order_code' => isset( $columns['Mã đơn hàng eShop'] ) ? $this->column_text( $row['cells'], $columns, 'Mã đơn hàng eShop' ) : null, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'discount_vuikhoe_source' => $discount_source, 'discount_vuikhoe_conflict' => $discount_conflict, 'items' => array() ), $internal );
 			$current_index = array_key_last( $orders );
 			$platform_counts[ $parsed['platform'] ] = ( $platform_counts[ $parsed['platform'] ] ?? 0 ) + 1;
 			if ( 'VALID_ITEM' === $product_structure ) {

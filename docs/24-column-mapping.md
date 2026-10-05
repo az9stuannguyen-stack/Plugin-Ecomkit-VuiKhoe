@@ -10,6 +10,8 @@
 
 > WP.6H.3C: `Voucher Xtra` là alias Excel chính xác của `Chiết Khấu (Vui Khỏe)`, cùng lưu `orders.discount_vuikhoe`; không thêm cột. Hai header có giá trị khác nhau tạo `DISCOUNT_VUIKHOE_SOURCE_CONFLICT` và lưu NULL; cùng giá trị chỉ ghi một lần. Giá trị âm không hợp lệ, 0 hợp lệ, blank là NULL. `source_metadata.discountVuikhoe` giữ `EXCEL/<header>` hoặc `NULL_NO_VERIFIED_SOURCE`. Result hiển thị tỷ lệ 2 chữ số theo HALF-UP exact rational, không đổi ratio canonical v7.
 
+> WP.6H.3D / canonical v8: quy tắc nghiệp vụ Shopee VN do operator xác nhận dùng một hằng số hạ tầng 3000 VND. `serviceFee=0` ⇒ hạ tầng/Voucher Xtra = 0; `serviceFee≥3000` ⇒ hạ tầng 3000 và Voucher Xtra = `serviceFee−3000`; `0<serviceFee<3000` hoặc âm ⇒ `SHOPEE_SERVICE_FEE_UNEXPECTED`, không suy đoán. Chiết Khấu VK ưu tiên Excel, sau đó mới nhận Voucher Xtra suy ra từ Payment OpenAPI đúng đơn; giá Excel khác giá suy ra được giữ và ghi discrepancy. Phí dịch vụ = hạ tầng + PiShip thực, không phụ thuộc Excel discount; PiShip thiếu ⇒ NULL. Excel hai header xung đột vẫn chặn fallback, kể cả rematerialize từ raw của Batch cũ. `voucher_from_shopee` không tham gia. Source/provenance là derived business rule, không phải trường Voucher Xtra trực tiếp của OpenAPI. Snapshot v1–v7 stale; không DB migration/API mới.
+
 ## WP.6H — Exact Financial Formula Engine (hiện hành)
 
 Canonical `v5` giữ đúng 24 scalar columns. Công thức legacy đã duyệt hoạt động tự động khi tất cả toán hạng của **từng công thức** có nguồn: `% Tổng Chi Phí=(L+M+N+I+J)/F`, `% Chiết Khấu Vui Khỏe=(I+J)/F`, `% Chi Phí Sàn TMĐT=(L+M+N)/F`; tỷ lệ lưu dưới dạng ratio, không nhân 100. F là Giá SP VAT 8%, I/J là hai field nội bộ Excel, L/M/N là ba phí Payment Shopee đã duyệt. NULL không phải 0; riêng F=0 làm ba tỷ lệ NULL với trạng thái `ZERO_DIVISOR`. Thiếu I/J không cản tỷ lệ phí sàn nếu F/L/M/N đầy đủ.
@@ -68,10 +70,10 @@ Snapshot `v1`/`v2`/`v3` trở thành stale, materialize lại từ Orders đã l
 | 16 | % Tổng Chi Phí | `total_cost_percent` | ratio string + exact rational metadata | `(L+M+N+I+J)/F` khi đủ nguồn | Không dùng float | Trống nếu thiếu toán hạng hoặc F=0 |
 | 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal string/source value | `escrowAmountAfterAdjustment` > `escrowAmount` > `F-(L+M+N+I+J)` khi đủ nguồn | Không suy từ buyerTotalAmount | NULL nếu cả hai Escrow và toàn bộ công thức thiếu |
 | 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.affiliate_fee_vuikhoe` | Không dùng Shopee Affiliate | Trống nếu thiếu/không hợp lệ |
-| 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.discount_vuikhoe` | Không dùng Shopee voucher/discount | Trống nếu thiếu/không hợp lệ |
+| 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | Excel cùng tên/`Voucher Xtra`, kế tiếp Shopee Payment `serviceFee−3000` theo rule v8 | Không dùng `voucher_from_shopee`; xung đột Excel chặn fallback | NULL khi cả hai nguồn thiếu/không hợp lệ |
 | 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | ratio string + exact rational metadata | `(I+J)/F` khi đủ nguồn | Không dùng Shopee Affiliate | Trống nếu thiếu toán hạng hoặc F=0 |
 | 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `commissionFee` | Trực tiếp, không tính | NULL nếu thiếu |
-| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | Shopee Payment + Excel: `serviceFee + shippingSellerProtectionFeeAmount − discount_vuikhoe` | Exact v6 reclassification | NULL nếu thiếu nguồn/âm cần review |
+| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | Shopee Payment derived: hạ tầng theo `serviceFee` + `shippingSellerProtectionFeeAmount` | Exact v8 component model | NULL nếu thiếu PiShip/hạ tầng hoặc âm cần review |
 | 23 | Phí Giao Dịch (TMĐT) | `transaction_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `sellerTransactionFee` | Trực tiếp, không tính | NULL nếu thiếu |
 | 24 | % Chi Phí Sàn TMĐT | `platform_cost_percent` | ratio string + exact rational metadata | `(L+M+N)/F` khi đủ nguồn | Không chế phí Lazada | Trống nếu thiếu toán hạng hoặc F=0 |
 

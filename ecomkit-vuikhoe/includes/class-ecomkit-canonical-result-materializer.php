@@ -1,9 +1,10 @@
 <?php
-/** Pure deterministic projection from persisted Order evidence to canonical v7. */
+/** Pure deterministic projection from persisted Order evidence to canonical v8. */
 
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
+	private const SHOPEE_VN_INFRASTRUCTURE_FEE = '3000';
 	public function __construct( private ?DateTimeZone $timezone = null ) {
 		$this->timezone ??= new DateTimeZone( 'UTC' );
 	}
@@ -39,11 +40,12 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 		}
 		$source_metadata['productPrice'] = array( 'source' => null === $values['product_price_vat_8'] ? 'NULL_NO_VERIFIED_SOURCE' : 'EXCEL' );
 		$raw_excel = $this->decode_provider( $order['raw_source_metadata'] ?? null );
+		$discount_conflict = ! empty( $raw_excel['discount_vuikhoe_conflict'] ) || $this->legacy_excel_discount_conflict( $raw_excel );
 		$discount_label = $raw_excel['discount_vuikhoe_source'] ?? null;
 		if ( null !== $values['discount_vuikhoe'] ) {
 			if ( ! in_array( $discount_label, array( 'Chiết Khấu (Vui Khỏe)', 'Voucher Xtra' ), true ) ) { $discount_label = 'Chiết Khấu (Vui Khỏe)'; }
 			$source_metadata['discountVuikhoe'] = array( 'source' => 'EXCEL/' . $discount_label );
-		} else { $source_metadata['discountVuikhoe'] = array( 'source' => 'NULL_NO_VERIFIED_SOURCE' ); }
+		} else { $source_metadata['discountVuikhoe'] = array( 'source' => $discount_conflict ? 'EXCEL_SOURCE_CONFLICT' : 'NULL_NO_VERIFIED_SOURCE' ); }
 		$values['vat_issued_date'] = $this->vat_date( $order['vat_issued_date'] ?? null );
 		$values['note'] = $this->scalar( $order['note'] ?? null );
 		if ( $matched ) {
@@ -72,17 +74,39 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 				$raw_payment = $this->decode_provider( $order['payment_raw_data'] ?? null );
 				$raw_income = (string) ( $raw_payment['order_sn'] ?? '' ) === (string) ( $order['marketplace_order_id'] ?? '' ) && is_array( $raw_payment['order_income'] ?? null ) ? $raw_payment['order_income'] : array();
 				// Old Payment snapshots lack the normalized PiShip key; use only the identity-checked persisted raw field.
-				$piship = $this->payment_number( $payment['shippingSellerProtectionFeeAmount'] ?? $raw_income['shipping_seller_protection_fee_amount'] ?? null );
+				$piship = $this->exact_payment_number( $payment['shippingSellerProtectionFeeAmount'] ?? $raw_income['shipping_seller_protection_fee_amount'] ?? null );
 				$provider_service = $this->exact_payment_number( $payment['serviceFee'] ?? null );
-				$discount = $values['discount_vuikhoe'];
-				$source_metadata['serviceFeeReclassification'] = array( 'version' => 'v1', 'providerServiceFee' => $provider_service, 'shippingSellerProtectionFeeAmount' => $piship, 'vuiKhoeDiscount' => $discount, 'canonicalServiceFee' => null, 'status' => 'MISSING_OPERANDS' );
+				$infrastructure = null;
+				$voucher_xtra = null;
+				if ( null !== $provider_service ) {
+					if ( Ecomkit_Vuikhoe_Exact_Financial_Math::is_zero( $provider_service ) ) {
+						$infrastructure = '0'; $voucher_xtra = '0';
+					} elseif ( Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $provider_service, self::SHOPEE_VN_INFRASTRUCTURE_FEE ) >= 0 ) {
+						$infrastructure = self::SHOPEE_VN_INFRASTRUCTURE_FEE;
+						$voucher_xtra = Ecomkit_Vuikhoe_Exact_Financial_Math::subtract( $provider_service, $infrastructure );
+					} else {
+						$source_metadata['shopeeServiceFeeDiagnostic'] = 'SHOPEE_SERVICE_FEE_UNEXPECTED';
+					}
+				}
+				if ( null !== $voucher_xtra ) {
+					if ( null === $values['discount_vuikhoe'] && ! $discount_conflict ) {
+						$values['discount_vuikhoe'] = $voucher_xtra;
+						$source_metadata['discountVuikhoe']['source'] = 'SHOPEE_OPENAPI_PAYMENT_DERIVED/serviceFee-minus-infrastructure';
+					} elseif ( null !== $values['discount_vuikhoe'] && Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $values['discount_vuikhoe'], $voucher_xtra ) !== 0 ) {
+						$source_metadata['discountVuikhoe']['discrepancy'] = array( 'excel_discount' => $values['discount_vuikhoe'], 'derived_voucher_xtra' => $voucher_xtra );
+					}
+				}
+				$source_metadata['serviceFeeReclassification'] = array( 'version' => 'v2', 'providerServiceFee' => $provider_service, 'infrastructureFee' => $infrastructure, 'derivedVoucherXtra' => $voucher_xtra, 'shippingSellerProtectionFeeAmount' => $piship, 'vuiKhoeDiscount' => $values['discount_vuikhoe'], 'source' => 'SHOPEE_OPENAPI_PAYMENT_DERIVED/infrastructure-plus-piship', 'canonicalServiceFee' => null, 'status' => 'MISSING_OPERANDS' );
 				$missing_service = array();
 				if ( null === $provider_service ) { $missing_service[] = 'providerServiceFee'; }
-				if ( null === $piship || null === $this->exact_payment_number( $piship ) ) { $missing_service[] = 'shippingSellerProtectionFeeAmount'; }
-				if ( null === $discount ) { $missing_service[] = 'discount_vuikhoe'; }
-				if ( $missing_service ) { $formula_states['service_platform_fee'] = array( 'status' => 'MISSING_OPERANDS', 'fields' => $missing_service ); }
+				if ( null === $piship ) { $missing_service[] = 'shippingSellerProtectionFeeAmount'; }
+				if ( null === $infrastructure && null !== $provider_service ) { $missing_service[] = 'infrastructureFee'; }
+				if ( null === $infrastructure && null !== $provider_service ) {
+					$source_metadata['serviceFeeReclassification']['status'] = 'SHOPEE_SERVICE_FEE_UNEXPECTED';
+					$formula_states['service_platform_fee'] = array( 'status' => 'SHOPEE_SERVICE_FEE_UNEXPECTED', 'fields' => array( 'providerServiceFee' ) );
+				} elseif ( $missing_service ) { $formula_states['service_platform_fee'] = array( 'status' => 'MISSING_OPERANDS', 'fields' => $missing_service ); }
 				else {
-					$corrected = Ecomkit_Vuikhoe_Exact_Financial_Math::subtract( Ecomkit_Vuikhoe_Exact_Financial_Math::add( $provider_service, $piship ), $discount );
+					$corrected = Ecomkit_Vuikhoe_Exact_Financial_Math::add( $infrastructure, $piship );
 					$source_metadata['serviceFeeReclassification']['calculatedServiceFee'] = $corrected;
 					if ( Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $corrected, '0' ) < 0 ) {
 						$source_metadata['serviceFeeReclassification']['status'] = 'SERVICE_FEE_NEGATIVE_REVIEW';
@@ -208,6 +232,21 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 	private function internal_money( mixed $value ): ?string {
 		if ( is_int( $value ) ) { $value = (string) $value; }
 		return is_string( $value ) && 1 === preg_match( '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]{1,4})?$/D', $value ) ? $value : null;
+	}
+
+	/** Preserve an Excel conflict when rematerializing a pre-v8 import that lacks the explicit marker. */
+	private function legacy_excel_discount_conflict( array $raw ): bool {
+		$map = $raw['column_map'] ?? null; $cells = $raw['cells'] ?? null;
+		if ( ! is_array( $map ) || ! is_array( $cells ) || ! isset( $map['Chiết Khấu (Vui Khỏe)'], $map['Voucher Xtra'] ) ) { return false; }
+		$values = array();
+		foreach ( array( 'Chiết Khấu (Vui Khỏe)', 'Voucher Xtra' ) as $label ) {
+			$text = trim( (string) ( $cells[ (string) $map[ $label ] ] ?? '' ) );
+			if ( 1 === preg_match( '/^-?[1-9][0-9]{0,2}(?:,[0-9]{3})+(?:\.[0-9]{1,4})?$/D', $text ) ) { $text = str_replace( ',', '', $text ); }
+			$number = $this->internal_money( $text );
+			if ( null === $number ) { return false; }
+			$values[] = $number;
+		}
+		return Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $values[0], $values[1] ) !== 0;
 	}
 
 	private function vat_date( mixed $value ): ?string {

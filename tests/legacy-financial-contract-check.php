@@ -8,7 +8,7 @@ function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return j
 function contract_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 
 $columns = Ecomkit_Vuikhoe_Canonical_Columns::all();
-contract_check( 24 === count( $columns ) && 'v7' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
+contract_check( 24 === count( $columns ) && 'v8' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
 $contract = Ecomkit_Vuikhoe_Canonical_Columns::legacy_formula_contract();
 $fees = array( 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
 $all = array_merge( $fees, array( 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ) );
@@ -55,7 +55,7 @@ contract_check( null === $result['columns']['difference_amount'], 'Broken differ
 unset( $order['payment_normalized_data'] );
 $without_payment = $materializer->materialize( $order );
 contract_check( null === $without_payment['columns']['total_amount_to_collect'], 'Legacy fallback was activated without verified platform fees.' );
-contract_check( 24 === count( $result['columns'] ) && 'v7' === $result['version'], 'Result contract changed.' );
+contract_check( 24 === count( $result['columns'] ) && 'v8' === $result['version'], 'Result contract changed.' );
 $math = Ecomkit_Vuikhoe_Exact_Financial_Math::class;
 $complete = $order;
 $complete['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => 50265, 'serviceFee' => 15108, 'shippingSellerProtectionFeeAmount' => 0, 'sellerTransactionFee' => 18481, 'affiliateCommissionFee' => 5000 ) );
@@ -76,7 +76,7 @@ $missing_result = $materializer->materialize( $missing_affiliate );
 contract_check( null === $missing_result['columns']['total_cost_percent'] && null === $missing_result['columns']['discount_percent_vuikhoe'] && null === $missing_result['columns']['total_amount_to_collect'] && null !== $missing_result['columns']['platform_cost_percent'], 'Missing affiliate blocked an independent platform ratio or became zero.' );
 $missing_discount = $complete; $missing_discount['discount_vuikhoe'] = null;
 $missing_result = $materializer->materialize( $missing_discount );
-contract_check( null === $missing_result['columns']['total_cost_percent'] && null === $missing_result['columns']['discount_percent_vuikhoe'] && null === $missing_result['columns']['total_amount_to_collect'] && null === $missing_result['columns']['platform_cost_percent'], 'Missing discount dependencies failed.' );
+contract_check( '12108' === $missing_result['columns']['discount_vuikhoe'] && '224146' === $missing_result['columns']['total_amount_to_collect'] && '83854' === $missing_result['rational']['total_cost_percent']['numerator'], 'Service-derived discount fallback failed.' );
 $missing_fee = $complete; $missing_fee['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => 50265, 'sellerTransactionFee' => 18481 ) );
 $missing_result = $materializer->materialize( $missing_fee );
 contract_check( null === $missing_result['columns']['total_cost_percent'] && null === $missing_result['columns']['platform_cost_percent'] && null === $missing_result['columns']['total_amount_to_collect'] && null !== $missing_result['columns']['discount_percent_vuikhoe'], 'Missing marketplace fee dependencies failed.' );
