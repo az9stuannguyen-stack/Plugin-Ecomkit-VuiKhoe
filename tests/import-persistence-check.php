@@ -3,7 +3,7 @@
 declare(strict_types=1);
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.4' );
-define( 'ECOMKIT_VUIKHOE_DB_VERSION', 8 );
+define( 'ECOMKIT_VUIKHOE_DB_VERSION', 9 );
 define( 'ARRAY_A', 'ARRAY_A' );
 function wp_max_upload_size(): int { return 20 * 1024 * 1024; }
 function size_format( int $bytes ): string { return (string) $bytes; }

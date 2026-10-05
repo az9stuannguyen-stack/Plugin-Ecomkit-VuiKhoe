@@ -1,7 +1,7 @@
 <?php
 /** WP.6H.2S: synthetic persisted-state projection; zero provider calls/writes. */
 declare(strict_types=1);
-define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' ); define( 'ARRAY_A', 'ARRAY_A' ); define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.6' );
+define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' ); define( 'ARRAY_A', 'ARRAY_A' ); define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.7' );
 function state_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 function wp_remote_post(): never { throw new RuntimeException( 'PROVIDER_CALLED' ); }
 function wp_remote_get(): never { throw new RuntimeException( 'PROVIDER_CALLED' ); }
@@ -39,6 +39,9 @@ state_check( str_contains( $waiting['auto_pipeline']['scheduled_step_current'], 
 $failed = $queued; $failed['auto_pipeline']['status'] = 'WARNING'; $failed['auto_pipeline']['warnings'] = array( 'SHOPEE_RECON_NETWORK_ERROR' ); $failed['auto_pipeline']['reconciliation_block_reason'] = 'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL'; $failed['auto_pipeline']['reconcile_inflight'] = true;
 $failure = Ecomkit_Vuikhoe_Batch_State_Audit::project( $batch, $failed );
 state_check( true === $failure['diagnostic_interpretation_inputs']['reconciliation_started'] && true === $failure['diagnostic_interpretation_inputs']['terminal_reason_present'] && ! $failure['diagnostic_interpretation_inputs']['provider_request_evidence_present'], 'Provider-failure evidence overclaimed a request.' );
+$failed['shopee_reconciliation_persist_diagnostic'] = array( 'operation' => 'ORDER_CONNECTION_UPDATE', 'table' => 'orders', 'error_classification' => 'DUPLICATE_KEY', 'failure_code' => 'SHOPEE_RECON_PERSIST_FAILED', 'payload_bytes' => 0, 'timestamp' => '2026-10-05 10:00:00', 'db_sql' => 'PRIVATE_SQL' );
+$local_failure = Ecomkit_Vuikhoe_Batch_State_Audit::project( $batch, $failed );
+state_check( 'DUPLICATE_KEY' === $local_failure['shopee_reconciliation']['local_persistence_diagnostic']['error_classification'] && ! str_contains( json_encode( $local_failure ), 'PRIVATE_SQL' ), 'Safe local persistence diagnostic was dropped or exposed SQL.' );
 $paged = $queued; $paged['auto_pipeline']['reconcile_continuation'] = array( 'cursor' => 'SECRET_CURSOR', 'provider_ids' => array( 'A' => true, 'B' => true ), 'page_count' => 2, 'request_ids' => array( 'safe_req_1' ), 'access_token' => 'PRIVATE_TOKEN' );
 $page = Ecomkit_Vuikhoe_Batch_State_Audit::project( $batch, $paged );
 state_check( true === $page['auto_pipeline']['cursor_present'] && 2 === $page['auto_pipeline']['accumulated_provider_order_count'] && 2 === $page['auto_pipeline']['page_count'] && true === $page['diagnostic_interpretation_inputs']['provider_request_evidence_present'], 'Pagination evidence lost.' );

@@ -241,3 +241,7 @@ Plugin 0.7.5 / DB 8 / canonical v6: chặn `RESULT_READY` và 100% khi còn đơ
 # WP.6H.2S — safe production state export; evidence pending
 
 Plugin 0.7.6 / DB 8 / canonical v6: admin có thể xuất JSON allowlist của trạng thái Batch, đối chiếu theo cửa sổ, dấu vết request và ảnh chụp kết nối/Cron hiện tại. Không có provider call, ghi business data hay suy diễn trường thiếu. Tiếp theo thu JSON riêng của Batch #23–#25 để định vị nguyên nhân production; chưa triển khai WP.6I/WP.7.
+
+# WP.6H.2T — reconciliation persistence repair; live retest pending
+
+Plugin 0.7.7 / DB 9 / canonical v6: Batch #27 cho thấy lỗi lưu đối chiếu cục bộ. Khóa UNIQUE cũ không cho phép reimport cùng mã sàn/shop qua các Batch; migration không xóa hàng đổi sang khóa theo Batch. Lỗi DB/JSON được phân loại local, chẩn đoán an toàn được giữ riêng, không gắn nhãn provider. Test migration, 10.000 ID metadata và pipeline regression PASS; cần triển khai, xác nhận migration và upload lại đúng một file lịch sử để kết luận live. WP.6I/WP.7 chưa bắt đầu.

@@ -256,3 +256,7 @@ Plugin 0.7.5 / schema 8 / canonical v6. `auto_pipeline` là trạng thái thẩm
 # WP.6H.2S — read-only Batch state evidence
 
 Plugin 0.7.6 / schema 8 / canonical v6. Admin POST/AJAX chỉ đọc Batch được chọn, allowlist `source_metadata.auto_pipeline` và `shopee_reconciliation`, cùng kết nối và sự kiện Cron **hiện tại**. JSON không chứa raw metadata, cursor thô, token/envelope, PII hoặc response provider. Khóa thiếu giữ `NOT_PRESENT`; không backfill. Không gọi provider, không ghi DB, không đổi business workflow. Công cụ nằm trong phần quản trị nâng cao, dành để phân tích Batch production #23–#25 riêng lẻ.
+
+# WP.6H.2T — Batch-scoped Shopee order identity
+
+Plugin 0.7.7 / schema 9 / canonical v6. Schema cũ đặt UNIQUE `connection_order(connection_id, marketplace_order_id)`, mâu thuẫn với việc cùng đơn sàn xuất hiện trong nhiều lần upload; `persist()` đặt `connection_id` trước các cập nhật khác nên UPDATE đầu tiên có thể va khóa. Migration InnoDB đổi index bằng một ALTER thành UNIQUE `(batch_id, connection_id, marketplace_order_id)`, kiểm tra lại index/số hàng và không xóa business rows. Batch `source_metadata` là LONGTEXT; không đổi cột. `persist()` rollback khi lỗi, lưu chẩn đoán allowlist sau rollback nếu có thể, tách lỗi local encode/DB khỏi lỗi provider. Không tự retry provider sau kết quả request không rõ; phải kiểm tra Batch mới sau triển khai.

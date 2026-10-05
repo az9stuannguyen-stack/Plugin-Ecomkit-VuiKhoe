@@ -9,6 +9,7 @@ final class Ecomkit_Vuikhoe_Batch_State_Audit {
 	private const RECON_KEYS = array( 'connection_id', 'shop_id', 'started_at', 'completed_at', 'provider_windows_executed', 'shopee_api_calls', 'excel_shopee_count', 'provider_count', 'matched_count', 'missing_count', 'extra_count', 'detail_count', 'detail_missing_count', 'missing_date_count', 'status', 'total_windows', 'next_window_offset', 'classification', 'request_contract_fingerprint', 'provider_error', 'safe_provider_message', 'http_status', 'request_id', 'api_path' );
 	private const WINDOW_KEYS = array( 'connection_id', 'shop_reference', 'time_range_field', 'start_date', 'end_date', 'time_from', 'time_to', 'status', 'list_request_success', 'pagination_complete', 'page_count', 'excel_count', 'provider_count', 'intersection_count', 'request_contract_fingerprint', 'provider_error', 'safe_provider_message', 'http_status', 'request_id', 'api_path' );
 	private const SET_KEYS = array( 'excel_order_ids', 'provider_order_ids', 'intersection', 'missing_in_provider', 'extra_in_provider' );
+	private const PERSIST_KEYS = array( 'operation', 'table', 'column', 'error_classification', 'failure_code', 'payload_bytes', 'json_error', 'timestamp' );
 
 	public function inspect_batch( int $batch_id ): array {
 		if ( $batch_id < 1 ) { throw new InvalidArgumentException( 'BATCH_STATE_ID_INVALID' ); }
@@ -50,6 +51,7 @@ final class Ecomkit_Vuikhoe_Batch_State_Audit {
 		$summary = self::fields( $recon, self::RECON_KEYS );
 		$summary['extra_order_sns'] = self::order_ids( $recon['extra_order_sns'] ?? null );
 		$summary['windows'] = array();
+		$summary['local_persistence_diagnostic'] = self::fields( is_array( $metadata['shopee_reconciliation_persist_diagnostic'] ?? null ) ? $metadata['shopee_reconciliation_persist_diagnostic'] : array(), self::PERSIST_KEYS );
 		foreach ( (array) ( $recon['windows'] ?? array() ) as $window ) {
 			if ( ! is_array( $window ) ) { continue; }
 			$entry = self::fields( $window, self::WINDOW_KEYS );

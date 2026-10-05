@@ -54,6 +54,7 @@ final class Ecomkit_Vuikhoe_DB {
 		if ( $before['tables_ok'] ) {
 			self::migrate_tables_to_innodb();
 			self::migrate_orders_contract();
+			self::migrate_connection_order_index();
 			self::migrate_provider_evidence_columns();
 			self::migrate_canonical_result_columns();
 			self::migrate_payment_columns();
@@ -73,6 +74,7 @@ final class Ecomkit_Vuikhoe_DB {
 		}
 
 		self::migrate_tables_to_innodb();
+		self::migrate_connection_order_index();
 		if ( ! self::database_runtime_diagnostic()['ready'] ) {
 			update_option( self::INSTALL_ERROR_OPTION, 'ECOMKIT_DB_INNODB_MIGRATION_FAILED', false );
 			throw new RuntimeException( 'ECOMKIT_DB_INNODB_MIGRATION_FAILED' );
@@ -262,6 +264,29 @@ final class Ecomkit_Vuikhoe_DB {
 		}
 
 		return array( 'altered' => $altered, 'counts' => $after );
+	}
+
+	/** Preserve historical re-import rows while making shop/order uniqueness Batch-scoped. */
+	public static function migrate_connection_order_index(): bool {
+		global $wpdb;
+		$tables = self::table_names();
+		$orders = self::safe_table_identifier( $tables['orders'], $tables );
+		$indexes = $wpdb->get_results( "SHOW INDEX FROM `$orders`", ARRAY_A );
+		$parts = array();
+		foreach ( is_array( $indexes ) ? $indexes : array() as $index ) {
+			if ( 'connection_order' === (string) ( $index['Key_name'] ?? '' ) ) { $parts[ (int) ( $index['Seq_in_index'] ?? 0 ) ] = (string) ( $index['Column_name'] ?? '' ); }
+		}
+		ksort( $parts );
+		if ( array_values( $parts ) === array( 'batch_id', 'connection_id', 'marketplace_order_id' ) ) { return false; }
+		if ( array_values( $parts ) !== array( 'connection_id', 'marketplace_order_id' ) ) { throw new RuntimeException( 'ECOMKIT_CONNECTION_ORDER_INDEX_UNEXPECTED' ); }
+		$before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$orders`" );
+		if ( false === $wpdb->query( "ALTER TABLE `$orders` DROP INDEX `connection_order`, ADD UNIQUE KEY `connection_order` (`batch_id`,`connection_id`,`marketplace_order_id`)" ) ) { throw new RuntimeException( 'ECOMKIT_CONNECTION_ORDER_INDEX_MIGRATION_FAILED' ); }
+		$after = $wpdb->get_results( "SHOW INDEX FROM `$orders`", ARRAY_A );
+		$columns = array();
+		foreach ( is_array( $after ) ? $after : array() as $index ) { if ( 'connection_order' === (string) ( $index['Key_name'] ?? '' ) ) { $columns[ (int) ( $index['Seq_in_index'] ?? 0 ) ] = (string) ( $index['Column_name'] ?? '' ); } }
+		ksort( $columns );
+		if ( array_values( $columns ) !== array( 'batch_id', 'connection_id', 'marketplace_order_id' ) || $before !== (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$orders`" ) ) { throw new RuntimeException( 'ECOMKIT_CONNECTION_ORDER_INDEX_VERIFY_FAILED' ); }
+		return true;
 	}
 
 	/**
@@ -635,7 +660,7 @@ final class Ecomkit_Vuikhoe_DB {
 	created_at datetime NOT NULL,
 	updated_at datetime NOT NULL,
 	PRIMARY KEY  (id),
-	UNIQUE KEY connection_order (connection_id,marketplace_order_id),
+	UNIQUE KEY connection_order (batch_id,connection_id,marketplace_order_id),
 	KEY batch_id (batch_id),
 	KEY normalized_order_code (normalized_order_code),
 	KEY matching_status (matching_status),

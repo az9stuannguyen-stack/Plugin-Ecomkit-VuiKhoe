@@ -45,7 +45,7 @@ foreach ($sql as $statement) {
 }
 
 $orders = $sql[2];
-check(str_contains($orders, 'UNIQUE KEY connection_order (connection_id,marketplace_order_id)'), 'Multi-shop uniqueness is missing.');
+check(str_contains($orders, 'UNIQUE KEY connection_order (batch_id,connection_id,marketplace_order_id)'), 'Batch-scoped shop/order uniqueness is missing.');
 check(str_contains($orders, 'matching_status varchar(32) DEFAULT NULL'), 'Pre-matching order status must remain nullable.');
 foreach ( array( 'canonical_data longtext DEFAULT NULL', 'canonical_result_version varchar(16) DEFAULT NULL', 'canonical_materialized_at datetime DEFAULT NULL', 'canonical_source_fingerprint varchar(64) DEFAULT NULL' ) as $canonical_column ) {
     check(str_contains($orders, $canonical_column), "Canonical schema mismatch: {$canonical_column}.");
@@ -94,8 +94,8 @@ check(substr_count((string) $admin, 'Ecomkit_Vuikhoe_Security::require_managemen
 check(str_contains((string) $oauth, "check_admin_referer( 'ecomkit_shopee_oauth_start', 'ecomkit_shopee_nonce' )"), 'Shopee OAuth start nonce validation is missing.');
 check(str_contains((string) $oauth, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Shopee OAuth start capability validation is missing.');
 check(str_contains((string) $oauth, "'permission_callback' => '__return_true'"), 'Public Shopee callback route is missing.');
-check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.6' )"), 'WP.6H.2S plugin version is wrong.');
-check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 8 )"), 'WP.6D database schema version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.7' )"), 'WP.6H.2T plugin version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 9 )"), 'WP.6H.2T database schema version is wrong.');
 check(str_contains((string) $key_resolver, "hash_hkdf( 'sha256'"), 'Credential resolver must use HKDF-SHA256.');
 check(str_contains((string) $key_resolver, "'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'"), 'Canonical WordPress secret order changed.');
 check(!preg_match('/get_option|update_option|set_transient|file_put_contents|wp-config\.php/i', (string) $key_resolver), 'Credential resolver persists key material or edits configuration.');

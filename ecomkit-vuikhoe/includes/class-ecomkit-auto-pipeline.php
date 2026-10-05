@@ -69,7 +69,7 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 		$shopee = max( 0, (int) ( $state['counts']['shopee_orders'] ?? 0 ) );
 		if ( 0 === $shopee ) { return true; }
 		$block = (string) ( $state['reconciliation_block_reason'] ?? '' );
-		if ( in_array( $block, array( 'SHOPEE_CONNECTION_NOT_READY', 'SHOP_SELECTION_REQUIRED', 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY', 'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL', 'SHOPEE_RECON_PAGINATION_INCOMPLETE' ), true ) ) { return true; }
+		if ( in_array( $block, array( 'SHOPEE_CONNECTION_NOT_READY', 'SHOP_SELECTION_REQUIRED', 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY', 'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL', 'SHOPEE_RECON_LOCAL_PERSIST_FAILED', 'SHOPEE_RECON_PAGINATION_INCOMPLETE' ), true ) ) { return true; }
 		return in_array( (string) ( $state['reconciliation_status'] ?? '' ), array( 'SUCCESS', 'WARNING' ), true )
 			&& (int) ( $state['counts']['reconcile_checked'] ?? 0 ) >= $shopee
 			&& (int) ( $state['reconcile_total_windows'] ?? 0 ) > 0
@@ -117,6 +117,7 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 		'PIPELINE_SCHEDULE_FAILED' => 'Tiến trình nền chưa được lên lịch. Hãy mở lại trang Kết quả để hệ thống thử tiếp tục; dữ liệu Shopee chưa hoàn tất.',
 		'SHOPEE_RECON_INCOMPLETE_STATE' => 'Đối chiếu Shopee chưa có kết quả đầy đủ; tiến trình đã dừng an toàn, không kết luận đơn vắng mặt.',
 		'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL' => 'Chưa thể hoàn tất đối chiếu Shopee do lỗi nhà cung cấp; dữ liệu Excel vẫn được giữ nguyên.',
+		'SHOPEE_RECON_LOCAL_PERSIST_FAILED' => 'Không thể lưu tiến trình xử lý Shopee. Dữ liệu Excel vẫn được giữ nguyên. Vui lòng liên hệ quản trị viên.',
 		'SHOPEE_CONNECTION_NOT_READY' => 'Đã nhập Excel nhưng chưa thể bổ sung dữ liệu Shopee. Kiểm tra kết nối Marketplace rồi tiếp tục pipeline.',
 		'SHOP_SELECTION_REQUIRED' => 'Có nhiều shop Shopee sẵn sàng. Chọn đúng shop trong Chẩn đoán nâng cao trước khi tiếp tục.',
 		'SHOPEE_INCOME_EMPTY' => 'Chưa có Income record; Result vẫn sử dụng Excel, Order Detail và Payment đã xác thực.',
@@ -152,7 +153,7 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 			if ( 0 === (int) ( $summary['matched_count'] ?? 0 ) && (int) ( $state['counts']['shopee_orders'] ?? 0 ) > 0 && (int) ( $summary['next_window_offset'] ?? 1 ) >= (int) ( $summary['total_windows'] ?? 1 ) && 'SUCCESS' === $state['reconciliation_status'] ) { $state['reconciliation_status'] = 'WARNING'; $state['warnings'][] = (string) ( $summary['classification'] ?? '' ) ?: 'SHOPEE_RECON_ZERO_MATCH_UNCLASSIFIED'; }
 			$state['reconcile_window_offset'] = (int) ( $summary['next_window_offset'] ?? 1 );
 			$state['stage'] = $state['reconcile_window_offset'] < (int) ( $summary['total_windows'] ?? 1 ) ? 'RECONCILE' : 'PAYMENT';
-		} catch ( Throwable $exception ) { $code = self::safe_code( $exception ); if ( preg_match( '/(?:CREDENTIAL|DECRYPT|PARTNER_KEY|TOKEN_CORRUPT|CONFIG_FINGERPRINT)/', $code ) ) { throw $exception; } $state['warnings'][] = $code; $state['reconciliation_block_reason'] = 'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL'; $state['warnings'][] = $state['reconciliation_block_reason']; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; }
+		} catch ( Throwable $exception ) { $code = self::safe_code( $exception ); if ( preg_match( '/(?:CREDENTIAL|DECRYPT|PARTNER_KEY|TOKEN_CORRUPT|CONFIG_FINGERPRINT)/', $code ) ) { throw $exception; } $state['warnings'][] = $code; $state['reconciliation_block_reason'] = in_array( $code, array( 'SHOPEE_RECON_PERSIST_FAILED', 'SHOPEE_RECON_STATE_ENCODE_FAILED', 'PIPELINE_STATE_PERSIST_FAILED' ), true ) ? 'SHOPEE_RECON_LOCAL_PERSIST_FAILED' : 'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL'; $state['warnings'][] = $state['reconciliation_block_reason']; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; }
 		unset( $state['reconcile_inflight'] ); return $state;
 	}
 

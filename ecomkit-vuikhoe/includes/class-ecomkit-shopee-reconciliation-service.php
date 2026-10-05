@@ -377,27 +377,32 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		global $wpdb;
 		$tables = Ecomkit_Vuikhoe_DB::table_names();
 		$now = current_time( 'mysql', true );
+		$operation = 'START_TRANSACTION'; $payload_bytes = 0;
 		if ( false === $wpdb->query( 'START TRANSACTION' ) ) {
 			$this->fail( 'SHOPEE_RECON_PERSIST_FAILED', 'RECON_PERSIST' );
 		}
 		try {
 			foreach ( $complete_ids as $order_id => $_ ) {
+				$operation = 'ORDER_CONNECTION_UPDATE';
 				if ( false === $wpdb->update( $tables['orders'], array( 'connection_id' => $connection_id, 'matched_at' => $now, 'updated_at' => $now ), array( 'id' => (int) $order_id ) ) ) {
 					throw new RuntimeException( 'SHOPEE_RECON_PERSIST_FAILED' );
 				}
 			}
 			foreach ( $missing as $order ) {
+				$operation = 'ORDER_MISSING_UPDATE';
 				if ( false === $wpdb->update( $tables['orders'], array( 'matching_status' => 'NOT_FOUND_IN_SHOPEE', 'updated_at' => $now ), array( 'id' => (int) $order['id'] ) ) ) {
 					throw new RuntimeException( 'SHOPEE_RECON_PERSIST_FAILED' );
 				}
 			}
 			if ( ! $detail_failed ) {
 				foreach ( $detail_missing as $sn ) {
+					$operation = 'ORDER_DETAIL_MISSING_UPDATE';
 					if ( isset( $matched[ $sn ] ) && false === $wpdb->update( $tables['orders'], array( 'matching_status' => 'DETAIL_MISSING', 'updated_at' => $now ), array( 'id' => (int) $matched[ $sn ]['id'] ) ) ) {
 						throw new RuntimeException( 'SHOPEE_RECON_PERSIST_FAILED' );
 					}
 				}
 				foreach ( $details as $sn => $detail ) {
+					$operation = 'ORDER_DETAIL_UPDATE';
 					if ( ! isset( $matched[ $sn ] ) || $sn !== (string) ( $detail['order_sn'] ?? '' ) ) {
 						throw new RuntimeException( 'SHOPEE_RECON_PROVIDER_IDENTITY_MISMATCH' );
 					}
@@ -422,22 +427,46 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 				}
 			}
 			foreach ( $errors as $error ) {
+				$operation = 'RECON_ERROR_INSERT';
 				if ( false === $wpdb->insert( $tables['errors'], $error ) ) {
 					throw new RuntimeException( 'SHOPEE_RECON_PERSIST_FAILED' );
 				}
 			}
 			$metadata['shopee_reconciliation'] = $summary;
-			if ( false === $wpdb->update( $tables['batches'], array( 'source_metadata' => wp_json_encode( $metadata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ), 'updated_at' => $now ), array( 'id' => (int) $batch['id'] ) ) ) {
+			$operation = 'BATCH_METADATA_UPDATE';
+			$metadata_json = wp_json_encode( $metadata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+			if ( ! is_string( $metadata_json ) ) { throw new RuntimeException( 'SHOPEE_RECON_STATE_ENCODE_FAILED' ); }
+			$payload_bytes = strlen( $metadata_json );
+			if ( false === $wpdb->update( $tables['batches'], array( 'source_metadata' => $metadata_json, 'updated_at' => $now ), array( 'id' => (int) $batch['id'] ) ) ) {
 				throw new RuntimeException( 'SHOPEE_RECON_PERSIST_FAILED' );
 			}
+			$operation = 'COMMIT';
 			if ( false === $wpdb->query( 'COMMIT' ) ) {
 				throw new RuntimeException( 'SHOPEE_RECON_PERSIST_FAILED' );
 			}
 		} catch ( Throwable $exception ) {
+			$db_error = (string) ( $wpdb->last_error ?? '' );
 			$wpdb->query( 'ROLLBACK' );
+			try { $this->save_persist_diagnostic( (int) $batch['id'], $operation, $db_error, $payload_bytes, $exception->getMessage() ); } catch ( Throwable ) { /* Keep the original local failure classification. */ }
 			$wpdb->insert( $tables['errors'], $this->error_record( $batch, null, 'SHOPEE_RECON_PERSIST_FAILED', 'RECON_PERSIST', 'Không thể lưu kết quả đối chiếu Shopee an toàn.', 'Kiểm tra Database Runtime Diagnostics rồi thử lại; dữ liệu Excel và snapshot cũ được giữ nguyên.' ) );
-			$this->fail( 'SHOPEE_RECON_PERSIST_FAILED', 'RECON_PERSIST' );
+			$this->fail( 'SHOPEE_RECON_STATE_ENCODE_FAILED' === $exception->getMessage() ? 'SHOPEE_RECON_STATE_ENCODE_FAILED' : 'SHOPEE_RECON_PERSIST_FAILED', 'RECON_PERSIST' );
 		}
+	}
+
+	private function save_persist_diagnostic( int $batch_id, string $operation, string $db_error, int $payload_bytes, string $failure_code ): void {
+		global $wpdb;
+		$tables = Ecomkit_Vuikhoe_DB::table_names();
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT source_metadata FROM {$tables['batches']} WHERE id = %d", $batch_id ), ARRAY_A );
+		$metadata = is_array( $row ) ? json_decode( (string) ( $row['source_metadata'] ?? '' ), true ) : null;
+		if ( ! is_array( $metadata ) ) { return; }
+		$class = 'OTHER_DB_ERROR';
+		if ( str_contains( strtolower( $db_error ), 'duplicate entry' ) ) { $class = 'DUPLICATE_KEY'; }
+		elseif ( str_contains( strtolower( $db_error ), 'data too long' ) ) { $class = 'DATA_TOO_LONG'; }
+		elseif ( str_contains( strtolower( $db_error ), 'deadlock' ) ) { $class = 'DEADLOCK'; }
+		elseif ( '' === $db_error ) { $class = 'NO_DB_ERROR_TEXT'; }
+		$metadata['shopee_reconciliation_persist_diagnostic'] = array( 'operation' => $operation, 'table' => 'ORDER_CONNECTION_UPDATE' === $operation || str_starts_with( $operation, 'ORDER_' ) ? 'orders' : ( 'BATCH_METADATA_UPDATE' === $operation ? 'batches' : 'other' ), 'column' => 'BATCH_METADATA_UPDATE' === $operation ? 'source_metadata' : 'NOT_APPLICABLE', 'error_classification' => $class, 'failure_code' => 'SHOPEE_RECON_STATE_ENCODE_FAILED' === $failure_code ? $failure_code : 'SHOPEE_RECON_PERSIST_FAILED', 'payload_bytes' => $payload_bytes, 'json_error' => 'SHOPEE_RECON_STATE_ENCODE_FAILED' === $failure_code ? json_last_error_msg() : 'NOT_APPLICABLE', 'timestamp' => current_time( 'mysql', true ) );
+		$json = wp_json_encode( $metadata, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+		if ( is_string( $json ) ) { $wpdb->update( $tables['batches'], array( 'source_metadata' => $json, 'updated_at' => current_time( 'mysql', true ) ), array( 'id' => $batch_id ) ); }
 	}
 
 	private static function provider_epoch( mixed $value ): ?int {
