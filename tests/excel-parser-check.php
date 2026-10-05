@@ -97,6 +97,27 @@ try {
 	assert_true( '2026-10-01 00:00:00' === $first['vat_issued_date'] && 'Đã kiểm tra nội bộ' === $first['note'], 'VAT date/note parse failed.' );
 	assert_true( 2 === count( $first['items'] ) && '308000' === $first['product_price_vat_8'], 'Continuation row overwrote parent internal source.' );
 	assert_true( '308000.00' === $second['product_price_vat_8'] && '0' === $second['discount_vuikhoe'] && null === $second['affiliate_fee_vuikhoe'] && null === $second['vat_issued_date'], 'NULL/zero/decimal precision failed.' );
+	foreach ( array(
+		array( array( 'Chiết Khấu (Vui Khỏe)' ), array( '17160' ), '17160', 'Chiết Khấu (Vui Khỏe)', 'SUCCESS' ),
+		array( array( 'Voucher Xtra' ), array( '17,160' ), '17160', 'Voucher Xtra', 'SUCCESS' ),
+		array( array( 'Chiết Khấu (Vui Khỏe)', 'Voucher Xtra' ), array( '17160.00', '17,160' ), '17160', 'Chiết Khấu (Vui Khỏe)', 'SUCCESS' ),
+		array( array( 'Chiết Khấu (Vui Khỏe)', 'Voucher Xtra' ), array( '17160', '18000' ), null, null, 'WARNING' ),
+		array( array( 'Voucher Xtra' ), array( '0' ), '0', 'Voucher Xtra', 'SUCCESS' ),
+		array( array( 'Voucher Xtra' ), array( '' ), null, null, 'SUCCESS' ),
+		array( array( 'Voucher Xtra' ), array( '-17160' ), null, null, 'WARNING' ),
+	) as [$labels, $values, $expected, $source, $status] ) {
+		$paths[] = $discount_fixture = fixture( static function ( Spreadsheet $book ) use ( $labels, $values ): void {
+			$sheet = $book->getActiveSheet();
+			$sheet->fromArray( array_merge( array( 'Sàn & Mã Đơn', 'Mã hàng hóa', 'Tên hàng hóa', 'Số lg' ), $labels ), null, 'A1' );
+			$sheet->fromArray( array_merge( array( "Shopee\n260924TSBR7FC0", 'SKU-A', 'Item A', 1 ), $values ), null, 'A2' );
+			$sheet->fromArray( array( null, 'SKU-B', 'Item B', 1, 99999, 99999 ), null, 'A3' );
+		} );
+		$parsed_discount = $parser->parse( $discount_fixture );
+		assert_true( $status === $parsed_discount['status'] && 1 === count( $parsed_discount['orders']) && 2 === count( $parsed_discount['orders'][0]['items'] ), 'Discount fixture/order continuation failed.' );
+		assert_true( $expected === $parsed_discount['orders'][0]['discount_vuikhoe'] && $source === $parsed_discount['orders'][0]['discount_vuikhoe_source'], 'Discount source value/alias failed: ' . json_encode( array( $labels, $expected, $source, $parsed_discount['orders'][0]['discount_vuikhoe'], $parsed_discount['orders'][0]['discount_vuikhoe_source'] ), JSON_UNESCAPED_UNICODE ) );
+		if ( 'WARNING' === $status && 2 === count( $labels ) ) { assert_true( in_array( 'DISCOUNT_VUIKHOE_SOURCE_CONFLICT', codes( $parsed_discount ), true ), 'Discount conflict classification missing.' ); }
+		if ( in_array( 'Voucher Xtra', $labels, true ) && array( '-17160' ) === $values ) { assert_true( in_array( 'EXCEL_INVALID_INTERNAL_FIELD', codes( $parsed_discount ), true ), 'Negative Voucher Xtra was accepted.' ); }
+	}
 	$paths[] = $partial_internal = fixture( static function ( Spreadsheet $book ): void { $book->getActiveSheet()->fromArray( array( array( 'Sàn & Mã Đơn', 'Giá SP (VAT 8%)' ), array( "Shopee\nPARTIAL", '24589.50' ) ), null, 'A1' ); $book->getActiveSheet()->setCellValueExplicit( 'B2', '24589.50', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING ); } );
 	$partial_result = $parser->parse( $partial_internal );
 	assert_true( 'SUCCESS' === $partial_result['status'] && '24589.50' === $partial_result['orders'][0]['product_price_vat_8'] && null === $partial_result['orders'][0]['discount_vuikhoe'], 'Partial optional header failed.' );

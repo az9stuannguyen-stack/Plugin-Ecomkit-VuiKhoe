@@ -68,6 +68,21 @@ final class Ecomkit_Vuikhoe_Exact_Financial_Math {
 		} catch ( InvalidArgumentException ) { return null; }
 	}
 
+	/** Result display only: exact rational percentage, two places, HALF-UP. */
+	public static function format_percent_two_decimals( array $rational ): ?string {
+		if ( ! isset( $rational['numerator'], $rational['denominator'] ) ) { return null; }
+		try {
+			$percent = self::ratio( self::shift_hundred( self::normalize( $rational['numerator'] ) ), self::normalize( $rational['denominator'] ), 3 )['ratio'];
+			$negative = str_starts_with( $percent, '-' );
+			[$whole, $fraction] = array_pad( explode( '.', ltrim( $percent, '-' ), 2 ), 2, '' );
+			$fraction = str_pad( $fraction, 3, '0' );
+			$cents = self::normalize( $whole . substr( $fraction, 0, 2 ) );
+			if ( $fraction[2] >= '5' ) { $cents = self::add( $cents, '1' ); }
+			$cents = str_pad( $cents, 3, '0', STR_PAD_LEFT );
+			return ( $negative && '0' !== self::normalize( $cents ) ? '-' : '' ) . substr( $cents, 0, -2 ) . '.' . substr( $cents, -2 ) . '%';
+		} catch ( InvalidArgumentException ) { return null; }
+	}
+
 	private static function shift_hundred( string $value ): string {
 		$negative = str_starts_with( $value, '-' ); $parts = explode( '.', ltrim( $value, '-' ), 2 );
 		$fraction = $parts[1] ?? '';

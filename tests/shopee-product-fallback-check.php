@@ -24,6 +24,8 @@ price_check( null === $m->materialize( $none )['columns']['product_price_vat_8']
 $wrong_id = $base; $wrong_id['payment_normalized_data'] = json_encode( array_merge( $payment, array( 'marketplaceOrderId' => 'OTHER' ) ) );
 price_check( null === $m->materialize( $wrong_id )['columns']['product_price_vat_8'], 'Price from another order accepted.' );
 $trusted = $base; $trusted['affiliate_fee_vuikhoe'] = '0'; $trusted['discount_vuikhoe'] = '17160';
+$trusted['raw_source_metadata'] = json_encode( array( 'source' => 'EXCEL', 'discount_vuikhoe_source' => 'Voucher Xtra' ) );
 $golden = $m->materialize( $trusted );
 price_check( '5700' === $golden['columns']['service_platform_fee'] && '0.055' === $golden['columns']['discount_percent_vuikhoe'] && '75900' === $golden['rational']['platform_cost_percent']['numerator'] && '93060' === $golden['rational']['total_cost_percent']['numerator'], 'Trusted discount golden formula failed.' );
+price_check( 'EXCEL/Voucher Xtra' === $golden['source_metadata']['discountVuikhoe']['source'] && 'NULL_NO_VERIFIED_SOURCE' === $fallback['source_metadata']['discountVuikhoe']['source'], 'Discount provenance/NULL source failed.' );
 echo "WP.6H.3B Shopee product fallback: PASS\n";

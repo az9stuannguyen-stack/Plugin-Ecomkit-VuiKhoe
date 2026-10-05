@@ -20,6 +20,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	private const QUANTITY_HEADER = 'Số lg';
 	private const ORDER_DATE_HEADER = 'Ngày đặt';
 	private const INTERNAL_HEADERS = array( 'Giá SP (VAT 8%)' => 'product_price_vat_8', 'Phí Affiliate (Vui Khỏe)' => 'affiliate_fee_vuikhoe', 'Chiết Khấu (Vui Khỏe)' => 'discount_vuikhoe', 'Ngày Xuất VAT' => 'vat_issued_date', 'Ghi Chú' => 'note' );
+	private const DISCOUNT_ALIAS = 'Voucher Xtra';
 
 	public function __construct( private bool $skip_runtime_check = false ) {}
 
@@ -161,6 +162,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			}
 			$internal = array_fill_keys( array_values( self::INTERNAL_HEADERS ), null );
 			foreach ( self::INTERNAL_HEADERS as $label => $field ) {
+				if ( 'discount_vuikhoe' === $field ) { continue; }
 				if ( ! isset( $columns[ $label ] ) ) { continue; }
 				$cell = $sheet->getCell( array( $columns[ $label ], $row_number ) );
 				if ( 'Ngày Xuất VAT' === $label ) {
@@ -176,7 +178,24 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 					$errors[] = $this->row_error( 'EXCEL_INVALID_INTERNAL_FIELD', sprintf( 'Giá trị “%s” ở dòng %d không hợp lệ.', $label, $row_number ), 'Sửa giá trị nguồn trong Excel (tiền dạng số chính xác; Ngày Xuất VAT dạng ngày hợp lệ) rồi tải lại file.', $sheet->getTitle(), $row_number, $this->safe_order_date_raw( $this->safe_cell_value( $cell ) ), array(), $label );
 				}
 			}
-			$orders[] = array_merge( array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'eshop_order_code' => isset( $columns['Mã đơn hàng eShop'] ) ? $this->column_text( $row['cells'], $columns, 'Mã đơn hàng eShop' ) : null, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() ), $internal );
+			$discount_source = null;
+			$discount_values = array();
+			foreach ( array( 'Chiết Khấu (Vui Khỏe)', self::DISCOUNT_ALIAS ) as $label ) {
+				if ( ! isset( $columns[ $label ] ) ) { continue; }
+				$parsed_discount = $this->parse_internal_money( $this->safe_cell_value( $sheet->getCell( array( $columns[ $label ], $row_number ) ) ) );
+				if ( null !== $parsed_discount['value'] && Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $parsed_discount['value'], '0' ) < 0 ) { $parsed_discount = array( 'value' => null, 'state' => 'invalid' ); }
+				if ( 'invalid' === $parsed_discount['state'] ) {
+					$errors[] = $this->row_error( 'EXCEL_INVALID_INTERNAL_FIELD', sprintf( 'Giá trị “%s” ở dòng %d không hợp lệ.', $label, $row_number ), 'Sửa giá trị tiền nguồn trong Excel rồi tải lại file.', $sheet->getTitle(), $row_number, null, array(), $label );
+				}
+				if ( null !== $parsed_discount['value'] ) { $discount_values[ $label ] = $parsed_discount['value']; }
+			}
+			if ( 2 === count( $discount_values ) && 0 !== Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $discount_values['Chiết Khấu (Vui Khỏe)'], $discount_values[ self::DISCOUNT_ALIAS ] ) ) {
+				$errors[] = $this->row_error( 'DISCOUNT_VUIKHOE_SOURCE_CONFLICT', sprintf( 'Hai nguồn Chiết Khấu Vui Khỏe ở dòng %d không trùng nhau.', $row_number ), 'Giữ một cột chiết khấu hoặc sửa hai giá trị cho trùng nhau.', $sheet->getTitle(), $row_number, null, array(), 'Chiết Khấu (Vui Khỏe)' );
+			} elseif ( $discount_values ) {
+				$discount_source = array_key_first( $discount_values );
+				$internal['discount_vuikhoe'] = $discount_values[ $discount_source ];
+			}
+			$orders[] = array_merge( array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'eshop_order_code' => isset( $columns['Mã đơn hàng eShop'] ) ? $this->column_text( $row['cells'], $columns, 'Mã đơn hàng eShop' ) : null, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'discount_vuikhoe_source' => $discount_source, 'items' => array() ), $internal );
 			$current_index = array_key_last( $orders );
 			$platform_counts[ $parsed['platform'] ] = ( $platform_counts[ $parsed['platform'] ] ?? 0 ) + 1;
 			if ( 'VALID_ITEM' === $product_structure ) {
@@ -206,6 +225,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 		}
 		if ( ! is_int( $value ) && ! is_string( $value ) ) { return array( 'value' => null, 'state' => 'invalid' ); }
 		$text = trim( (string) $value );
+		if ( 1 === preg_match( '/^-?[1-9][0-9]{0,2}(?:,[0-9]{3})+(?:\.[0-9]{1,4})?$/D', $text ) ) { $text = str_replace( ',', '', $text ); }
 		if ( 1 !== preg_match( '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]{1,4})?$/D', $text ) || strlen( explode( '.', ltrim( $text, '-' ) )[0] ) > 16 ) { return array( 'value' => null, 'state' => 'invalid' ); }
 		return array( 'value' => $text, 'state' => 'valid' );
 	}

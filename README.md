@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6H.3B — Giá SP ưu tiên Excel, fallback Shopee Payment `order_selling_price`**, plugin `0.7.8`, database schema `9`, canonical `v7`. Giá Shopee chỉ dùng khi Payment đúng Mã đơn sàn và Excel thiếu; giá lệch nhau giữ Excel và lưu discrepancy an toàn. Voucher Xtra không có nguồn OpenAPI được duyệt: `voucher_from_shopee` không phải Chiết Khấu Vui Khỏe; phí dịch vụ và tỷ lệ phụ thuộc vẫn NULL khi thiếu chiết khấu nội bộ. Snapshot canonical v1–v6 cần rematerialize từ Payment đã lưu, không refetch chỉ vì đổi mapping. WP.6I/WP.7 chưa bắt đầu.
+Hiện tại: **WP.6H.3C — Excel Voucher Xtra và hiển thị tỷ lệ 2 chữ số**, plugin `0.7.9`, database schema `9`, canonical `v7`. Giá SP vẫn ưu tiên Excel rồi fallback Shopee Payment `order_selling_price`. Header tùy chọn `Voucher Xtra` là alias chính xác của `Chiết Khấu (Vui Khỏe)`; hai header lệch giá gây cảnh báo và giá trị nội bộ NULL. Shopee buyer voucher không được dùng. Result hiển thị phần trăm HALF-UP 2 chữ số, ratio canonical không đổi. WP.6I/WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.7.8`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.7.9`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `8`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

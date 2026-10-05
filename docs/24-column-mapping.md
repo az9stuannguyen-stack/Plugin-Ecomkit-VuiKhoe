@@ -8,6 +8,8 @@
 
 > WP.6H.3B / canonical v7: audit OpenAPI production của `260924TSBR7FC0` xác nhận `payment_raw_data.order_income.order_selling_price=312000`, đúng giá sản phẩm Seller Center. Giá SP ưu tiên `orders.product_price_vat_8` (Excel), sau đó dùng `payment_normalized_data.orderSellingPrice` của đúng `marketplace_order_id`; thiếu cả hai = NULL. Chênh lệch giữa hai nguồn giữ giá Excel và lưu hai con số trong `source_metadata.productPrice.discrepancy`. Voucher Xtra 17,160 và `service_fee_infos` không có trong snapshot OpenAPI này; `voucher_from_shopee=50000` là buyer voucher, **không** map Chiết Khấu Vui Khỏe. Chiết khấu vẫn chỉ Excel; thiếu chiết khấu thì phí dịch vụ và tỷ lệ phụ thuộc vẫn NULL. Không migration DB, snapshot v1–v6 stale.
 
+> WP.6H.3C: `Voucher Xtra` là alias Excel chính xác của `Chiết Khấu (Vui Khỏe)`, cùng lưu `orders.discount_vuikhoe`; không thêm cột. Hai header có giá trị khác nhau tạo `DISCOUNT_VUIKHOE_SOURCE_CONFLICT` và lưu NULL; cùng giá trị chỉ ghi một lần. Giá trị âm không hợp lệ, 0 hợp lệ, blank là NULL. `source_metadata.discountVuikhoe` giữ `EXCEL/<header>` hoặc `NULL_NO_VERIFIED_SOURCE`. Result hiển thị tỷ lệ 2 chữ số theo HALF-UP exact rational, không đổi ratio canonical v7.
+
 ## WP.6H — Exact Financial Formula Engine (hiện hành)
 
 Canonical `v5` giữ đúng 24 scalar columns. Công thức legacy đã duyệt hoạt động tự động khi tất cả toán hạng của **từng công thức** có nguồn: `% Tổng Chi Phí=(L+M+N+I+J)/F`, `% Chiết Khấu Vui Khỏe=(I+J)/F`, `% Chi Phí Sàn TMĐT=(L+M+N)/F`; tỷ lệ lưu dưới dạng ratio, không nhân 100. F là Giá SP VAT 8%, I/J là hai field nội bộ Excel, L/M/N là ba phí Payment Shopee đã duyệt. NULL không phải 0; riêng F=0 làm ba tỷ lệ NULL với trạng thái `ZERO_DIVISOR`. Thiếu I/J không cản tỷ lệ phí sàn nếu F/L/M/N đầy đủ.

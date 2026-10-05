@@ -38,6 +38,12 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			$values[ $key ] = $this->internal_money( $order[ $key ] ?? null );
 		}
 		$source_metadata['productPrice'] = array( 'source' => null === $values['product_price_vat_8'] ? 'NULL_NO_VERIFIED_SOURCE' : 'EXCEL' );
+		$raw_excel = $this->decode_provider( $order['raw_source_metadata'] ?? null );
+		$discount_label = $raw_excel['discount_vuikhoe_source'] ?? null;
+		if ( null !== $values['discount_vuikhoe'] ) {
+			if ( ! in_array( $discount_label, array( 'Chiết Khấu (Vui Khỏe)', 'Voucher Xtra' ), true ) ) { $discount_label = 'Chiết Khấu (Vui Khỏe)'; }
+			$source_metadata['discountVuikhoe'] = array( 'source' => 'EXCEL/' . $discount_label );
+		} else { $source_metadata['discountVuikhoe'] = array( 'source' => 'NULL_NO_VERIFIED_SOURCE' ); }
 		$values['vat_issued_date'] = $this->vat_date( $order['vat_issued_date'] ?? null );
 		$values['note'] = $this->scalar( $order['note'] ?? null );
 		if ( $matched ) {

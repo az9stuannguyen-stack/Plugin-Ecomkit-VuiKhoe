@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Ecomkit - Vui Khỏe
  * Description: Nền tảng quản lý và đối chiếu đơn hàng thương mại điện tử cho Vui Khỏe.
- * Version: 0.7.8
+ * Version: 0.7.9
  * Requires at least: 6.6
  * Requires PHP: 8.1
  * Author: Vui Khỏe
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.8' );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.9' );
 define( 'ECOMKIT_VUIKHOE_DB_VERSION', 9 );
 define( 'ECOMKIT_VUIKHOE_MIN_PHP', '8.1' );
 define( 'ECOMKIT_VUIKHOE_MIN_WP', '6.6' );

@@ -164,7 +164,7 @@ final class Ecomkit_Vuikhoe_Import_Service {
 					'discount_vuikhoe' => $order['discount_vuikhoe'] ?? null,
 					'vat_issued_date' => $order['vat_issued_date'] ?? null,
 					'note' => $order['note'] ?? null,
-					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'combined_identity' => $order['raw_identity'], 'platform_label' => $order['raw_platform'], 'cells' => $order['raw_cells'], 'column_map' => $result['raw']['column_map'] ?? array(), 'order_date_precision' => $order['order_date_precision'] ?? null, 'order_date_storage' => ! empty( $order['order_date'] ) ? 'UTC' : null ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
+					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'combined_identity' => $order['raw_identity'], 'platform_label' => $order['raw_platform'], 'cells' => $order['raw_cells'], 'column_map' => $result['raw']['column_map'] ?? array(), 'discount_vuikhoe_source' => $order['discount_vuikhoe_source'] ?? null, 'order_date_precision' => $order['order_date_precision'] ?? null, 'order_date_storage' => ! empty( $order['order_date'] ) ? 'UTC' : null ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'source_refs'             => wp_json_encode( array( 'source' => 'EXCEL', 'sheet' => $order['sheet'], 'row' => $order['row'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'created_at'              => $now,
 					'updated_at'              => $now,

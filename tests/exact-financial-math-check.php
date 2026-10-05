@@ -18,6 +18,10 @@ exact_check( '33.333333333333…%' === $math::format_percent( $third ), 'Percent
 $ratio = $math::ratio( '393', '10000' );
 exact_check( '0.0393' === $ratio['ratio'] && $ratio['decimal_exact'] && '3.93%' === $math::format_percent( $ratio ), 'Ratio was multiplied by 100 twice.' );
 exact_check( '-12.5%' === $math::format_percent( $math::ratio( '-1', '8' ) ), 'Signed percent display failed.' );
+foreach ( array( array( '1234', '100000', '1.23%' ), array( '1235', '100000', '1.24%' ), array( '1236', '100000', '1.24%' ), array( '0', '1', '0.00%' ), array( '1', '1', '100.00%' ), array( '17160', '312000', '5.50%' ), array( '75900', '312000', '24.33%' ), array( '93060', '312000', '29.83%' ), array( '-1235', '100000', '-1.24%' ) ) as [$numerator, $denominator, $display] ) {
+	exact_check( $display === $math::format_percent_two_decimals( $math::ratio( $numerator, $denominator ) ), 'Two-decimal HALF-UP percentage failed: ' . $display );
+}
+exact_check( null === $math::format_percent_two_decimals( array() ), 'Missing percentage did not remain NULL.' );
 try { $math::ratio( '1', '0' ); throw new RuntimeException( 'Zero divisor was accepted.' ); } catch ( InvalidArgumentException $exception ) { exact_check( 'EXACT_DECIMAL_ZERO_DIVISOR' === $exception->getMessage(), 'Zero divisor classification changed.' ); }
 try { $math::add( '1.1e3', '1' ); throw new RuntimeException( 'Scientific notation was accepted.' ); } catch ( InvalidArgumentException ) {}
 echo "WP.6H exact financial math: PASS\n";
