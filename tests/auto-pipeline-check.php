@@ -76,4 +76,23 @@ $zero_pipeline = new Ecomkit_Vuikhoe_Auto_Pipeline( array(
 ) );
 $zero_pipeline->start( 25 ); drain( $zero_pipeline ); $zero_state = $zero_pipeline->state( 25 );
 pipeline_check( 'WARNING' === $zero_state['status'] && 100 === Ecomkit_Vuikhoe_Auto_Pipeline::progress( $zero_state )['percent'] && 3 === $zero_state['counts']['canonical_rows'] && 0 === $zero_state['counts']['payment_total'] && array( 'payment' => 0, 'income' => 0 ) === $zero_calls && in_array( 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY', $zero_state['warnings'], true ), 'Zero-match pipeline called downstream provider or hid 3-row Result.' );
+create_batch( 26, 11, 0 ); $recon_steps = 0; $detail_after_resume = 0;
+$resume_ops = array(
+	'ready_connections' => static fn(): array => array( array( 'id' => 9 ) ),
+	'reconcile' => static function ( int $batch_id, int $connection_id, array $limits ) use ( &$recon_steps, $db ): array {
+		$recon_steps++;
+		pipeline_check( 9 === $connection_id && 0 === $limits['window_offset'], 'Reconciliation changed shop/window while paging.' );
+		if ( $recon_steps < 3 ) { pipeline_check( $recon_steps - 1 === (int) ( $limits['continuation']['page_count'] ?? 0 ), 'Persisted cursor/page state was lost between cron events.' ); return array( 'status' => 'PROCESSING', 'total_windows' => 1, 'next_window_offset' => 0, 'continuation' => array( 'cursor' => 'page-' . $recon_steps, 'provider_ids' => array_fill_keys( range( 1, $recon_steps * 5 ), true ), 'page_count' => $recon_steps ) ); }
+		pipeline_check( 2 === (int) ( $limits['continuation']['page_count'] ?? 0 ) && 10 === count( $limits['continuation']['provider_ids'] ), 'Third cron invocation did not receive all prior IDs.' );
+		foreach ( $db->orders[ $batch_id ] as &$order ) { $order['matching_status'] = 'MATCHED'; } unset( $order );
+		return array( 'status' => 'SUCCESS', 'matched_count' => 11, 'missing_count' => 0, 'detail_count' => 11, 'total_windows' => 1, 'next_window_offset' => 1 );
+	},
+	'payment' => static function ( int $batch_id, int $order_id ) use ( &$detail_after_resume ): void { $detail_after_resume++; },
+	'income_page' => static fn(): array => array( 'classification' => 'SHOPEE_INCOME_EMPTY', 'records' => array(), 'next_cursor' => '', 'request_id' => 'safe' ),
+	'materialize' => static fn(): array => array( 'rows' => 11 ),
+);
+$multi_cron = new Ecomkit_Vuikhoe_Auto_Pipeline( $resume_ops ); $multi_cron->start( 26 ); drain( $multi_cron ); $multi_state = $multi_cron->state( 26 );
+pipeline_check( 3 === $recon_steps && 11 === $multi_state['counts']['shopee_matched'] && 11 === $multi_state['counts']['reconcile_checked'] && 11 === $multi_state['counts']['canonical_rows'] && 11 === $detail_after_resume && 100 === Ecomkit_Vuikhoe_Auto_Pipeline::progress( $multi_state )['percent'], 'Multi-cron 5+5+1 continuation did not run downstream 11-order pipeline.' );
+$unresolved = $multi_state; $unresolved['status'] = 'WARNING'; $unresolved['counts']['reconcile_checked'] = 0; $unresolved['counts']['shopee_matched'] = 0;
+pipeline_check( 0 === Ecomkit_Vuikhoe_Auto_Pipeline::progress( $unresolved )['reconcile_done'], 'Terminal warning falsely presented 11/11 as checked with matched=missing=0.' );
 echo "WP.6E one-upload pipeline checks passed.\n";

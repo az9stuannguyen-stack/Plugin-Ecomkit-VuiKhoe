@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6H.2A — Cảnh báo Shopee không khớp tự động**, plugin `0.7.3`, database schema `8`, canonical `v6`. Một lần upload vẫn tự xử lý và tạo Result 24 cột. Nếu Excel có đơn Shopee nhưng không có mã sàn trùng chính xác, Result đạt 100% với cảnh báo rõ ràng: khoảng truy vấn Shopee rỗng hoặc Shopee có đơn khác nhưng không giao với Excel. Metadata đối chiếu lưu khoảng ngày, shop đã chọn, số lượng/tập mã đơn và trạng thái phân trang từ chính các API call đang có; không thêm provider call. Không suy đoán sai shop/ngày và không đổi matching hay phí WP.6H.2. Nguồn nội bộ Excel thiếu giá trị được thông báo riêng. WP.7 chưa bắt đầu.
+Hiện tại: **WP.6H.2B — sửa phân trang đối chiếu tự động**, plugin `0.7.4`, database schema `8`, canonical `v6`. WP.6E từng giới hạn hai trang Shopee trong một lượt cron nhưng chưa lưu cursor/tập `order_sn`; khi còn trang thứ ba, đối chiếu có thể dừng với matched=missing=0 dù Result đạt 100% WARNING. Luồng tự động nay lưu cursor, tập ID và số trang trong Batch pipeline state, tiếp tục ở cron kế tiếp, chỉ so khớp chính xác sau khi hết trang. Manual và automatic cùng dùng Shopee Order List core. Không đổi cửa sổ ngày, shop, exact matching, tài chính hay số cột; một lần upload vẫn tự xử lý. Batch #22 phải kiểm tra metadata production để xác nhận đây có phải nguyên nhân thực tế. WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -39,7 +39,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.7.3`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.7.4`, Composer classmap autoload và text domain.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `8`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

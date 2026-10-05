@@ -82,8 +82,31 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		foreach ( $windows as $window ) {
 			$window_ids = array_keys( array_filter( $dates_by_id, static fn( string $date ): bool => $date >= $window['start_date'] && $date <= $window['end_date'] ) );
 			$window_excel_sns = array_values( array_map( static fn( int $id ): string => (string) $by_id[ $id ]['marketplace_order_id'], $window_ids ) );
+			$result = null;
 			try {
-				$result = $this->orders->get_all_orders( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100, null, is_array( $auto_limits ) ? max( 1, min( 3, (int) ( $auto_limits['max_pages'] ?? 2 ) ) ) : 100 );
+				if ( is_array( $auto_limits ) ) {
+					$continuation = (array) ( $auto_limits['continuation'] ?? array() );
+					$cursor = $continuation['cursor'] ?? null;
+					if ( null !== $cursor && ( ! is_string( $cursor ) || '' === $cursor ) ) { throw new RuntimeException( 'SHOPEE_RECON_CURSOR_INVALID' ); }
+					$provider_ids = (array) ( $continuation['provider_ids'] ?? array() );
+					$seen = (array) ( $continuation['seen_cursors'] ?? array() );
+					$request_ids = (array) ( $continuation['request_ids'] ?? array() );
+					$page_count = (int) ( $continuation['page_count'] ?? 0 );
+					if ( $page_count < 0 || $page_count >= 100 || count( $provider_ids ) > 10000 ) { throw new RuntimeException( 'SHOPEE_RECON_PAGE_LIMIT_EXCEEDED' ); }
+					$limit = max( 1, min( 3, (int) ( $auto_limits['max_pages'] ?? 2 ) ) );
+					for ( $page = 0; $page < $limit; $page++ ) {
+						$list = $this->orders->get_order_list_page( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100, $cursor );
+						$page_count++; $request_ids[] = $list['request_id'];
+						foreach ( $list['orders'] as $provider_order ) { $provider_ids[ (string) $provider_order['order_sn'] ] = true; }
+						if ( ! $list['more'] ) { $result = array( 'orders' => array_map( static fn( mixed $sn ): array => array( 'order_sn' => (string) $sn ), array_keys( $provider_ids ) ), 'page_count' => $page_count, 'request_ids' => $request_ids ); break; }
+						$next = (string) $list['next_cursor'];
+						if ( '' === $next || $next === $cursor || isset( $seen[ $next ] ) || $page_count >= 100 || count( $provider_ids ) > 10000 ) { throw new RuntimeException( 'SHOPEE_RECON_PAGINATION_INCOMPLETE' ); }
+						$seen[ $next ] = true; $cursor = $next;
+					}
+					if ( ! isset( $result ) ) {
+						return array( 'status' => 'PROCESSING', 'matched_count' => (int) ( $batch_metadata['shopee_reconciliation']['matched_count'] ?? 0 ), 'missing_count' => (int) ( $batch_metadata['shopee_reconciliation']['missing_count'] ?? 0 ), 'detail_count' => (int) ( $batch_metadata['shopee_reconciliation']['detail_count'] ?? 0 ), 'total_windows' => $all_windows_count, 'next_window_offset' => $window_offset, 'continuation' => array( 'cursor' => $cursor, 'provider_ids' => $provider_ids, 'seen_cursors' => $seen, 'request_ids' => $request_ids, 'page_count' => $page_count ) );
+					}
+				} else { $result = $this->orders->get_all_orders( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100 ); }
 				$api_calls += (int) $result['page_count'];
 				foreach ( $result['orders'] as $provider_order ) {
 					$provider_by_sn[ $provider_order['order_sn'] ] = $provider_order;
@@ -96,7 +119,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 				$window_results[] = array( 'connection_id' => $connection_id, 'shop_reference' => (string) $connection['external_shop_id'], 'time_range_field' => 'create_time', 'start_date' => $window['start_date'], 'end_date' => $window['end_date'], 'time_from' => $window['time_from'], 'time_to' => $window['time_to'], 'status' => 'SUCCESS', 'list_request_success' => true, 'pagination_complete' => true, 'request_ids' => array_values( array_filter( (array) ( $result['request_ids'] ?? array() ), static fn( mixed $id ): bool => is_string( $id ) && 1 === preg_match( '/\A[A-Za-z0-9_-]{1,128}\z/D', $id ) ) ), 'page_count' => (int) $result['page_count'], 'excel_count' => count( $window_excel_sns ), 'provider_count' => count( $provider_sns ), 'intersection_count' => count( $sets['matched'] ), 'excel_order_ids' => $window_excel_sns, 'provider_order_ids' => $provider_sns, 'intersection' => $sets['matched'], 'missing_in_provider' => $sets['missing'], 'extra_in_provider' => $sets['extra'] );
 			} catch ( Throwable $exception ) {
 				$api_calls += max( 1, (int) ( $this->orders->last_diagnostic['pagination_page'] ?? 1 ) );
-				$is_partial = (int) ( $this->orders->last_diagnostic['pagination_page'] ?? 1 ) > 1 || in_array( $exception->getMessage(), array( 'SHOPEE_ORDER_PAGINATION_STALLED', 'SHOPEE_ORDER_PAGE_LIMIT_EXCEEDED' ), true );
+				$is_partial = (int) ( $page_count ?? 0 ) > 0 || (int) ( $this->orders->last_diagnostic['pagination_page'] ?? 1 ) > 1 || in_array( $exception->getMessage(), array( 'SHOPEE_ORDER_PAGINATION_STALLED', 'SHOPEE_ORDER_PAGE_LIMIT_EXCEEDED', 'SHOPEE_RECON_PAGINATION_INCOMPLETE', 'SHOPEE_RECON_PAGE_LIMIT_EXCEEDED' ), true );
 				$error_code = $is_partial ? 'SHOPEE_RECON_PAGINATION_INCOMPLETE' : 'SHOPEE_RECON_LIST_FAILED';
 				$provider_errors[] = $this->error_record( $batch, null, $error_code, 'RECON_LIST', 'Không thể đọc đầy đủ tất cả trang đơn Shopee trong một khoảng ngày.', 'Thử đối chiếu lại; các đơn trong khoảng lỗi chưa được kết luận NOT FOUND.' );
 				$window_results[] = array( 'connection_id' => $connection_id, 'shop_reference' => (string) $connection['external_shop_id'], 'time_range_field' => 'create_time', 'start_date' => $window['start_date'], 'end_date' => $window['end_date'], 'time_from' => $window['time_from'], 'time_to' => $window['time_to'], 'status' => 'INCOMPLETE', 'list_request_success' => false, 'pagination_complete' => false, 'excel_count' => count( $window_excel_sns ), 'excel_order_ids' => $window_excel_sns, 'failure_code' => $error_code, 'classification' => sanitize_key( $exception->getMessage() ) );

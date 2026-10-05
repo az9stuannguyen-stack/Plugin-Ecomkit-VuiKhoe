@@ -84,6 +84,8 @@ recon_check( array( 'A', 'B' ) === $sets['matched'] && array( 'C', 'ABC123' ) ==
 $timezone = wp_timezone();
 $windows = Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::derive_windows( array( '2026-09-16', '2026-09-17', '2026-10-01', '2026-10-02' ), $timezone );
 recon_check( 2 === count( $windows ) && '2026-09-16' === $windows[0]['start_date'] && '2026-09-17' === $windows[0]['end_date'], 'Automatic contiguous date windows failed.' );
+$sept24 = Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::derive_windows( array_fill( 0, 11, '2026-09-24' ), $timezone );
+recon_check( 1 === count( $sept24 ) && '2026-09-24' === $sept24[0]['start_date'] && ( new DateTimeImmutable( '2026-09-24 00:00:00', $timezone ) )->getTimestamp() === $sept24[0]['time_from'] && ( new DateTimeImmutable( '2026-09-24 23:59:59', $timezone ) )->getTimestamp() === $sept24[0]['time_to'], 'Eleven same-day orders did not share one full local-day provider window.' );
 $long_dates = array_map( static fn( int $day ): string => ( new DateTimeImmutable( '2026-01-01' ) )->modify( '+' . $day . ' days' )->format( 'Y-m-d' ), range( 0, 20 ) );
 $long_windows = Ecomkit_Vuikhoe_Shopee_Reconciliation_Service::derive_windows( $long_dates, $timezone );
 recon_check( 2 === count( $long_windows ) && $long_windows[0]['time_to'] - $long_windows[0]['time_from'] <= 1296000, '>15-day window was not split safely.' );
@@ -204,6 +206,26 @@ $GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'respo
 $GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => 'error_server', 'message' => 'safe', 'request_id' => 'failed-page' ) );
 $incomplete_summary = $service->reconcile_batch( 24 );
 recon_check( 'SHOPEE_RECON_PAGINATION_INCOMPLETE' === $incomplete_summary['classification'] && ! $incomplete_summary['windows'][0]['pagination_complete'] && null === $wpdb->orders[240]['matching_status'] && null === $wpdb->orders[241]['matching_status'], 'Incomplete pagination produced false absence.' );
+// Historical 11-ID day: the old automatic two-page cap discarded both pages and advanced to Payment.
+$historical_ids = array( '260924TSBR7FC0', '260924TRGBRTWG', '260924TQYMTK0W', '260924TSK2SSD9', '260924TTJRJN95', '260924TU5SYBWF', '260924TVM40VA9', '260924TVPM3EBG', '260924TW33Q66N', '260924TW6HD3EV', '260924TYM3SV7F' );
+diagnostic_batch( 26, $historical_ids, $base );
+foreach ( $historical_ids as $offset => $sn ) { $wpdb->orders[260 + $offset]['order_date'] = '2026-09-24 10:00:00'; }
+foreach ( array( array_slice( $historical_ids, 0, 5 ), array_slice( $historical_ids, 5, 5 ), array_slice( $historical_ids, 10 ) ) as $page => $ids ) {
+	$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'request_id' => 'page-' . ( $page + 1 ), 'response' => array( 'more' => $page < 2, 'next_cursor' => $page < 2 ? 'cursor-' . ( $page + 2 ) : '', 'order_list' => array_map( static fn( string $sn ): array => array( 'order_sn' => $sn ), $ids ) ) ) );
+}
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'request_id' => 'detail-11', 'response' => array( 'order_list' => array_map( static fn( string $sn ): array => array( 'order_sn' => $sn, 'update_time' => 200 ), $historical_ids ) ) ) );
+$calls_before_historical = count( $GLOBALS['recon_get_calls'] );
+$first = $service->reconcile_batch( 26, $connection_id, array( 'window_offset' => 0, 'max_windows' => 1, 'max_pages' => 2, 'max_detail_batches' => 1 ) );
+recon_check( 'PROCESSING' === $first['status'] && 0 === $first['next_window_offset'] && 10 === count( $first['continuation']['provider_ids'] ) && 'cursor-3' === $first['continuation']['cursor'] && null === $wpdb->orders[260]['matching_status'], 'Two-page boundary discarded provider IDs or concluded early.' );
+$second = $service->reconcile_batch( 26, $connection_id, array( 'window_offset' => 0, 'max_windows' => 1, 'max_pages' => 2, 'max_detail_batches' => 1, 'continuation' => $first['continuation'] ) );
+recon_check( 11 === $second['matched_count'] && 0 === $second['missing_count'] && 0 === $second['extra_count'] && 11 === $second['detail_count'] && 1 === $second['total_windows'] && 3 === $second['windows'][0]['page_count'] && 11 === $second['windows'][0]['intersection_count'] && 4 === count( $GLOBALS['recon_get_calls'] ) - $calls_before_historical, 'Historical 5+5+1 pagination failed to restore 11 exact matches without duplicate calls.' );
+foreach ( $historical_ids as $offset => $sn ) { recon_check( 'MATCHED' === $wpdb->orders[260 + $offset]['matching_status'] && $sn === $wpdb->orders[260 + $offset]['marketplace_order_id'], 'Historical order identity/matching changed.' ); }
+diagnostic_batch( 27, $historical_ids, $base );
+foreach ( $historical_ids as $offset => $sn ) { $wpdb->orders[270 + $offset]['order_date'] = '2026-09-24 10:00:00'; }
+foreach ( array( array_slice( $historical_ids, 0, 5 ), array_slice( $historical_ids, 5, 5 ), array_slice( $historical_ids, 10 ) ) as $page => $ids ) { $GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'response' => array( 'more' => $page < 2, 'next_cursor' => $page < 2 ? 'manual-' . $page : '', 'order_list' => array_map( static fn( string $sn ): array => array( 'order_sn' => $sn ), $ids ) ) ) ); }
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'response' => array( 'order_list' => array_map( static fn( string $sn ): array => array( 'order_sn' => $sn, 'update_time' => 200 ), $historical_ids ) ) ) );
+$manual_core = $service->reconcile_batch( 27, $connection_id );
+recon_check( $manual_core['matched_count'] === $second['matched_count'] && $manual_core['missing_count'] === $second['missing_count'] && $manual_core['extra_count'] === $second['extra_count'] && $manual_core['detail_count'] === $second['detail_count'] && $manual_core['windows'][0]['intersection'] === $second['windows'][0]['intersection'], 'Historical unbounded core and automatic bounded core diverged on identical 11 IDs.' );
 
 ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->upsert_shopee( '789', array( 'access_token' => 'FAKE_ACCESS_2', 'refresh_token' => 'FAKE_REFRESH_2', 'expire_in' => 3600 ), $config['fingerprint'] );
 $calls_before_ambiguous = count( $GLOBALS['recon_get_calls'] );

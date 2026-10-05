@@ -3,7 +3,7 @@
 declare(strict_types=1);
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 define( 'ARRAY_A', 'ARRAY_A' );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.3' );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.4' );
 function audit_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 function wp_remote_post(): never { $GLOBALS['provider_calls']++; throw new RuntimeException( 'Provider call forbidden.' ); }
 function wp_remote_get(): never { $GLOBALS['provider_calls']++; throw new RuntimeException( 'Provider call forbidden.' ); }
@@ -40,7 +40,7 @@ $db->rows = array( fixture_row( '260922NNXT8KEM', 31270 ), fixture_row( '260922N
 $service = new Ecomkit_Vuikhoe_Shopee_Fee_Audit();
 $ids = Ecomkit_Vuikhoe_Shopee_Fee_Audit::parse_order_ids( "260922NNXT8KEM\n260922NUU8C6TR" );
 $report = $service->inspect_batch( 7, $ids );
-audit_check( 2 === count( $report['orders'] ) && '0.7.3' === $report['plugin_version'], 'Both exact IDs were not found in persisted rows.' );
+audit_check( 2 === count( $report['orders'] ) && '0.7.4' === $report['plugin_version'], 'Both exact IDs were not found in persisted rows.' );
 audit_check( array( 'plugin_version', 'orders' ) === array_keys( $report ) && array( 'marketplace_order_id', 'payment_fetched_at', 'payment_request_id', 'normalized_financial', 'financial_paths', 'exact_5700_matches' ) === array_keys( $report['orders'][0] ), 'JSON export schema contains an unsafe extra field.' );
 foreach ( $report['orders'] as $index => $order ) {
 	$expected = 0 === $index ? 31270 : 8940;
