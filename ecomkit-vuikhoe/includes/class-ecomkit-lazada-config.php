@@ -4,11 +4,17 @@ defined( 'ABSPATH' ) || exit;
 final class Ecomkit_Vuikhoe_Lazada_Config implements Ecomkit_Vuikhoe_Provider_Configuration {
 	public const OPTION = 'ecomkit_vuikhoe_lazada_config';
 	public const COUNTRY = 'vn';
+	public const AUTHORIZATION_URL = 'https://auth.lazada.com/oauth/authorize';
+	public const TOKEN_BASE = 'https://auth.lazada.com/rest';
+	public const API_BASE = 'https://api.lazada.vn/rest';
+	public const TOKEN_CREATE = '/auth/token/create';
+	public const TOKEN_REFRESH = '/auth/token/refresh';
 	private const AAD = 'ecomkit|lazada|provider-config|v1';
 	public function __construct( private ?Ecomkit_Vuikhoe_Credential_Encryption $encryption = null ) { $this->encryption ??= new Ecomkit_Vuikhoe_Credential_Encryption(); }
 	public function platform(): string { return Ecomkit_Vuikhoe_Marketplace_Platform::LAZADA; }
-	/** Routes deliberately unset until the OAuth/API contracts are implemented. */
-	public static function endpoint_contract(): array { return array( 'country' => self::COUNTRY, 'api_base' => null, 'authorization_url' => null, 'token_route' => null ); }
+	public static function endpoint_contract(): array { return array( 'country' => self::COUNTRY, 'api_base' => self::API_BASE, 'authorization_url' => self::AUTHORIZATION_URL, 'token_route' => self::TOKEN_CREATE, 'token_base' => self::TOKEN_BASE, 'refresh_route' => self::TOKEN_REFRESH ); }
+	public function callback_url(): string { return add_query_arg( 'action', 'ecomkit_lazada_oauth_callback', admin_url( 'admin-post.php' ) ); }
+	public function fingerprint(): string { $stored = get_option( self::OPTION, array() ); return hash( 'sha256', (string) ( is_array( $stored ) ? ( $stored['credential_envelope'] ?? '' ) : '' ) ); }
 	/** Future token payload contract, not token data; official expiry units require OAuth-stage validation. */
 	public static function credential_contract(): array {
 		return array( 'version' => 1, 'application_fields' => array( 'app_key', 'app_secret', 'country' ), 'future_authorization_fields' => array( 'access_token', 'refresh_token', 'expires_in', 'refresh_expires_in', 'account_id', 'country_user_info_list' ) );
