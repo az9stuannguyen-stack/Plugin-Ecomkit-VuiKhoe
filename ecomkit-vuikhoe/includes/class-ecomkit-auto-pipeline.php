@@ -15,17 +15,17 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 		$batch = $this->batch( $batch_id ); $metadata = $this->metadata( $batch );
 		if ( ! in_array( (string) ( $batch['status'] ?? '' ), array( 'SUCCESS', 'WARNING' ), true ) ) { throw new RuntimeException( 'PIPELINE_IMPORT_NOT_READY' ); }
 		$existing = $metadata[ self::META_KEY ] ?? null;
-		if ( is_array( $existing ) && ! $resume ) { if ( ! in_array( (string) ( $existing['status'] ?? '' ), array( 'SUCCESS', 'WARNING', 'ERROR' ), true ) ) { $this->schedule( $batch_id ); } return $existing; }
+		if ( is_array( $existing ) && ! $resume ) { if ( in_array( (string) ( $existing['status'] ?? '' ), array( 'SUCCESS', 'WARNING' ), true ) && ! self::reconciliation_terminal( $existing ) && empty( $existing['reconcile_inflight'] ) && empty( $existing['connection_id'] ) && ! is_array( $metadata['shopee_reconciliation'] ?? null ) ) { return $this->start( $batch_id, true ); } if ( ! in_array( (string) ( $existing['status'] ?? '' ), array( 'SUCCESS', 'WARNING', 'ERROR' ), true ) ) { try { $this->schedule( $batch_id ); } catch ( Throwable ) { $existing['warnings'][] = 'PIPELINE_SCHEDULE_FAILED'; $this->save( $batch_id, $existing ); } } return $existing; }
 		$counts = (array) ( $metadata['platform_counts'] ?? array() );
 		$shopee = (int) ( $counts['SHOPEE'] ?? 0 );
 		$state = array( 'run_sequence' => (int) ( $existing['run_sequence'] ?? 0 ) + 1, 'status' => 'QUEUED', 'stage' => $shopee > 0 ? 'RECONCILE' : 'MATERIALIZE', 'import_status' => (string) $batch['status'], 'reconciliation_status' => $shopee > 0 ? 'QUEUED' : 'SKIPPED', 'payment_status' => $shopee > 0 ? 'QUEUED' : 'SKIPPED', 'income_status' => $shopee > 0 ? 'QUEUED' : 'SKIPPED', 'canonical_status' => 'QUEUED', 'started_at' => current_time( 'mysql', true ), 'updated_at' => current_time( 'mysql', true ), 'completed_at' => null, 'counts' => array( 'excel_orders' => (int) ( $batch['order_count'] ?? 0 ), 'excel_items' => (int) ( $metadata['item_rows'] ?? 0 ), 'shopee_orders' => $shopee, 'lazada_orders' => (int) ( $counts['LAZADA'] ?? 0 ), 'shopee_matched' => 0, 'reconcile_checked' => 0, 'detail_fetched' => 0, 'detail_missing' => 0, 'payment_total' => 0, 'payment_fetched' => 0, 'payment_reused' => 0, 'payment_failed' => 0, 'income_matched' => 0, 'income_empty' => 0, 'canonical_rows' => 0 ), 'warnings' => array(), 'errors' => array(), 'payment_index' => 0, 'income_index' => 0, 'income_cursor' => '', 'income_pages' => 0 );
-		if ( $resume && is_array( $existing ) && is_array( $metadata['shopee_reconciliation'] ?? null ) ) {
-			$state['stage'] = 'PAYMENT'; $state['reconciliation_status'] = (string) ( $metadata['shopee_reconciliation']['status'] ?? 'WARNING' ); $state['counts']['shopee_matched'] = (int) ( $metadata['shopee_reconciliation']['matched_count'] ?? 0 ); $state['counts']['payment_total'] = $state['counts']['shopee_matched']; $state['counts']['reconcile_checked'] = $shopee; $state['counts']['detail_fetched'] = (int) ( $metadata['shopee_reconciliation']['detail_count'] ?? 0 ); $state['counts']['detail_missing'] = (int) ( $metadata['shopee_reconciliation']['detail_missing_count'] ?? 0 );
+		if ( $resume && is_array( $existing ) && is_array( $metadata['shopee_reconciliation'] ?? null ) && self::reconciliation_terminal( $existing ) && empty( $existing['reconciliation_block_reason'] ) ) {
+			$state['stage'] = 'PAYMENT'; $state['reconciliation_status'] = (string) ( $metadata['shopee_reconciliation']['status'] ?? 'WARNING' ); $state['counts']['shopee_matched'] = (int) ( $metadata['shopee_reconciliation']['matched_count'] ?? 0 ); $state['counts']['payment_total'] = $state['counts']['shopee_matched']; $state['counts']['reconcile_checked'] = (int) ( $existing['counts']['reconcile_checked'] ?? 0 ); $state['counts']['detail_fetched'] = (int) ( $metadata['shopee_reconciliation']['detail_count'] ?? 0 ); $state['counts']['detail_missing'] = (int) ( $metadata['shopee_reconciliation']['detail_missing_count'] ?? 0 ); $state['reconcile_total_windows'] = (int) ( $existing['reconcile_total_windows'] ?? 0 ); $state['reconcile_window_offset'] = (int) ( $existing['reconcile_window_offset'] ?? 0 );
 		}
 		if ( $resume && is_array( $existing ) && ! empty( $existing['reconcile_continuation'] ) ) { $state['stage'] = 'RECONCILE'; $state['reconciliation_status'] = 'QUEUED'; $state['reconcile_continuation'] = $existing['reconcile_continuation']; $state['reconcile_window_offset'] = (int) ( $existing['reconcile_window_offset'] ?? 0 ); $state['reconcile_total_windows'] = (int) ( $existing['reconcile_total_windows'] ?? 0 ); $state['counts']['reconcile_checked'] = (int) ( $existing['counts']['reconcile_checked'] ?? 0 ); }
 		$this->save( $batch_id, $state );
 		try { $this->schedule( $batch_id ); }
-		catch ( Throwable ) { $state['warnings'][] = 'PIPELINE_SCHEDULE_FAILED'; $state['stage'] = 'MATERIALIZE'; try { $state = $this->materialize( $batch_id, $state ); } catch ( Throwable $exception ) { $state['errors'][] = self::safe_code( $exception ); $state['status'] = 'ERROR'; } $this->save( $batch_id, $state ); }
+		catch ( Throwable ) { $state['warnings'][] = 'PIPELINE_SCHEDULE_FAILED'; $this->save( $batch_id, $state ); }
 		return $state;
 	}
 
@@ -58,22 +58,33 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 			$state['updated_at'] = current_time( 'mysql', true ); $this->save( $batch_id, $state );
 			if ( ! in_array( $state['status'], array( 'SUCCESS', 'WARNING', 'ERROR' ), true ) ) {
 				try { $this->schedule( $batch_id ); }
-				catch ( Throwable ) { $state['warnings'][] = 'PIPELINE_SCHEDULE_FAILED'; try { $state = $this->materialize( $batch_id, $state ); } catch ( Throwable $exception ) { $state['errors'][] = self::safe_code( $exception ); $state['status'] = 'ERROR'; } $this->save( $batch_id, $state ); }
+				catch ( Throwable ) { $state['warnings'][] = 'PIPELINE_SCHEDULE_FAILED'; $this->save( $batch_id, $state ); }
 			}
 		} finally { delete_option( $lock_key ); }
 	}
 
 	public function state( int $batch_id ): ?array { $metadata = $this->metadata( $this->batch( $batch_id ) ); return is_array( $metadata[ self::META_KEY ] ?? null ) ? $metadata[ self::META_KEY ] : null; }
 
+	private static function reconciliation_terminal( array $state ): bool {
+		$shopee = max( 0, (int) ( $state['counts']['shopee_orders'] ?? 0 ) );
+		if ( 0 === $shopee ) { return true; }
+		$block = (string) ( $state['reconciliation_block_reason'] ?? '' );
+		if ( in_array( $block, array( 'SHOPEE_CONNECTION_NOT_READY', 'SHOP_SELECTION_REQUIRED', 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY', 'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL', 'SHOPEE_RECON_PAGINATION_INCOMPLETE' ), true ) ) { return true; }
+		return in_array( (string) ( $state['reconciliation_status'] ?? '' ), array( 'SUCCESS', 'WARNING' ), true )
+			&& (int) ( $state['counts']['reconcile_checked'] ?? 0 ) >= $shopee
+			&& (int) ( $state['reconcile_total_windows'] ?? 0 ) > 0
+			&& (int) ( $state['reconcile_window_offset'] ?? 0 ) >= (int) $state['reconcile_total_windows'];
+	}
+
 	/** Read-only, PII-free projection of persisted progress. No provider/DB calls. */
 	public static function progress( array $state, ?int $now = null ): array {
 		$counts = (array) ( $state['counts'] ?? array() );
 		$status = (string) ( $state['status'] ?? 'QUEUED' );
 		$stage = (string) ( $state['stage'] ?? 'RECONCILE' );
-		$terminal = in_array( $status, array( 'SUCCESS', 'WARNING', 'ERROR' ), true );
+		$terminal = 'ERROR' === $status;
 		$shopee = max( 0, (int) ( $counts['shopee_orders'] ?? 0 ) );
 		$orders = max( 0, (int) ( $counts['excel_orders'] ?? 0 ) );
-		$reconcile_done = in_array( (string) ( $state['reconciliation_status'] ?? '' ), array( 'SUCCESS', 'WARNING', 'INCOMPLETE', 'ERROR', 'SKIPPED' ), true ) && 'RECONCILE' !== $stage;
+		$reconcile_done = self::reconciliation_terminal( $state ) && 'RECONCILE' !== $stage;
 		$windows_total = max( 0, (int) ( $state['reconcile_total_windows'] ?? 0 ) );
 		$windows_done = max( 0, (int) ( $state['reconcile_window_offset'] ?? 0 ) );
 		$reconcile_ratio = $reconcile_done || 0 === $shopee ? 1.0 : ( $windows_total > 0 ? min( 1.0, $windows_done / $windows_total ) : 0.0 );
@@ -90,17 +101,22 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 		$canonical_done = 'READY' === (string) ( $state['canonical_status'] ?? '' ) && (int) ( $counts['canonical_rows'] ?? 0 ) === $orders;
 		$raw_percent = 15 + 15 * $reconcile_ratio + 15 * $detail_ratio + 30 * $payment_ratio + 10 * $income_ratio + ( $canonical_done ? 15 : 0 );
 		$complete = in_array( $status, array( 'SUCCESS', 'WARNING' ), true ) && $reconcile_done && $payment_terminal && $income_terminal && $canonical_done;
+		$terminal = $terminal || $complete;
 		$percent = $complete ? 100 : min( 99, max( (int) ( $state['progress_percent'] ?? 0 ), (int) floor( $raw_percent ) ) );
 		$updated = (string) ( $state['updated_at'] ?? '' );
 		$updated_epoch = '' !== $updated ? strtotime( $updated . ' UTC' ) : false;
 		$stalled = ! $terminal && false !== $updated_epoch && ( $now ?? time() ) - $updated_epoch > 90;
 		$stage_key = match ( $stage ) { 'RECONCILE' => 'RECONCILIATION', 'PAYMENT' => 'PAYMENT', 'INCOME_INIT', 'INCOME' => 'INCOME', 'MATERIALIZE' => 'CANONICAL', 'RESULT_READY' => 'COMPLETE', default => 'IMPORT' };
+		if ( ! $reconcile_done && $shopee > 0 && 'RESULT_READY' === $stage ) { $stage_key = 'RECONCILIATION'; }
 		if ( 'RECONCILE' === $stage && $windows_done > 0 && $detail_ratio < 1 ) { $stage_key = 'ORDER_DETAIL'; }
 		$labels = array( 'IMPORT' => 'Đọc và kiểm tra Excel', 'RECONCILIATION' => 'Đối chiếu đơn Shopee', 'ORDER_DETAIL' => 'Lấy thông tin đơn hàng', 'PAYMENT' => 'Lấy phí và tiền thực nhận', 'INCOME' => 'Kiểm tra trạng thái thu nhập', 'CANONICAL' => 'Hoàn thiện kết quả 24 cột', 'COMPLETE' => 'Hoàn tất xử lý' );
 		$income_label = match ( (string) ( $state['income_status'] ?? '' ) ) { 'EMPTY' => 'Không có dữ liệu Income bổ sung', 'SUCCESS' => 'Đã kiểm tra', 'REUSED' => 'Dùng dữ liệu đã có', 'WARNING' => 'Hoàn tất với cảnh báo', 'SKIPPED' => 'Không cần kiểm tra', default => 'Đang kiểm tra' };
 		return array( 'status' => $status, 'stage' => $stage_key, 'stage_label' => $labels[ $stage_key ], 'percent' => $percent, 'terminal' => $terminal, 'stalled' => $stalled, 'updated_at' => $updated, 'orders' => $orders, 'items' => max( 0, (int) ( $counts['excel_items'] ?? 0 ) ), 'shopee' => $shopee, 'lazada' => max( 0, (int) ( $counts['lazada_orders'] ?? 0 ) ), 'reconcile_done' => min( $shopee, max( 0, (int) ( $counts['reconcile_checked'] ?? 0 ) ) ), 'matched' => max( 0, (int) ( $counts['shopee_matched'] ?? 0 ) ), 'detail_done' => max( 0, (int) ( $counts['detail_fetched'] ?? 0 ) ), 'detail_missing' => max( 0, (int) ( $counts['detail_missing'] ?? 0 ) ), 'payment_total' => $payment_total, 'payment_done' => $payment_done, 'payment_reused' => max( 0, (int) ( $counts['payment_reused'] ?? 0 ) ), 'payment_fetched' => max( 0, (int) ( $counts['payment_fetched'] ?? 0 ) ), 'payment_failed' => max( 0, (int) ( $counts['payment_failed'] ?? 0 ) ), 'income_done' => $income_done, 'income_total' => $income_total, 'income_label' => $income_label, 'canonical_done' => max( 0, (int) ( $counts['canonical_rows'] ?? 0 ) ), 'warning_count' => count( (array) ( $state['warnings'] ?? array() ) ), 'error_count' => count( (array) ( $state['errors'] ?? array() ) ) );
 	}
 	public static function operator_message( string $code ): string { return match ( $code ) {
+		'PIPELINE_SCHEDULE_FAILED' => 'Tiến trình nền chưa được lên lịch. Hãy mở lại trang Kết quả để hệ thống thử tiếp tục; dữ liệu Shopee chưa hoàn tất.',
+		'SHOPEE_RECON_INCOMPLETE_STATE' => 'Đối chiếu Shopee chưa có kết quả đầy đủ; tiến trình đã dừng an toàn, không kết luận đơn vắng mặt.',
+		'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL' => 'Chưa thể hoàn tất đối chiếu Shopee do lỗi nhà cung cấp; dữ liệu Excel vẫn được giữ nguyên.',
 		'SHOPEE_CONNECTION_NOT_READY' => 'Đã nhập Excel nhưng chưa thể bổ sung dữ liệu Shopee. Kiểm tra kết nối Marketplace rồi tiếp tục pipeline.',
 		'SHOP_SELECTION_REQUIRED' => 'Có nhiều shop Shopee sẵn sàng. Chọn đúng shop trong Chẩn đoán nâng cao trước khi tiếp tục.',
 		'SHOPEE_INCOME_EMPTY' => 'Chưa có Income record; Result vẫn sử dụng Excel, Order Detail và Payment đã xác thực.',
@@ -116,9 +132,9 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 	}; }
 
 	private function reconcile( int $batch_id, array $state ): array {
-		if ( ! empty( $state['reconcile_inflight'] ) ) { $state['warnings'][] = 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY'; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; return $state; }
+		if ( ! empty( $state['reconcile_inflight'] ) ) { $state['warnings'][] = 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY'; $state['reconciliation_block_reason'] = 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY'; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; return $state; }
 		$ready = isset( $this->operations['ready_connections'] ) ? ( $this->operations['ready_connections'] )() : ( new Ecomkit_Vuikhoe_Shopee_Reconciliation_Service() )->ready_connections();
-		if ( 1 !== count( $ready ) ) { $state['warnings'][] = $ready ? 'SHOP_SELECTION_REQUIRED' : 'SHOPEE_CONNECTION_NOT_READY'; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; return $state; }
+		if ( 1 !== count( $ready ) ) { $state['reconciliation_block_reason'] = $ready ? 'SHOP_SELECTION_REQUIRED' : 'SHOPEE_CONNECTION_NOT_READY'; $state['warnings'][] = $state['reconciliation_block_reason']; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; return $state; }
 		$state['connection_id'] = (int) $ready[0]['id']; $state['reconcile_inflight'] = true; $this->save( $batch_id, $state );
 		try {
 			$limits = array( 'window_offset' => (int) ( $state['reconcile_window_offset'] ?? 0 ), 'max_windows' => 1, 'max_pages' => 2, 'max_detail_batches' => 1, 'continuation' => (array) ( $state['reconcile_continuation'] ?? array() ) );
@@ -136,7 +152,7 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 			if ( 0 === (int) ( $summary['matched_count'] ?? 0 ) && (int) ( $state['counts']['shopee_orders'] ?? 0 ) > 0 && (int) ( $summary['next_window_offset'] ?? 1 ) >= (int) ( $summary['total_windows'] ?? 1 ) && 'SUCCESS' === $state['reconciliation_status'] ) { $state['reconciliation_status'] = 'WARNING'; $state['warnings'][] = (string) ( $summary['classification'] ?? '' ) ?: 'SHOPEE_RECON_ZERO_MATCH_UNCLASSIFIED'; }
 			$state['reconcile_window_offset'] = (int) ( $summary['next_window_offset'] ?? 1 );
 			$state['stage'] = $state['reconcile_window_offset'] < (int) ( $summary['total_windows'] ?? 1 ) ? 'RECONCILE' : 'PAYMENT';
-		} catch ( Throwable $exception ) { $code = self::safe_code( $exception ); if ( preg_match( '/(?:CREDENTIAL|DECRYPT|PARTNER_KEY|TOKEN_CORRUPT|CONFIG_FINGERPRINT)/', $code ) ) { throw $exception; } $state['warnings'][] = $code; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; }
+		} catch ( Throwable $exception ) { $code = self::safe_code( $exception ); if ( preg_match( '/(?:CREDENTIAL|DECRYPT|PARTNER_KEY|TOKEN_CORRUPT|CONFIG_FINGERPRINT)/', $code ) ) { throw $exception; } $state['warnings'][] = $code; $state['reconciliation_block_reason'] = 'SHOPEE_RECON_PROVIDER_ERROR_TERMINAL'; $state['warnings'][] = $state['reconciliation_block_reason']; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; }
 		unset( $state['reconcile_inflight'] ); return $state;
 	}
 
@@ -198,6 +214,7 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 	private function next_income_query( array $state ): array { $state['income_index'] = (int) $state['income_index'] + 1; $state['income_cursor'] = ''; $state['income_pages'] = 0; $state['income_seen'] = array(); unset( $state['income_inflight'] ); return $state; }
 
 	private function materialize( int $batch_id, array $state ): array {
+		if ( ! self::reconciliation_terminal( $state ) ) { throw new RuntimeException( 'SHOPEE_RECON_INCOMPLETE_STATE' ); }
 		$result = isset( $this->operations['materialize'] ) ? ( $this->operations['materialize'] )( $batch_id ) : ( new Ecomkit_Vuikhoe_Canonical_Result_Service() )->materialize_batch( $batch_id );
 		if ( (int) ( $result['rows'] ?? -1 ) !== (int) ( $state['counts']['excel_orders'] ?? -2 ) ) { throw new RuntimeException( 'PIPELINE_CANONICAL_ROW_COUNT_MISMATCH' ); }
 		if ( (int) ( $result['service_fee_source_gaps'] ?? 0 ) > 0 ) { $state['warnings'][] = 'SERVICE_FEE_SOURCE_GAP'; }

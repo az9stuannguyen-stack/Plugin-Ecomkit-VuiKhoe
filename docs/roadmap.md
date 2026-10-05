@@ -233,3 +233,7 @@ Plugin 0.7.3 / DB 8 / canonical v6. Tự lưu summary an toàn theo từng cửa
 # WP.6H.2B — deterministic pagination regression fixed; production confirmation pending
 
 Plugin 0.7.4 / DB 8 / canonical v6: WP.6E từng gọi list với giới hạn hai trang, sau đó coi lỗi page-limit là reconciliation terminal và mất tập ID đã đọc. Auto nay persist cursor + ID set giữa các WP-Cron events, không tăng window offset trước khi hoàn tất, rồi mới exact-match và chạy Detail/Payment/Income. Test 11 ID qua 5+5+1 trang PASS, manual/unbounded core parity PASS; lỗi trang chưa hoàn tất vẫn không kết luận NOT_FOUND. Progress không còn báo 11/11 khi matched=missing=0 chưa xử lý. Cần upload lại file lịch sử và xem Batch #22 metadata để xác nhận nguyên nhân live. WP.6I/WP.7 chưa bắt đầu.
+
+# WP.6H.2C — automatic pipeline completion gate; live retest pending
+
+Plugin 0.7.5 / DB 8 / canonical v6: chặn `RESULT_READY` và 100% khi còn đơn Shopee chưa được so sánh đầy đủ mà không có mã chặn cụ thể. Sửa đường lỗi lên lịch Cron từng nhảy thẳng sang materialization; giờ giữ trạng thái chờ và tự lên lịch lại khi mở Result. Kết nối chưa sẵn sàng, nhiều shop, provider lỗi hoặc yêu cầu gián đoạn có mã chặn riêng. Test 11/11, 0/11, canonical sớm, Cron chờ, kết nối chặn và phân trang tiếp tục. Cần thử lại cùng file production và xem metadata Batch #23 để xác định nguyên nhân live; WP.6I/WP.7 chưa bắt đầu.
