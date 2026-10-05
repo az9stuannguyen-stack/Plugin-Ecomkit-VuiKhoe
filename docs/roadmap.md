@@ -224,3 +224,6 @@ Plugin 0.6.9 / DB 8 / canonical v4: năm trường nội bộ tùy chọn đư�
 # WP.6H.1A — Safe Payment snapshot audit
 
 Plugin 0.7.1 / DB 8 / canonical v5: thêm công cụ chẩn đoán phí Shopee admin-only trong Kết quả, đọc Payment snapshot đã lưu theo Batch + marketplace order ID chính xác; AJAX POST hiển thị và POST tải JSON projection tài chính an toàn. Không provider call, data mutation hay mapping change. Cần chạy với hai đơn production và gửi lại JSON an toàn để kết thúc audit WP.6H.1; chỉ sau đó cân nhắc WP.6H.2. WP.7 chưa bắt đầu.
+# WP.6H.2 — completed in code; manual WordPress review pending
+
+Plugin 0.7.2 / DB 8 / canonical v6: Shopee Phí dịch vụ legacy được phân loại lại từ `serviceFee + shippingSellerProtectionFeeAmount − discount_vuikhoe` bằng exact math. Thiếu toán hạng = NULL, âm cần review, Escrow ưu tiên, raw/normalized Payment không bị thay đổi. Snapshot v1–v5 stale và rematerialize từ nguồn lưu sẵn, không tự refetch Payment. Một upload tự xử lý; diagnostics dành cho admin và thu gọn. WP.7 chưa bắt đầu.

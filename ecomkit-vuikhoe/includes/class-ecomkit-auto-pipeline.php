@@ -104,6 +104,8 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 		'SHOP_SELECTION_REQUIRED' => 'Có nhiều shop Shopee sẵn sàng. Chọn đúng shop trong Chẩn đoán nâng cao trước khi tiếp tục.',
 		'SHOPEE_INCOME_EMPTY' => 'Chưa có Income record; Result vẫn sử dụng Excel, Order Detail và Payment đã xác thực.',
 		'SHOPEE_INCOME_PAGINATION_INCOMPLETE', 'INCOME_HISTORY_SEARCH_BOUNDED' => 'Tìm kiếm Income chưa bao phủ toàn bộ lịch sử; không kết luận đơn không tồn tại.',
+		'SERVICE_FEE_SOURCE_GAP' => 'Một số phí dịch vụ chưa đủ nguồn Excel/Shopee để tính; Result vẫn hoàn tất.',
+		'SERVICE_FEE_NEGATIVE_REVIEW' => 'Một số phí dịch vụ tính ra âm và cần kiểm tra; Result để trống các ô đó.',
 		'PAYMENT_INTERRUPTED_NO_AUTO_RETRY', 'INCOME_INTERRUPTED_NO_AUTO_RETRY', 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY' => 'Bước provider bị gián đoạn; hệ thống không tự gọi lại để tránh lặp yêu cầu không rõ kết quả.',
 		default => 'Result vẫn hiển thị dữ liệu có nguồn xác thực; mở Chẩn đoán nâng cao để kiểm tra nếu cần.',
 	}; }
@@ -190,6 +192,8 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 	private function materialize( int $batch_id, array $state ): array {
 		$result = isset( $this->operations['materialize'] ) ? ( $this->operations['materialize'] )( $batch_id ) : ( new Ecomkit_Vuikhoe_Canonical_Result_Service() )->materialize_batch( $batch_id );
 		if ( (int) ( $result['rows'] ?? -1 ) !== (int) ( $state['counts']['excel_orders'] ?? -2 ) ) { throw new RuntimeException( 'PIPELINE_CANONICAL_ROW_COUNT_MISMATCH' ); }
+		if ( (int) ( $result['service_fee_source_gaps'] ?? 0 ) > 0 ) { $state['warnings'][] = 'SERVICE_FEE_SOURCE_GAP'; }
+		if ( (int) ( $result['service_fee_negative_reviews'] ?? 0 ) > 0 ) { $state['warnings'][] = 'SERVICE_FEE_NEGATIVE_REVIEW'; }
 		$state['counts']['canonical_rows'] = (int) ( $result['rows'] ?? 0 ); $state['canonical_status'] = 'READY'; $state['stage'] = 'RESULT_READY'; $state['status'] = $state['warnings'] ? 'WARNING' : 'SUCCESS'; $state['completed_at'] = current_time( 'mysql', true ); return $state;
 	}
 

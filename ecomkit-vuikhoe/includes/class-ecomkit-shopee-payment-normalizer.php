@@ -12,7 +12,7 @@ final class Ecomkit_Vuikhoe_Shopee_Payment_Normalizer {
 			'orderSellerDiscount' => 'order_seller_discount', 'sellerDiscount' => 'seller_discount',
 			'shopeeDiscount' => 'shopee_discount', 'voucherFromSeller' => 'voucher_from_seller',
 			'voucherFromShopee' => 'voucher_from_shopee', 'commissionFee' => 'commission_fee',
-			'serviceFee' => 'service_fee', 'sellerTransactionFee' => 'seller_transaction_fee',
+			'serviceFee' => 'service_fee', 'shippingSellerProtectionFeeAmount' => 'shipping_seller_protection_fee_amount', 'sellerTransactionFee' => 'seller_transaction_fee',
 			'affiliateCommissionFee' => 'order_ams_commission_fee', 'totalAdjustmentAmount' => 'total_adjustment_amount',
 			'buyerPaidShippingFee' => 'buyer_paid_shipping_fee', 'estimatedShippingFee' => 'estimated_shipping_fee',
 			'actualShippingFee' => 'actual_shipping_fee', 'finalShippingFee' => 'final_shipping_fee',

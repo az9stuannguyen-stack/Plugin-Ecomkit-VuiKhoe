@@ -12,7 +12,7 @@ final class Ecomkit_Vuikhoe_Shopee_Fee_Audit {
 		'escrowAmount', 'escrowAmountAfterAdjustment', 'buyerTotalAmount', 'orderOriginalPrice',
 		'orderSellingPrice', 'orderDiscountedPrice', 'orderSellerDiscount', 'sellerDiscount',
 		'shopeeDiscount', 'voucherFromSeller', 'voucherFromShopee', 'commissionFee',
-		'serviceFee', 'sellerTransactionFee', 'affiliateCommissionFee', 'totalAdjustmentAmount',
+		'serviceFee', 'shippingSellerProtectionFeeAmount', 'sellerTransactionFee', 'affiliateCommissionFee', 'totalAdjustmentAmount',
 		'buyerPaidShippingFee', 'estimatedShippingFee', 'actualShippingFee', 'finalShippingFee',
 		'shopeeShippingRebate',
 	);

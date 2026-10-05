@@ -1,5 +1,5 @@
 <?php
-/** Pure deterministic projection from persisted Order evidence to canonical v5. */
+/** Pure deterministic projection from persisted Order evidence to canonical v6. */
 
 defined( 'ABSPATH' ) || exit;
 
@@ -17,7 +17,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 		$provider = $this->decode_provider( $order['provider_normalized_data'] ?? null );
 		$matched = 'SHOPEE' === (string) ( $order['platform'] ?? '' ) && 'MATCHED' === (string) ( $order['matching_status'] ?? '' );
 		$values = array_fill_keys( array_column( $columns, 'key' ), null );
-		$rationals = array(); $formula_states = array();
+		$rationals = array(); $formula_states = array(); $source_metadata = array();
 		$values['eshop_order_code'] = $this->eshop_code( $order['eshop_order_code'] ?? null );
 		if ( null === $values['eshop_order_code'] ) {
 			$raw = $this->decode_provider( $order['raw_source_metadata'] ?? null );
@@ -53,7 +53,31 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			$payment = $this->decode_provider( $order['payment_normalized_data'] ?? null );
 			if ( (string) ( $payment['marketplaceOrderId'] ?? '' ) === (string) ( $order['marketplace_order_id'] ?? '' ) ) {
 				$values['fixed_platform_fee'] = $this->payment_number( $payment['commissionFee'] ?? null );
-				$values['service_platform_fee'] = $this->payment_number( $payment['serviceFee'] ?? null );
+				$raw_payment = $this->decode_provider( $order['payment_raw_data'] ?? null );
+				$raw_income = (string) ( $raw_payment['order_sn'] ?? '' ) === (string) ( $order['marketplace_order_id'] ?? '' ) && is_array( $raw_payment['order_income'] ?? null ) ? $raw_payment['order_income'] : array();
+				// Old Payment snapshots lack the normalized PiShip key; use only the identity-checked persisted raw field.
+				$piship = $this->payment_number( $payment['shippingSellerProtectionFeeAmount'] ?? $raw_income['shipping_seller_protection_fee_amount'] ?? null );
+				$provider_service = $this->exact_payment_number( $payment['serviceFee'] ?? null );
+				$discount = $values['discount_vuikhoe'];
+				$source_metadata['serviceFeeReclassification'] = array( 'version' => 'v1', 'providerServiceFee' => $provider_service, 'shippingSellerProtectionFeeAmount' => $piship, 'vuiKhoeDiscount' => $discount, 'canonicalServiceFee' => null, 'status' => 'MISSING_OPERANDS' );
+				$missing_service = array();
+				if ( null === $provider_service ) { $missing_service[] = 'providerServiceFee'; }
+				if ( null === $piship || null === $this->exact_payment_number( $piship ) ) { $missing_service[] = 'shippingSellerProtectionFeeAmount'; }
+				if ( null === $discount ) { $missing_service[] = 'discount_vuikhoe'; }
+				if ( $missing_service ) { $formula_states['service_platform_fee'] = array( 'status' => 'MISSING_OPERANDS', 'fields' => $missing_service ); }
+				else {
+					$corrected = Ecomkit_Vuikhoe_Exact_Financial_Math::subtract( Ecomkit_Vuikhoe_Exact_Financial_Math::add( $provider_service, $piship ), $discount );
+					$source_metadata['serviceFeeReclassification']['calculatedServiceFee'] = $corrected;
+					if ( Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $corrected, '0' ) < 0 ) {
+						$source_metadata['serviceFeeReclassification']['status'] = 'SERVICE_FEE_NEGATIVE_REVIEW';
+						$formula_states['service_platform_fee'] = array( 'status' => 'SERVICE_FEE_NEGATIVE_REVIEW', 'fields' => array() );
+					} else {
+						$values['service_platform_fee'] = $corrected;
+						$source_metadata['serviceFeeReclassification']['canonicalServiceFee'] = $corrected;
+						$source_metadata['serviceFeeReclassification']['status'] = 'READY';
+						$formula_states['service_platform_fee'] = array( 'status' => 'READY', 'fields' => array() );
+					}
+				}
 				$values['transaction_platform_fee'] = $this->payment_number( $payment['sellerTransactionFee'] ?? null );
 				$values['total_amount_to_collect'] = $this->payment_number( $payment['escrowAmountAfterAdjustment'] ?? null );
 				$values['total_amount_to_collect'] ??= $this->payment_number( $payment['escrowAmount'] ?? null );
@@ -80,7 +104,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 		foreach ( $values as $value ) {
 			if ( null !== $value && ! is_scalar( $value ) ) { throw new RuntimeException( 'CANONICAL_SOURCE_INVALID' ); }
 		}
-		return array( 'version' => Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'columns' => $values, 'rational' => $rationals, 'formula_state' => $formula_states );
+		return array( 'version' => Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'columns' => $values, 'rational' => $rationals, 'formula_state' => $formula_states, 'source_metadata' => $source_metadata );
 	}
 
 	/** @param array<string,mixed> $order @param array<int,array<string,mixed>> $items @param array<string,mixed> $batch_source */
@@ -96,6 +120,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			'platform' => $order['platform'] ?? null, 'matching_status' => $order['matching_status'] ?? null,
 			'provider_normalized_data' => $this->decode_provider( $order['provider_normalized_data'] ?? null),
 			'payment_normalized_data' => $this->decode_provider( $order['payment_normalized_data'] ?? null ),
+			'payment_raw_data' => $this->decode_provider( $order['payment_raw_data'] ?? null ),
 			'items' => array_map( static fn( array $item ): array => array_intersect_key( $item, array_flip( array( 'id', 'sku', 'product_name', 'quantity', 'price', 'variant' ) ) ), $items ),
 		);
 		return hash( 'sha256', (string) wp_json_encode( $source, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ) );
@@ -156,6 +181,12 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 	private function payment_number( mixed $value ): int|float|string|null {
 		if ( is_int( $value ) || is_float( $value ) ) { return $value; }
 		return is_string( $value ) && is_numeric( $value ) ? $value : null;
+	}
+
+	private function exact_payment_number( mixed $value ): ?string {
+		if ( ! is_int( $value ) && ! is_string( $value ) ) { return null; }
+		try { return Ecomkit_Vuikhoe_Exact_Financial_Math::normalize( $value ); }
+		catch ( InvalidArgumentException ) { return null; }
 	}
 
 	private function internal_money( mixed $value ): ?string {

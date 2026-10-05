@@ -1,6 +1,6 @@
 # Hợp đồng canonical 24 cột
 
-> WP.6H.1A: `payment_raw_data.order_income.service_fee → serviceFee → Phí dịch vụ (TMĐT)` vẫn là mapping code hiện hành nhưng được đánh dấu **SEMANTIC_PARITY_UNVERIFIED** sau khi hai đơn legacy không khớp. Công cụ chẩn đoán admin chỉ đọc snapshot đã lưu để tìm nguồn đúng; chưa sửa canonical, Payment hoặc công thức, chưa khẳng định field thay thế.
+> WP.6H.2 / canonical v6: Shopee **Phí dịch vụ (TMĐT)** = `payment_normalized_data.serviceFee` + `payment_normalized_data.shippingSellerProtectionFeeAmount` − `orders.discount_vuikhoe`, dùng exact decimal math. Với Payment snapshot cũ thiếu normalized PiShip, chỉ đọc `payment_raw_data.order_income.shipping_seller_protection_fee_amount` khi raw `order_sn` khớp chính xác; không refetch. Mọi toán hạng bắt buộc, NULL không thành 0. Kết quả âm là `SERVICE_FEE_NEGATIVE_REVIEW` và canonical NULL. Provider `serviceFee` giữ nguyên; metadata phép tính nằm trong canonical JSON, không thêm cột. Công thức tỷ lệ và legacy fallback dùng phí đã phân loại lại, Escrow vẫn thắng. Snapshot v1–v5 stale. Bản Excel thiếu chiết khấu nội bộ vẫn nhập và hoàn tất với source gap; công cụ kỹ thuật không thuộc luồng thường. Các dòng v5 bên dưới là lịch sử.
 
 ## WP.6H — Exact Financial Formula Engine (hiện hành)
 
@@ -63,7 +63,7 @@ Snapshot `v1`/`v2`/`v3` trở thành stale, materialize lại từ Orders đã l
 | 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.discount_vuikhoe` | Không dùng Shopee voucher/discount | Trống nếu thiếu/không hợp lệ |
 | 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | ratio string + exact rational metadata | `(I+J)/F` khi đủ nguồn | Không dùng Shopee Affiliate | Trống nếu thiếu toán hạng hoặc F=0 |
 | 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `commissionFee` | Trực tiếp, không tính | NULL nếu thiếu |
-| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `serviceFee` | Trực tiếp, không tính | NULL nếu thiếu |
+| 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | Shopee Payment + Excel: `serviceFee + shippingSellerProtectionFeeAmount − discount_vuikhoe` | Exact v6 reclassification | NULL nếu thiếu nguồn/âm cần review |
 | 23 | Phí Giao Dịch (TMĐT) | `transaction_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `sellerTransactionFee` | Trực tiếp, không tính | NULL nếu thiếu |
 | 24 | % Chi Phí Sàn TMĐT | `platform_cost_percent` | ratio string + exact rational metadata | `(L+M+N)/F` khi đủ nguồn | Không chế phí Lazada | Trống nếu thiếu toán hạng hoặc F=0 |
 
@@ -160,7 +160,7 @@ Sau audit WP.6F: `EXCEL_AVAILABLE` = 1; `SHOPEE_ORDER_DETAIL_AVAILABLE` = 5; đa
 | 19 | Chiết Khấu (Vui Khỏe) | UNMAPPED_NO_SOURCE | Không có internal discount source đã xác minh | Không | NULL; không dùng Shopee promotion |
 | 20 | % Chiết Khấu Vui Khỏe | DERIVED_LEGACY_FORMULA_GATED | `(I+J)/F` đã xác minh | Không kích hoạt khi thiếu F/I/J | NULL hiện tại; không rút gọn thành `J/F` |
 | 21 | Phí Cố Định (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.commissionFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
-| 22 | Phí dịch vụ (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.serviceFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
+| 22 | Phí dịch vụ (TMĐT) | SHOPEE_PAYMENT_PLUS_INTERNAL_RECLASSIFICATION | `serviceFee`, `shippingSellerProtectionFeeAmount`, `orders.discount_vuikhoe` | Raw PiShip đã lưu nếu normalized key thiếu và order_sn khớp | Exact v6; thiếu = NULL, 0 = 0, âm = review |
 | 23 | Phí Giao Dịch (TMĐT) | SHOPEE_PAYMENT_ESCROW | `payment_normalized_data.sellerTransactionFee` | Không | Trực tiếp; thiếu = NULL, 0 = 0 |
 | 24 | % Chi Phí Sàn TMĐT | DERIVED_LEGACY_FORMULA_GATED | `(L+M+N)/F` đã xác minh | Không kích hoạt khi thiếu F hoặc bất kỳ phí nào | NULL hiện tại; không thay phí thiếu bằng 0 |
 

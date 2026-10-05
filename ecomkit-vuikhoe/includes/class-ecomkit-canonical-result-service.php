@@ -18,13 +18,16 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 		$items = $this->items_by_order( array_column( $orders, 'id' ) );
 		$materializer = new Ecomkit_Vuikhoe_Canonical_Result_Materializer( wp_timezone() );
 		$now = current_time( 'mysql', true );
-		$updates = array();
+		$updates = array(); $service_fee_source_gaps = 0; $service_fee_negative_reviews = 0;
 		foreach ( $orders as $order ) {
 			try {
 				$order_items = $items[ (int) $order['id'] ] ?? array();
 				$snapshot = $materializer->materialize( $order, $order_items, $batch_source );
 				$json = wp_json_encode( $snapshot, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
 				if ( ! is_string( $json ) || 24 !== count( $snapshot['columns'] ) ) { throw new RuntimeException( 'CANONICAL_ROW_BUILD_FAILED' ); }
+				$fee_state = $snapshot['formula_state']['service_platform_fee']['status'] ?? '';
+				if ( 'MISSING_OPERANDS' === $fee_state ) { $service_fee_source_gaps++; }
+				if ( 'SERVICE_FEE_NEGATIVE_REVIEW' === $fee_state ) { $service_fee_negative_reviews++; }
 				$updates[] = array( 'id' => (int) $order['id'], 'json' => $json, 'fingerprint' => $materializer->fingerprint( $order, $order_items, $batch_source ) );
 			} catch ( Throwable $exception ) {
 				if ( in_array( $exception->getMessage(), array( 'CANONICAL_MAPPING_CONTRACT_INVALID', 'CANONICAL_SOURCE_INVALID' ), true ) ) { throw $exception; }
@@ -42,7 +45,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 			$wpdb->query( 'ROLLBACK' );
 			throw new RuntimeException( 'CANONICAL_RESULT_PERSIST_FAILED', 0, $exception );
 		}
-		return array( 'orders' => count( $orders ), 'rows' => count( $updates ) );
+		return array( 'orders' => count( $orders ), 'rows' => count( $updates ), 'service_fee_source_gaps' => $service_fee_source_gaps, 'service_fee_negative_reviews' => $service_fee_negative_reviews );
 	}
 
 	/** @return array<string,mixed>|null */
