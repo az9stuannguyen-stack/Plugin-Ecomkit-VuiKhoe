@@ -106,6 +106,10 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 		'SHOPEE_INCOME_PAGINATION_INCOMPLETE', 'INCOME_HISTORY_SEARCH_BOUNDED' => 'Tìm kiếm Income chưa bao phủ toàn bộ lịch sử; không kết luận đơn không tồn tại.',
 		'SERVICE_FEE_SOURCE_GAP' => 'Một số phí dịch vụ chưa đủ nguồn Excel/Shopee để tính; Result vẫn hoàn tất.',
 		'SERVICE_FEE_NEGATIVE_REVIEW' => 'Một số phí dịch vụ tính ra âm và cần kiểm tra; Result để trống các ô đó.',
+		'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY' => 'Không tìm thấy đơn Shopee nào trong khoảng ngày truy vấn. Hãy xác nhận file thuộc đúng shop đang kết nối.',
+		'SHOPEE_RECON_ZERO_INTERSECTION' => 'Shopee có đơn trong khoảng ngày truy vấn nhưng không có Mã đơn sàn nào trùng chính xác với Excel.',
+		'SHOPEE_RECON_PARTIAL_MATCH' => 'Một số Mã đơn sàn trong Excel chưa trùng chính xác với đơn Shopee trong khoảng ngày truy vấn.',
+		'SHOPEE_RECON_ZERO_MATCH_UNCLASSIFIED' => 'Chưa có đơn Shopee khớp; kiểm tra tóm tắt đối chiếu trong Result. Chưa xác định nguyên nhân.',
 		'PAYMENT_INTERRUPTED_NO_AUTO_RETRY', 'INCOME_INTERRUPTED_NO_AUTO_RETRY', 'SHOPEE_RECON_INTERRUPTED_NO_AUTO_RETRY' => 'Bước provider bị gián đoạn; hệ thống không tự gọi lại để tránh lặp yêu cầu không rõ kết quả.',
 		default => 'Result vẫn hiển thị dữ liệu có nguồn xác thực; mở Chẩn đoán nâng cao để kiểm tra nếu cần.',
 	}; }
@@ -125,7 +129,8 @@ final class Ecomkit_Vuikhoe_Auto_Pipeline {
 			$state['counts']['payment_total'] = (int) ( $summary['matched_count'] ?? 0 );
 			$state['reconcile_total_windows'] = (int) ( $summary['total_windows'] ?? 1 );
 			$state['reconciliation_status'] = (string) ( $summary['status'] ?? 'WARNING' );
-			if ( 'SUCCESS' !== $state['reconciliation_status'] ) { $state['warnings'][] = 'SHOPEE_RECON_PARTIAL'; }
+			if ( 'SUCCESS' !== $state['reconciliation_status'] ) { $state['warnings'][] = (string) ( $summary['classification'] ?? '' ) ?: 'SHOPEE_RECON_PARTIAL'; }
+			if ( 0 === (int) ( $summary['matched_count'] ?? 0 ) && (int) ( $state['counts']['shopee_orders'] ?? 0 ) > 0 && (int) ( $summary['next_window_offset'] ?? 1 ) >= (int) ( $summary['total_windows'] ?? 1 ) && 'SUCCESS' === $state['reconciliation_status'] ) { $state['reconciliation_status'] = 'WARNING'; $state['warnings'][] = (string) ( $summary['classification'] ?? '' ) ?: 'SHOPEE_RECON_ZERO_MATCH_UNCLASSIFIED'; }
 			$state['reconcile_window_offset'] = (int) ( $summary['next_window_offset'] ?? 1 );
 			$state['stage'] = $state['reconcile_window_offset'] < (int) ( $summary['total_windows'] ?? 1 ) ? 'RECONCILE' : 'PAYMENT';
 		} catch ( Throwable $exception ) { $code = self::safe_code( $exception ); if ( preg_match( '/(?:CREDENTIAL|DECRYPT|PARTNER_KEY|TOKEN_CORRUPT|CONFIG_FINGERPRINT)/', $code ) ) { throw $exception; } $state['warnings'][] = $code; $state['reconciliation_status'] = 'WARNING'; $state['payment_status'] = 'SKIPPED'; $state['income_status'] = 'SKIPPED'; $state['stage'] = 'MATERIALIZE'; }

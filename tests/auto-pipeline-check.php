@@ -66,4 +66,14 @@ $admin_source = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/includes/class
 $result_view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/results.php' ); pipeline_check( ! str_contains( $result_view, 'UI: Nền tảng / Matching / Cảnh báo' ) && str_contains( $result_view, "foreach ( \$result['columns'] as \$column )" ), 'Result table adds a noncanonical column.' );
 pipeline_check( str_contains( $result_view, '<details><summary>' ) && str_contains( $result_view, 'Công cụ quản trị nâng cao' ) && str_contains( $result_view, 'Chỉ dùng khi cần kiểm tra kỹ thuật' ), 'Technical actions are prominent in normal Result view.' );
 create_batch( 19, 0, 1 ); $gap_pipeline = new Ecomkit_Vuikhoe_Auto_Pipeline( array( 'materialize' => static fn(): array => array( 'rows' => 1, 'service_fee_source_gaps' => 1 ) ) ); $gap_pipeline->start( 19 ); drain( $gap_pipeline ); $gap_state = $gap_pipeline->state( 19 ); pipeline_check( 'WARNING' === $gap_state['status'] && 100 === Ecomkit_Vuikhoe_Auto_Pipeline::progress( $gap_state )['percent'] && in_array( 'SERVICE_FEE_SOURCE_GAP', $gap_state['warnings'], true ), 'Service fee source gap blocked completion or was not explained.' );
+create_batch( 25, 2, 1 ); $zero_calls = array( 'payment' => 0, 'income' => 0 );
+$zero_pipeline = new Ecomkit_Vuikhoe_Auto_Pipeline( array(
+	'ready_connections' => static fn(): array => array( array( 'id' => 9 ) ),
+	'reconcile' => static fn(): array => array( 'status' => 'WARNING', 'classification' => 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY', 'matched_count' => 0, 'missing_count' => 2, 'detail_count' => 0, 'total_windows' => 1, 'next_window_offset' => 1 ),
+	'payment' => static function () use ( &$zero_calls ): void { $zero_calls['payment']++; },
+	'income_page' => static function () use ( &$zero_calls ): array { $zero_calls['income']++; return array(); },
+	'materialize' => static fn(): array => array( 'rows' => 3 ),
+) );
+$zero_pipeline->start( 25 ); drain( $zero_pipeline ); $zero_state = $zero_pipeline->state( 25 );
+pipeline_check( 'WARNING' === $zero_state['status'] && 100 === Ecomkit_Vuikhoe_Auto_Pipeline::progress( $zero_state )['percent'] && 3 === $zero_state['counts']['canonical_rows'] && 0 === $zero_state['counts']['payment_total'] && array( 'payment' => 0, 'income' => 0 ) === $zero_calls && in_array( 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY', $zero_state['warnings'], true ), 'Zero-match pipeline called downstream provider or hid 3-row Result.' );
 echo "WP.6E one-upload pipeline checks passed.\n";

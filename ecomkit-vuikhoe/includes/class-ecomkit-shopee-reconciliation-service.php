@@ -37,7 +37,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		$batch_metadata = is_array( $batch_metadata ) ? $batch_metadata : array();
 		$date_column = isset( $batch_metadata['date_column'] ) && (int) $batch_metadata['date_column'] > 0 ? (int) $batch_metadata['date_column'] : ( (string) ( $batch_metadata['parser_version'] ?? '' ) === 'wp2b-v1' ? 3 : 0 );
 
-		$by_sn = array();
+		$by_sn = array(); $by_id = array();
 		$dates_by_id = array();
 		$planning_errors = array();
 		foreach ( $excel_orders as $order ) {
@@ -47,6 +47,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 				continue;
 			}
 			$by_sn[ $sn ] = $order;
+			$by_id[ (int) $order['id'] ] = $order;
 			$raw = json_decode( (string) ( $order['raw_source_metadata'] ?? '' ), true );
 			$storage = is_array( $raw ) ? (string) ( $raw['order_date_storage'] ?? 'LOCAL' ) : 'LOCAL';
 			$date = self::stored_order_local_date( (string) ( $order['order_date'] ?? '' ), $timezone, $storage );
@@ -80,6 +81,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		if ( is_array( $auto_limits ) && $window_offset >= $all_windows_count && $all_windows_count > 0 ) { $this->fail( 'SHOPEE_RECON_WINDOW_OFFSET_INVALID', 'RECON_PLAN' ); }
 		foreach ( $windows as $window ) {
 			$window_ids = array_keys( array_filter( $dates_by_id, static fn( string $date ): bool => $date >= $window['start_date'] && $date <= $window['end_date'] ) );
+			$window_excel_sns = array_values( array_map( static fn( int $id ): string => (string) $by_id[ $id ]['marketplace_order_id'], $window_ids ) );
 			try {
 				$result = $this->orders->get_all_orders( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100, null, is_array( $auto_limits ) ? max( 1, min( 3, (int) ( $auto_limits['max_pages'] ?? 2 ) ) ) : 100 );
 				$api_calls += (int) $result['page_count'];
@@ -89,13 +91,15 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 				foreach ( $window_ids as $order_id ) {
 					$complete_order_ids[ (int) $order_id ] = true;
 				}
-				$window_results[] = array( 'start_date' => $window['start_date'], 'end_date' => $window['end_date'], 'status' => 'SUCCESS', 'page_count' => (int) $result['page_count'], 'provider_count' => count( $result['orders'] ) );
+				$provider_sns = array_values( array_map( static fn( array $row ): string => (string) $row['order_sn'], $result['orders'] ) );
+				$sets = self::compare_exact_sets( $window_excel_sns, $provider_sns );
+				$window_results[] = array( 'connection_id' => $connection_id, 'shop_reference' => (string) $connection['external_shop_id'], 'time_range_field' => 'create_time', 'start_date' => $window['start_date'], 'end_date' => $window['end_date'], 'time_from' => $window['time_from'], 'time_to' => $window['time_to'], 'status' => 'SUCCESS', 'list_request_success' => true, 'pagination_complete' => true, 'request_ids' => array_values( array_filter( (array) ( $result['request_ids'] ?? array() ), static fn( mixed $id ): bool => is_string( $id ) && 1 === preg_match( '/\A[A-Za-z0-9_-]{1,128}\z/D', $id ) ) ), 'page_count' => (int) $result['page_count'], 'excel_count' => count( $window_excel_sns ), 'provider_count' => count( $provider_sns ), 'intersection_count' => count( $sets['matched'] ), 'excel_order_ids' => $window_excel_sns, 'provider_order_ids' => $provider_sns, 'intersection' => $sets['matched'], 'missing_in_provider' => $sets['missing'], 'extra_in_provider' => $sets['extra'] );
 			} catch ( Throwable $exception ) {
 				$api_calls += max( 1, (int) ( $this->orders->last_diagnostic['pagination_page'] ?? 1 ) );
 				$is_partial = (int) ( $this->orders->last_diagnostic['pagination_page'] ?? 1 ) > 1 || in_array( $exception->getMessage(), array( 'SHOPEE_ORDER_PAGINATION_STALLED', 'SHOPEE_ORDER_PAGE_LIMIT_EXCEEDED' ), true );
 				$error_code = $is_partial ? 'SHOPEE_RECON_PAGINATION_INCOMPLETE' : 'SHOPEE_RECON_LIST_FAILED';
 				$provider_errors[] = $this->error_record( $batch, null, $error_code, 'RECON_LIST', 'Không thể đọc đầy đủ tất cả trang đơn Shopee trong một khoảng ngày.', 'Thử đối chiếu lại; các đơn trong khoảng lỗi chưa được kết luận NOT FOUND.' );
-				$window_results[] = array( 'start_date' => $window['start_date'], 'end_date' => $window['end_date'], 'status' => 'INCOMPLETE', 'classification' => sanitize_key( $exception->getMessage() ) );
+				$window_results[] = array( 'connection_id' => $connection_id, 'shop_reference' => (string) $connection['external_shop_id'], 'time_range_field' => 'create_time', 'start_date' => $window['start_date'], 'end_date' => $window['end_date'], 'time_from' => $window['time_from'], 'time_to' => $window['time_to'], 'status' => 'INCOMPLETE', 'list_request_success' => false, 'pagination_complete' => false, 'excel_count' => count( $window_excel_sns ), 'excel_order_ids' => $window_excel_sns, 'failure_code' => $error_code, 'classification' => sanitize_key( $exception->getMessage() ) );
 			}
 		}
 
@@ -168,6 +172,8 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 			$summary['extra_order_sns'] = array_slice( array_unique( array_merge( (array) ( $previous['extra_order_sns'] ?? array() ), $summary['extra_order_sns'] ) ), 0, 100 );
 			if ( 'SUCCESS' !== (string) ( $previous['status'] ?? 'SUCCESS' ) && 'SUCCESS' === $summary['status'] ) { $summary['status'] = (string) $previous['status']; }
 		}
+		$summary['classification'] = self::classify_summary( $summary );
+		if ( in_array( $summary['classification'], array( 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY', 'SHOPEE_RECON_ZERO_INTERSECTION', 'SHOPEE_RECON_PARTIAL_MATCH' ), true ) && 'SUCCESS' === $summary['status'] ) { $summary['status'] = 'WARNING'; }
 
 		$this->persist( $batch, $batch_metadata, $connection_id, $complete_order_ids, $matched, $missing, $details_by_sn, $detail_missing, $detail_failed, $all_errors, $summary );
 		return $summary;
@@ -209,6 +215,17 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 			'missing' => array_values( array_diff( $excel, $provider ) ),
 			'extra'   => array_values( array_diff( $provider, $excel ) ),
 		);
+	}
+
+	/** Classify only after every planned provider window finished; absence is never inferred from an incomplete page. */
+	public static function classify_summary( array $summary ): ?string {
+		$windows = (array) ( $summary['windows'] ?? array() );
+		if ( (int) ( $summary['excel_shopee_count'] ?? 0 ) < 1 || ! $windows || count( $windows ) !== (int) ( $summary['total_windows'] ?? count( $windows ) ) || (int) ( $summary['next_window_offset'] ?? count( $windows ) ) < (int) ( $summary['total_windows'] ?? count( $windows ) ) ) { return null; }
+		foreach ( $windows as $window ) { if ( 'SUCCESS' !== ( $window['status'] ?? '' ) || false === ( $window['pagination_complete'] ?? true ) ) { return in_array( (string) ( $window['failure_code'] ?? '' ), array( 'SHOPEE_RECON_PAGINATION_INCOMPLETE', 'SHOPEE_RECON_LIST_FAILED' ), true ) ? $window['failure_code'] : 'SHOPEE_RECON_PAGINATION_INCOMPLETE'; } }
+		if ( (int) ( $summary['missing_date_count'] ?? 0 ) > 0 ) { return null; }
+		$matched = (int) ( $summary['matched_count'] ?? 0 ); $excel = (int) $summary['excel_shopee_count'];
+		if ( 0 === $matched ) { return 0 === (int) ( $summary['provider_count'] ?? 0 ) ? 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY' : 'SHOPEE_RECON_ZERO_INTERSECTION'; }
+		return $matched < $excel ? 'SHOPEE_RECON_PARTIAL_MATCH' : null;
 	}
 
 	public static function parse_excel_local_date( mixed $value, DateTimeZone $timezone ): ?string {

@@ -242,3 +242,6 @@ Parser khám phá hàng header production hiện hữu rồi nhận độc lập
 # WP.6H.2 — Shopee legacy fee reclassification
 
 Canonical v6 (plugin 0.7.2, schema 8) tính riêng phí dịch vụ legacy từ provider `serviceFee` + PiShip `shipping_seller_protection_fee_amount` − Excel `discount_vuikhoe` bằng exact decimal math. Payment normalized giữ nghĩa provider; snapshot cũ có thể dùng raw PiShip đã lưu với `order_sn` khớp, không gọi lại API. Thiếu nguồn hoặc kết quả âm không được thay bằng 0; công thức phụ thuộc dùng canonical fee đã hiệu chỉnh. Một upload vẫn tự chạy toàn bộ pipeline. Admin diagnostics thu gọn và không cần cho vận hành thường.
+# WP.6H.2A — reconciliation evidence and zero-match UX
+
+Plugin 0.7.3 / schema 8 / canonical v6: mỗi cửa sổ đối chiếu Shopee lưu ngay trong Batch metadata shop đã chọn, `create_time`, ngày Excel, Unix range, số Excel/Shopee, tập `order_sn` và giao chính xác, trạng thái list/pagination và request IDs an toàn. Chỉ kết luận window empty, zero intersection hay partial match khi toàn bộ cửa sổ đã hoàn tất; phân trang lỗi không cho phép kết luận NOT_FOUND. Result hiển thị cảnh báo ngắn riêng với khoảng ngày/shop, giải thích vì sao Detail/Payment/Income là 0/0; nguồn Excel nội bộ thiếu là vấn đề tách biệt. Không thêm API call, DB schema, canonical column hay bước bấm của người dùng.

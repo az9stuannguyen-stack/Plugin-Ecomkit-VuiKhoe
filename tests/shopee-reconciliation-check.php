@@ -172,6 +172,39 @@ $calls_before_empty = count( $GLOBALS['recon_get_calls'] );
 try { $service->reconcile_batch( 11 ); throw new RuntimeException( 'LAZADA-only Batch was accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Reconciliation_Exception $exception ) { recon_check( 'SHOPEE_RECON_NO_SHOPEE_ORDERS' === $exception->getMessage(), 'No-Shopee classification failed.' ); }
 recon_check( $calls_before_empty === count( $GLOBALS['recon_get_calls'] ), 'LAZADA-only Batch called Shopee.' );
 
+// Automatic zero-match evidence uses the same single list request; no diagnostic refetch.
+function diagnostic_batch( int $batch_id, array $ids, array $base ): void {
+	global $wpdb;
+	$wpdb->batches[ $batch_id ] = array( 'id' => $batch_id, 'source_type' => 'EXCEL', 'status' => 'SUCCESS', 'source_filename' => 'synthetic.xlsx', 'source_metadata' => json_encode( array( 'parser_version' => 'wp5a-v1', 'date_column' => 3 ) ) );
+	foreach ( $ids as $offset => $sn ) { $id = $batch_id * 10 + $offset; $wpdb->orders[ $id ] = array_merge( $base, array( 'id' => $id, 'batch_id' => $batch_id, 'marketplace_order_id' => $sn, 'order_date' => '2026-10-03 10:00:00', 'raw_source_metadata' => '{}', 'source_refs' => '{}' ) ); }
+}
+diagnostic_batch( 20, array( 'A', 'B' ), $base );
+$before = count( $GLOBALS['recon_get_calls'] );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'request_id' => 'empty-window', 'response' => array( 'more' => false, 'next_cursor' => '', 'order_list' => array() ) ) );
+$empty_summary = $service->reconcile_batch( 20 ); $empty_window = $empty_summary['windows'][0];
+recon_check( 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY' === $empty_summary['classification'] && 'WARNING' === $empty_summary['status'] && 0 === $empty_summary['matched_count'] && 1 === count( $GLOBALS['recon_get_calls'] ) - $before, 'Empty provider window was not classified from one existing list call.' );
+recon_check( $empty_window['pagination_complete'] && $empty_window['list_request_success'] && 'create_time' === $empty_window['time_range_field'] && '2026-10-03' === $empty_window['start_date'] && 2 === $empty_window['excel_count'] && 0 === $empty_window['provider_count'] && array( 'A', 'B' ) === $empty_window['missing_in_provider'] && array( 'empty-window' ) === $empty_window['request_ids'], 'Safe window/date/set/request evidence was not persisted.' );
+recon_check( 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY' === json_decode( $wpdb->batches[20]['source_metadata'], true )['shopee_reconciliation']['classification'], 'Empty-window evidence was not persisted on Batch.' );
+diagnostic_batch( 21, array( 'A', 'B' ), $base );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'request_id' => 'other-orders', 'response' => array( 'more' => false, 'next_cursor' => '', 'order_list' => array( array( 'order_sn' => 'C' ), array( 'order_sn' => 'D' ), array( 'order_sn' => 'E' ) ) ) ) );
+$zero_summary = $service->reconcile_batch( 21 );
+recon_check( 'SHOPEE_RECON_ZERO_INTERSECTION' === $zero_summary['classification'] && 0 === $zero_summary['matched_count'] && 3 === $zero_summary['provider_count'] && array( 'C', 'D', 'E' ) === $zero_summary['windows'][0]['extra_in_provider'], 'Nonempty disjoint provider set was falsely matched.' );
+diagnostic_batch( 22, array( 'A', 'B' ), $base );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'response' => array( 'more' => false, 'next_cursor' => '', 'order_list' => array( array( 'order_sn' => 'A' ), array( 'order_sn' => 'C' ) ) ) ) );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'response' => array( 'order_list' => array( array( 'order_sn' => 'A', 'update_time' => 200 ) ) ) ) );
+$partial_summary = $service->reconcile_batch( 22 );
+recon_check( 'SHOPEE_RECON_PARTIAL_MATCH' === $partial_summary['classification'] && 1 === $partial_summary['matched_count'] && array( 'B' ) === $partial_summary['windows'][0]['missing_in_provider'] && 'NOT_FOUND_IN_SHOPEE' === $wpdb->orders[221]['matching_status'], 'Partial exact match did not retain missing B.' );
+diagnostic_batch( 23, array( 'A', 'B' ), $base );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'response' => array( 'more' => false, 'next_cursor' => '', 'order_list' => array( array( 'order_sn' => 'A' ), array( 'order_sn' => 'B' ), array( 'order_sn' => 'C' ) ) ) ) );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'response' => array( 'order_list' => array( array( 'order_sn' => 'A', 'update_time' => 200 ), array( 'order_sn' => 'B', 'update_time' => 200 ) ) ) ) );
+$exact_summary = $service->reconcile_batch( 23 );
+recon_check( null === $exact_summary['classification'] && 2 === $exact_summary['matched_count'] && 1 === $exact_summary['extra_count'] && array( 'A', 'B' ) === $exact_summary['windows'][0]['intersection'], 'Exact full match/extra provider set failed.' );
+diagnostic_batch( 24, array( 'A', 'B' ), $base );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => '', 'response' => array( 'more' => true, 'next_cursor' => 'MORE', 'order_list' => array( array( 'order_sn' => 'A' ) ) ) ) );
+$GLOBALS['recon_get_responses'][] = recon_response( array( 'error' => 'error_server', 'message' => 'safe', 'request_id' => 'failed-page' ) );
+$incomplete_summary = $service->reconcile_batch( 24 );
+recon_check( 'SHOPEE_RECON_PAGINATION_INCOMPLETE' === $incomplete_summary['classification'] && ! $incomplete_summary['windows'][0]['pagination_complete'] && null === $wpdb->orders[240]['matching_status'] && null === $wpdb->orders[241]['matching_status'], 'Incomplete pagination produced false absence.' );
+
 ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->upsert_shopee( '789', array( 'access_token' => 'FAKE_ACCESS_2', 'refresh_token' => 'FAKE_REFRESH_2', 'expire_in' => 3600 ), $config['fingerprint'] );
 $calls_before_ambiguous = count( $GLOBALS['recon_get_calls'] );
 try { $service->reconcile_batch( 10 ); throw new RuntimeException( 'Ambiguous multi-shop selection was accepted.' ); } catch ( Ecomkit_Vuikhoe_Shopee_Reconciliation_Exception $exception ) { recon_check( 'SHOPEE_RECON_CONNECTION_AMBIGUOUS' === $exception->getMessage(), 'Multi-shop ambiguity classification failed.' ); }

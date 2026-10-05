@@ -227,3 +227,6 @@ Plugin 0.7.1 / DB 8 / canonical v5: thêm công cụ chẩn đoán phí Shopee a
 # WP.6H.2 — completed in code; manual WordPress review pending
 
 Plugin 0.7.2 / DB 8 / canonical v6: Shopee Phí dịch vụ legacy được phân loại lại từ `serviceFee + shippingSellerProtectionFeeAmount − discount_vuikhoe` bằng exact math. Thiếu toán hạng = NULL, âm cần review, Escrow ưu tiên, raw/normalized Payment không bị thay đổi. Snapshot v1–v5 stale và rematerialize từ nguồn lưu sẵn, không tự refetch Payment. Một upload tự xử lý; diagnostics dành cho admin và thu gọn. WP.7 chưa bắt đầu.
+# WP.6H.2A — automated PASS; manual production review pending
+
+Plugin 0.7.3 / DB 8 / canonical v6. Tự lưu summary an toàn theo từng cửa sổ đối chiếu và phân biệt `SHOPEE_RECON_PROVIDER_WINDOW_EMPTY`, `SHOPEE_RECON_ZERO_INTERSECTION`, `SHOPEE_RECON_PARTIAL_MATCH`; phân trang chưa hoàn tất không tạo kết luận vắng mặt. Result 100% WARNING giải thích zero match và các bước downstream 0/0, tách khỏi source gap Excel. Chỉ sử dụng dữ liệu của lượt đối chiếu sẵn có, không thêm Shopee call, không sửa exact matching hay tài chính. Batch cũ có summary đủ số lượng/trạng thái vẫn có thể hiển thị phân loại tổng quát, nhưng chưa có tập mã theo cửa sổ. WP.7 chưa bắt đầu.

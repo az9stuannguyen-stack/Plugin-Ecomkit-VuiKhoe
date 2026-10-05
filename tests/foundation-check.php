@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 define('ABSPATH', __DIR__ . '/wordpress-placeholder/');
 define('ECOMKIT_VUIKHOE_DB_VERSION', 8);
-define('ECOMKIT_VUIKHOE_VERSION', '0.7.2');
+define('ECOMKIT_VUIKHOE_VERSION', '0.7.3');
 
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 
@@ -94,7 +94,7 @@ check(substr_count((string) $admin, 'Ecomkit_Vuikhoe_Security::require_managemen
 check(str_contains((string) $oauth, "check_admin_referer( 'ecomkit_shopee_oauth_start', 'ecomkit_shopee_nonce' )"), 'Shopee OAuth start nonce validation is missing.');
 check(str_contains((string) $oauth, 'Ecomkit_Vuikhoe_Security::require_management_capability()'), 'Shopee OAuth start capability validation is missing.');
 check(str_contains((string) $oauth, "'permission_callback' => '__return_true'"), 'Public Shopee callback route is missing.');
-check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.2' )"), 'WP.6H.2 plugin version is wrong.');
+check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.3' )"), 'WP.6H.2A plugin version is wrong.');
 check(str_contains((string) $plugin_file, "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 8 )"), 'WP.6D database schema version is wrong.');
 check(str_contains((string) $key_resolver, "hash_hkdf( 'sha256'"), 'Credential resolver must use HKDF-SHA256.');
 check(str_contains((string) $key_resolver, "'AUTH_KEY', 'SECURE_AUTH_KEY', 'LOGGED_IN_KEY', 'NONCE_KEY', 'AUTH_SALT', 'SECURE_AUTH_SALT', 'LOGGED_IN_SALT', 'NONCE_SALT'"), 'Canonical WordPress secret order changed.');
