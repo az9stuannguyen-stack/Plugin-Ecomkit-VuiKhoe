@@ -186,7 +186,21 @@ $clipboard_values = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( $re
 $clipboard_headers = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( array( 'rows' => array() ), true );
 $clipboard_count = count( $result['rows'] );
 $clipboard_json_flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+$unmapped_status_count = 0;
+foreach ( $result['rows'] as $clipboard_row ) {
+	$status = Ecomkit_Vuikhoe_Shopee_Business_Status::resolve( (string) $clipboard_row['platform'], (string) ( $clipboard_row['columns']['order_status'] ?? '' ) );
+	if ( null !== $status['diagnostic'] ) { $unmapped_status_count++; }
+}
 ?>
+<section style="margin:12px 0;padding:12px;border:1px solid #c3c4c7;background:#fff" aria-label="Bổ sung tên và địa chỉ từ PDF nhãn Shopee">
+<h3 style="margin-top:0"><?php echo esc_html__( 'Bổ sung tên/địa chỉ từ PDF nhãn Shopee', 'ecomkit-vuikhoe' ); ?></h3>
+<label for="ecomkit-spx-pdf"><?php echo esc_html__( 'Chọn PDF nhãn Shopee', 'ecomkit-vuikhoe' ); ?></label>
+<input type="file" id="ecomkit-spx-pdf" accept=".pdf,application/pdf" aria-label="Chọn PDF nhãn Shopee">
+<button type="button" class="button" id="ecomkit-clear-spx-pdf" disabled><?php echo esc_html__( 'Xóa dữ liệu PDF tạm', 'ecomkit-vuikhoe' ); ?></button>
+<p style="margin-bottom:0"><?php echo esc_html__( 'PDF chỉ được dùng tạm để bổ sung dữ liệu khi sao chép và không được lưu trên hệ thống. Dữ liệu PDF tự mất khi tải lại trang.', 'ecomkit-vuikhoe' ); ?></p>
+<p id="ecomkit-spx-summary" role="status" aria-live="polite"></p>
+</section>
+<?php if ( $unmapped_status_count > 0 ) : ?><p class="description"><?php echo esc_html( sprintf( 'UNMAPPED_SHOPEE_BUSINESS_STATUS: %d trạng thái Shopee chưa đủ bằng chứng để đổi sang nhãn nghiệp vụ; giữ nguyên trạng thái gốc khi sao chép.', $unmapped_status_count ) ); ?></p><?php endif; ?>
 <div style="margin:12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
 <button type="button" class="button button-primary" id="ecomkit-copy-values" <?php disabled( 0 === $clipboard_count ); ?>><?php echo esc_html__( 'Sao chép dữ liệu', 'ecomkit-vuikhoe' ); ?></button>
 <button type="button" class="button" id="ecomkit-copy-with-headers" <?php disabled( 0 === $clipboard_count ); ?>><?php echo esc_html__( 'Sao chép kèm tiêu đề', 'ecomkit-vuikhoe' ); ?></button>
@@ -197,7 +211,51 @@ $clipboard_json_flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_Q
     const values = <?php echo wp_json_encode( $clipboard_values, $clipboard_json_flags ); ?>;
     const headers = <?php echo wp_json_encode( $clipboard_headers, $clipboard_json_flags ); ?>;
     const count = <?php echo (int) $clipboard_count; ?>;
+    const maxPdfBytes = <?php echo (int) min( Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_BYTES, wp_max_upload_size() ); ?>;
     const feedback = document.getElementById('ecomkit-copy-feedback');
+    const summary = document.getElementById('ecomkit-spx-summary');
+    const input = document.getElementById('ecomkit-spx-pdf');
+    const clear = document.getElementById('ecomkit-clear-spx-pdf');
+    const enrichment = new Map(); // Page memory only; never browser storage or HTML.
+    function currentValues() {
+        if (!enrichment.size) return values;
+        return values.split('\n').map(line => {
+            const cells = line.split('\t');
+            const recipient = cells[3] === 'SHOPEE' ? enrichment.get(cells[2]) : null;
+            if (recipient) { cells[5] = recipient.name; cells[7] = recipient.address; }
+            return cells.join('\t');
+        }).join('\n');
+    }
+    input.addEventListener('change', async function () {
+        const file = this.files && this.files[0];
+        if (!file) return;
+        enrichment.clear(); clear.disabled = true;
+        if (file.size > maxPdfBytes) { summary.textContent = 'PDF vượt quá giới hạn cho phép.'; this.value = ''; return; }
+        summary.textContent = 'Đang đọc PDF nhãn Shopee…';
+        try {
+            const form = new FormData();
+            form.append('action', 'ecomkit_shopee_spx_pdf');
+            form.append('nonce', <?php echo wp_json_encode( wp_create_nonce( 'ecomkit_shopee_spx_pdf' ), $clipboard_json_flags ); ?>);
+            form.append('batch_id', <?php echo (int) $batch['id']; ?>);
+            form.append('platform', <?php echo wp_json_encode( $data['platform_filter'], $clipboard_json_flags ); ?>);
+            form.append('matching', <?php echo wp_json_encode( $data['matching_filter'], $clipboard_json_flags ); ?>);
+            form.append('pdf', file);
+            const response = await fetch(<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ), $clipboard_json_flags ); ?>, {method: 'POST', body: form, credentials: 'same-origin', cache: 'no-store'});
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.data) throw new Error(payload.data && payload.data.message ? payload.data.message : 'Không thể đọc PDF.');
+            for (const [id, recipient] of Object.entries(payload.data.enrichment || {})) {
+                if (typeof recipient.name === 'string' && typeof recipient.address === 'string') enrichment.set(id, {name: recipient.name, address: recipient.address});
+            }
+            clear.disabled = enrichment.size === 0;
+            const data = payload.data;
+            summary.textContent = 'Đã đọc: ' + data.pages + ' trang, ' + data.parsed + ' nhãn · Khớp Result: ' + data.matched + ' · Tên được bổ sung: ' + data.names_enriched + ' · Địa chỉ được bổ sung: ' + data.addresses_enriched + ' · Không khớp: ' + data.unmatched + (data.duplicate_conflicts ? ' · Trùng mã mâu thuẫn: ' + data.duplicate_conflicts : '') + (data.matched ? '' : ' Đã đọc PDF nhưng không có mã đơn nào khớp Batch hiện tại.');
+        } catch (error) { summary.textContent = error.message || 'PDF không hợp lệ.'; }
+        finally { this.value = ''; }
+    });
+    clear.addEventListener('click', function () {
+        enrichment.clear(); input.value = ''; clear.disabled = true;
+        summary.textContent = 'Đã xóa dữ liệu PDF tạm. Lần sao chép tiếp theo dùng giá trị Ecomkit.';
+    });
     async function copyPlainText(value) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             try { await navigator.clipboard.writeText(value); return; } catch (error) { /* Try the text-only fallback. */ }
@@ -217,7 +275,8 @@ $clipboard_json_flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_Q
         document.getElementById(id).addEventListener('click', async function () {
             this.disabled = true;
             try {
-                await copyPlainText(withHeaders ? headers + '\n' + values : values);
+                const data = currentValues();
+                await copyPlainText(withHeaders ? headers + '\n' + data : data);
                 feedback.textContent = withHeaders ? 'Đã sao chép ' + count + ' đơn + tiêu đề.' : 'Đã sao chép ' + count + ' đơn × 24 cột.';
             } catch (error) { feedback.textContent = 'Không thể sao chép. Vui lòng kiểm tra quyền clipboard của trình duyệt.'; }
             finally { this.disabled = false; }

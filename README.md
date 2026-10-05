@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6H.3F — Sao chép Result sang bảng tính**, plugin `0.7.12`, database schema `9`, canonical `v9`. Hai nút ở Result sao chép toàn bộ dòng theo bộ lọc hiện tại dưới dạng TSV văn bản thuần, không kèm định dạng hay tạo file: chỉ dữ liệu hoặc dữ liệu kèm 24 tiêu đề. Tiền dùng số gốc, tỷ lệ dùng ratio canonical dạng thập phân chính xác, NULL để ô trống, ngày ISO; văn bản được vô hiệu hóa công thức bảng tính. Chức năng chỉ dành cho người có quyền xem Result hiện tại. WP.6I/WP.7 chưa bắt đầu.
+Hiện tại: **WP.6H.3H — PDF nhãn Shopee tạm cho thao tác sao chép**, plugin `0.7.13`, database schema `9`, canonical `v9`. Result cho quản trị viên chọn PDF nhãn SPX để bổ sung tên/địa chỉ vào TSV theo mã đơn sàn khớp chính xác; số điện thoại và dữ liệu tài chính không đổi. PDF chỉ được đọc trong file tạm PHP và xóa sau request; dữ liệu bổ sung chỉ sống trong bộ nhớ tab, mất khi tải lại trang hoặc bấm xóa. Clipboard dịch trạng thái Shopee đã xác minh (`COMPLETED`, `SHIPPED`) sang nhãn tiếng Việt; các trạng thái chưa đủ bằng chứng giữ nguyên. WP.6I/WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
@@ -24,6 +24,7 @@ Kiến trúc Node/NestJS/PostgreSQL/Redis/BullMQ cũ không được sao chép n
 - WordPress **6.6** trở lên.
 - MySQL/MariaDB theo yêu cầu của phiên bản WordPress đang dùng, có hỗ trợ InnoDB và quyền tạo/cập nhật/đổi storage engine cho riêng sáu bảng Ecomkit.
 - Các PHP extension runtime được PhpSpreadsheet `5.8.1` khai báo: `ctype`, `dom`, `fileinfo`, `filter`, `gd`, `iconv`, `libxml`, `mbstring`, `simplexml`, `xml`, `xmlreader`, `xmlwriter`, `zip` và `zlib`.
+- Trình đọc PDF nhãn SPX: Composer `smalot/pdfparser` `2.12.5` (khóa trong `composer.lock`) và `symfony/polyfill-mbstring` `1.43.0`; dùng các extension `iconv`/`zlib` đã thuộc baseline. Không cần OCR, dịch vụ cloud hay binary hệ thống. Khi tự build plugin, chạy `composer install --no-dev --no-plugins --no-scripts` trong `ecomkit-vuikhoe/` và triển khai cả `vendor/`. Thư viện PDF mang giấy phép LGPL-3.0; giữ tệp giấy phép trong `vendor/` và kiểm tra chính sách phân phối của đơn vị vận hành.
 
 Đây là baseline được chốt ở WP.1 vì WP.0 chưa chỉ định phiên bản tối thiểu. Plugin kiểm tra compatibility trước khi tải runtime và hiển thị notice an toàn cho quản trị viên nếu môi trường không đạt.
 
@@ -39,7 +40,11 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.7.12`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.7.13`, Composer classmap autoload và text domain.
+
+## PDF nhãn Shopee chỉ dùng khi sao chép
+
+Trong **Ecomkit → Kết quả**, quản trị viên có thể chọn PDF nhãn SPX gốc (có lớp văn bản), tối đa **5 MiB hoặc giới hạn WordPress nếu thấp hơn**, tối đa **50 trang**. Plugin đọc trực tiếp từ file upload tạm của PHP và xóa file trong `finally`; không đưa PDF vào Media Library, `wp-content/uploads`, database, transient hoặc cache. Tên/địa chỉ khớp mã đơn chỉ tồn tại trong bộ nhớ của tab cho hai nút sao chép TSV, không thay đổi Result HTML/canonical; tải lại trang hoặc bấm **Xóa dữ liệu PDF tạm** sẽ bỏ nguồn tạm. PDF không cung cấp SĐT nên SĐT luôn lấy từ Ecomkit. File scan không có lớp văn bản bị từ chối, không chạy OCR. Dữ liệu PDF tạm có thể chiếm dung lượng bằng cỡ file (ví dụ khoảng 5 MiB) trong lúc request đang chạy; sau đó không có lưu trữ PDF hoặc PII đã phân tích trên máy chủ.
 - Compatibility notices cho PHP/WordPress.
 - Sáu bảng custom có prefix động, schema version `8`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

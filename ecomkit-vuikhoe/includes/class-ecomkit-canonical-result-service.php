@@ -25,6 +25,9 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 					$cells[] = ( is_int( $value ) || is_string( $value ) ) && 1 === preg_match( '/\A-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\z/D', (string) $value ) ? (string) $value : '';
 				} elseif ( in_array( $key, array( 'order_date', 'vat_issued_date' ), true ) ) {
 					$cells[] = is_string( $value ) && 1 === preg_match( '/\A\d{4}-\d{2}-\d{2}\z/D', $value ) ? $value : '';
+				} elseif ( 'order_status' === $key ) {
+					$status = Ecomkit_Vuikhoe_Shopee_Business_Status::resolve( (string) ( $row['platform'] ?? '' ), (string) $value );
+					$cells[] = self::clipboard_text( $status['label'] );
 				} else { $cells[] = self::clipboard_text( (string) $value ); }
 			}
 			$lines[] = implode( "\t", $cells );
@@ -32,7 +35,8 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 		return implode( "\n", $lines );
 	}
 
-	private static function clipboard_text( string $value ): string {
+	/** Plain-text spreadsheet-safe projection, also used for temporary PDF text. */
+	public static function clipboard_text( string $value ): string {
 		$value = strip_tags( html_entity_decode( $value, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 		$value = trim( (string) preg_replace( '/[\x00-\x1F\x7F]+/u', ' ', $value ) );
 		$check = (string) preg_replace( '/\A[\p{Z}\s]+/u', '', $value );

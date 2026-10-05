@@ -31,6 +31,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_income_test', array( $this, 'handle_shopee_income_test' ) );
 		add_action( 'admin_post_ecomkit_pipeline_resume', array( $this, 'handle_pipeline_resume' ) );
 		add_action( 'wp_ajax_ecomkit_pipeline_progress', array( $this, 'handle_pipeline_progress' ) );
+		add_action( 'wp_ajax_ecomkit_shopee_spx_pdf', array( $this, 'handle_shopee_spx_pdf' ) );
 		add_action( 'admin_post_ecomkit_shopee_financial_enrich', array( $this, 'handle_shopee_financial_enrich' ) );
 	}
 
@@ -96,6 +97,42 @@ final class Ecomkit_Vuikhoe_Admin {
 		$pipeline = null;
 		if ( $batch_id ) { try { $automatic = new Ecomkit_Vuikhoe_Auto_Pipeline(); $pipeline = $automatic->state( $batch_id ); if ( is_array( $pipeline ) && ! Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline )['terminal'] ) { $pipeline = $automatic->start( $batch_id ); } } catch ( Throwable ) { /* Retain ordinary Result access if scheduling is unavailable. */ } }
 		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'pipeline' => $pipeline, 'progress' => is_array( $pipeline ) ? Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test, 'income_test' => $income_test, 'financial_run' => $financial_run ) );
+	}
+
+	/** Request-only PDF text extraction; never changes Batch, Order, canonical or cron state. */
+	public function handle_shopee_spx_pdf(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		if ( false === check_ajax_referer( 'ecomkit_shopee_spx_pdf', 'nonce', false ) ) {
+			wp_send_json_error( array( 'code' => 'SHOPEE_PDF_PERMISSION_DENIED', 'message' => 'Phiên xác thực đã hết hạn. Vui lòng tải lại trang.' ), 403 );
+		}
+		$upload = isset( $_FILES['pdf'] ) && is_array( $_FILES['pdf'] ) ? $_FILES['pdf'] : array();
+		$path = is_string( $upload['tmp_name'] ?? null ) ? $upload['tmp_name'] : '';
+		$payload = null; $error_code = null;
+		try {
+			$batch_id = isset( $_POST['batch_id'] ) ? absint( wp_unslash( $_POST['batch_id'] ) ) : 0;
+			$platform = isset( $_POST['platform'] ) && in_array( (string) $_POST['platform'], array( 'SHOPEE', 'LAZADA' ), true ) ? (string) $_POST['platform'] : '';
+			$matching = isset( $_POST['matching'] ) && in_array( (string) $_POST['matching'], array( 'MATCHED', 'NOT_FOUND_IN_SHOPEE', 'DETAIL_MISSING', '__BLANK__' ), true ) ? (string) $_POST['matching'] : '';
+			$result = $batch_id > 0 ? ( new Ecomkit_Vuikhoe_Canonical_Result_Service() )->get_batch_result( $batch_id, $platform, $matching ) : null;
+			if ( ! is_array( $result ) ) { throw new RuntimeException( 'SHOPEE_PDF_BATCH_NOT_FOUND' ); }
+			$payload = Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( $upload, $result );
+		} catch ( Throwable $exception ) {
+			$error_code = in_array( $exception->getMessage(), array( 'SHOPEE_PDF_INVALID', 'SHOPEE_PDF_TOO_LARGE', 'SHOPEE_PDF_TOO_MANY_PAGES', 'SHOPEE_PDF_TEXT_LAYER_REQUIRED', 'SHOPEE_PDF_NO_VALID_LABELS', 'SHOPEE_PDF_BATCH_NOT_FOUND', 'SHOPEE_PDF_TEMP_CLEANUP_FAILED' ), true ) ? $exception->getMessage() : 'SHOPEE_PDF_INVALID';
+		} finally {
+			if ( '' !== $path && is_file( $path ) && ! @unlink( $path ) ) { $error_code = 'SHOPEE_PDF_TEMP_CLEANUP_FAILED'; $payload = null; }
+		}
+		nocache_headers();
+		if ( null !== $error_code ) {
+			$messages = array(
+				'SHOPEE_PDF_TOO_LARGE' => 'PDF vượt quá giới hạn cho phép.',
+				'SHOPEE_PDF_TOO_MANY_PAGES' => 'PDF có quá nhiều trang.',
+				'SHOPEE_PDF_TEXT_LAYER_REQUIRED' => 'PDF này không có lớp văn bản có thể đọc. Vui lòng dùng file nhãn Shopee PDF gốc thay vì bản scan/ảnh.',
+				'SHOPEE_PDF_NO_VALID_LABELS' => 'Không tìm thấy nhãn Shopee hợp lệ.',
+				'SHOPEE_PDF_BATCH_NOT_FOUND' => 'Không tìm thấy Batch Result.',
+				'SHOPEE_PDF_TEMP_CLEANUP_FAILED' => 'Không thể xóa PDF tạm sau khi đọc. Vui lòng liên hệ quản trị viên.',
+			);
+			wp_send_json_error( array( 'code' => $error_code, 'message' => $messages[ $error_code ] ?? 'PDF không hợp lệ.' ), 400 );
+		}
+		wp_send_json_success( $payload );
 	}
 
 	public function handle_pipeline_resume(): void {

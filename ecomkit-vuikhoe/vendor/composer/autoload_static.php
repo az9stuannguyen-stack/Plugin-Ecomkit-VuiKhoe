@@ -6,10 +6,18 @@ namespace Composer\Autoload;
 
 class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
 {
+    public static $files = array (
+        '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/bootstrap.php',
+    );
+
     public static $prefixLengthsPsr4 = array (
         'Z' =>
         array (
             'ZipStream\\' => 10,
+        ),
+        'S' =>
+        array (
+            'Symfony\\Polyfill\\Mbstring\\' => 26,
         ),
         'P' =>
         array (
@@ -32,6 +40,10 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         array (
             0 => __DIR__ . '/..' . '/maennchen/zipstream-php/src',
         ),
+        'Symfony\\Polyfill\\Mbstring\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/symfony/polyfill-mbstring',
+        ),
         'Psr\\SimpleCache\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/simple-cache/src',
@@ -51,6 +63,16 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         'Complex\\' =>
         array (
             0 => __DIR__ . '/..' . '/markbaker/complex/classes/src',
+        ),
+    );
+
+    public static $prefixesPsr0 = array (
+        'S' =>
+        array (
+            'Smalot\\PdfParser\\' =>
+            array (
+                0 => __DIR__ . '/..' . '/smalot/pdfparser/src',
+            ),
         ),
     );
 
@@ -79,32 +101,44 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         'Composer\\Pcre\\UnexpectedNullMatchException' => __DIR__ . '/..' . '/composer/pcre/src/UnexpectedNullMatchException.php',
         'Ecomkit_Vuikhoe_Activator' => __DIR__ . '/../..' . '/includes/class-ecomkit-activator.php',
         'Ecomkit_Vuikhoe_Admin' => __DIR__ . '/../..' . '/includes/class-ecomkit-admin.php',
+        'Ecomkit_Vuikhoe_Auto_Pipeline' => __DIR__ . '/../..' . '/includes/class-ecomkit-auto-pipeline.php',
+        'Ecomkit_Vuikhoe_Batch_State_Audit' => __DIR__ . '/../..' . '/includes/class-ecomkit-batch-state-audit.php',
         'Ecomkit_Vuikhoe_Canonical_Columns' => __DIR__ . '/../..' . '/includes/class-ecomkit-canonical-columns.php',
         'Ecomkit_Vuikhoe_Canonical_Result_Materializer' => __DIR__ . '/../..' . '/includes/class-ecomkit-canonical-result-materializer.php',
-        'Ecomkit_Vuikhoe_Exact_Financial_Math' => __DIR__ . '/../..' . '/includes/class-ecomkit-exact-financial-math.php',
-        'Ecomkit_Vuikhoe_Shopee_Fee_Audit' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-fee-audit.php',
         'Ecomkit_Vuikhoe_Canonical_Result_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-canonical-result-service.php',
         'Ecomkit_Vuikhoe_Credential_Encryption' => __DIR__ . '/../..' . '/includes/class-ecomkit-credential-encryption.php',
         'Ecomkit_Vuikhoe_Credential_Key_Resolver' => __DIR__ . '/../..' . '/includes/class-ecomkit-credential-key-resolver.php',
         'Ecomkit_Vuikhoe_Credential_Mutation_Lock' => __DIR__ . '/../..' . '/includes/class-ecomkit-credential-mutation-lock.php',
         'Ecomkit_Vuikhoe_DB' => __DIR__ . '/../..' . '/includes/class-ecomkit-db.php',
+        'Ecomkit_Vuikhoe_Exact_Financial_Math' => __DIR__ . '/../..' . '/includes/class-ecomkit-exact-financial-math.php',
         'Ecomkit_Vuikhoe_Excel_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-excel-service.php',
         'Ecomkit_Vuikhoe_Import_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-import-service.php',
         'Ecomkit_Vuikhoe_Import_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-import-service.php',
         'Ecomkit_Vuikhoe_Marketplace_Connection_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-marketplace-connection-service.php',
+        'Ecomkit_Vuikhoe_Money_Formatter' => __DIR__ . '/../..' . '/includes/class-ecomkit-money-formatter.php',
         'Ecomkit_Vuikhoe_Plugin' => __DIR__ . '/../..' . '/includes/class-ecomkit-plugin.php',
         'Ecomkit_Vuikhoe_Runtime_Diagnostics' => __DIR__ . '/../..' . '/includes/class-ecomkit-runtime-diagnostics.php',
         'Ecomkit_Vuikhoe_Security' => __DIR__ . '/../..' . '/includes/class-ecomkit-security.php',
+        'Ecomkit_Vuikhoe_Shopee_Business_Status' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-business-status.php',
         'Ecomkit_Vuikhoe_Shopee_Config' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-config.php',
         'Ecomkit_Vuikhoe_Shopee_Environment' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-environment.php',
+        'Ecomkit_Vuikhoe_Shopee_Fee_Audit' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-fee-audit.php',
+        'Ecomkit_Vuikhoe_Shopee_Financial_Enrichment_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-financial-enrichment-service.php',
         'Ecomkit_Vuikhoe_Shopee_HTTP_Client' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-http-client.php',
+        'Ecomkit_Vuikhoe_Shopee_Income_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-income-service.php',
+        'Ecomkit_Vuikhoe_Shopee_Income_Normalizer' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-income-normalizer.php',
+        'Ecomkit_Vuikhoe_Shopee_Income_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-income-service.php',
         'Ecomkit_Vuikhoe_Shopee_OAuth' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-oauth.php',
         'Ecomkit_Vuikhoe_Shopee_Order_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-order-service.php',
         'Ecomkit_Vuikhoe_Shopee_Order_Normalizer' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-order-normalizer.php',
         'Ecomkit_Vuikhoe_Shopee_Order_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-order-service.php',
+        'Ecomkit_Vuikhoe_Shopee_Payment_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-payment-service.php',
+        'Ecomkit_Vuikhoe_Shopee_Payment_Normalizer' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-payment-normalizer.php',
+        'Ecomkit_Vuikhoe_Shopee_Payment_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-payment-service.php',
         'Ecomkit_Vuikhoe_Shopee_Provider_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-http-client.php',
         'Ecomkit_Vuikhoe_Shopee_Reconciliation_Exception' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-reconciliation-service.php',
         'Ecomkit_Vuikhoe_Shopee_Reconciliation_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-reconciliation-service.php',
+        'Ecomkit_Vuikhoe_Shopee_SPX_Labels' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-spx-labels.php',
         'Ecomkit_Vuikhoe_Shopee_Signer' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-signer.php',
         'Ecomkit_Vuikhoe_Shopee_Token_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-token-service.php',
         'Matrix\\Builder' => __DIR__ . '/..' . '/markbaker/matrix/classes/src/Builder.php',
@@ -656,6 +690,53 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         'Psr\\SimpleCache\\CacheException' => __DIR__ . '/..' . '/psr/simple-cache/src/CacheException.php',
         'Psr\\SimpleCache\\CacheInterface' => __DIR__ . '/..' . '/psr/simple-cache/src/CacheInterface.php',
         'Psr\\SimpleCache\\InvalidArgumentException' => __DIR__ . '/..' . '/psr/simple-cache/src/InvalidArgumentException.php',
+        'Smalot\\PdfParser\\Config' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Config.php',
+        'Smalot\\PdfParser\\Document' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Document.php',
+        'Smalot\\PdfParser\\Element' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element.php',
+        'Smalot\\PdfParser\\Element\\ElementArray' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementArray.php',
+        'Smalot\\PdfParser\\Element\\ElementBoolean' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementBoolean.php',
+        'Smalot\\PdfParser\\Element\\ElementDate' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementDate.php',
+        'Smalot\\PdfParser\\Element\\ElementHexa' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementHexa.php',
+        'Smalot\\PdfParser\\Element\\ElementMissing' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementMissing.php',
+        'Smalot\\PdfParser\\Element\\ElementName' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementName.php',
+        'Smalot\\PdfParser\\Element\\ElementNull' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementNull.php',
+        'Smalot\\PdfParser\\Element\\ElementNumeric' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementNumeric.php',
+        'Smalot\\PdfParser\\Element\\ElementString' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementString.php',
+        'Smalot\\PdfParser\\Element\\ElementStruct' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementStruct.php',
+        'Smalot\\PdfParser\\Element\\ElementXRef' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Element/ElementXRef.php',
+        'Smalot\\PdfParser\\Encoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding.php',
+        'Smalot\\PdfParser\\Encoding\\AbstractEncoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/AbstractEncoding.php',
+        'Smalot\\PdfParser\\Encoding\\EncodingLocator' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/EncodingLocator.php',
+        'Smalot\\PdfParser\\Encoding\\ISOLatin1Encoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/ISOLatin1Encoding.php',
+        'Smalot\\PdfParser\\Encoding\\ISOLatin9Encoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/ISOLatin9Encoding.php',
+        'Smalot\\PdfParser\\Encoding\\MacRomanEncoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/MacRomanEncoding.php',
+        'Smalot\\PdfParser\\Encoding\\PDFDocEncoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/PDFDocEncoding.php',
+        'Smalot\\PdfParser\\Encoding\\PostScriptGlyphs' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/PostScriptGlyphs.php',
+        'Smalot\\PdfParser\\Encoding\\StandardEncoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/StandardEncoding.php',
+        'Smalot\\PdfParser\\Encoding\\WinAnsiEncoding' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Encoding/WinAnsiEncoding.php',
+        'Smalot\\PdfParser\\Exception\\EmptyPdfException' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Exception/EmptyPdfException.php',
+        'Smalot\\PdfParser\\Exception\\EncodingNotFoundException' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Exception/EncodingNotFoundException.php',
+        'Smalot\\PdfParser\\Exception\\InvalidDictionaryObjectException' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Exception/InvalidDictionaryObjectException.php',
+        'Smalot\\PdfParser\\Exception\\MissingCatalogException' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Exception/MissingCatalogException.php',
+        'Smalot\\PdfParser\\Exception\\MissingPdfHeaderException' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Exception/MissingPdfHeaderException.php',
+        'Smalot\\PdfParser\\Exception\\NotImplementedException' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Exception/NotImplementedException.php',
+        'Smalot\\PdfParser\\Font' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Font.php',
+        'Smalot\\PdfParser\\Font\\FontCIDFontType0' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Font/FontCIDFontType0.php',
+        'Smalot\\PdfParser\\Font\\FontCIDFontType2' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Font/FontCIDFontType2.php',
+        'Smalot\\PdfParser\\Font\\FontTrueType' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Font/FontTrueType.php',
+        'Smalot\\PdfParser\\Font\\FontType0' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Font/FontType0.php',
+        'Smalot\\PdfParser\\Font\\FontType1' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Font/FontType1.php',
+        'Smalot\\PdfParser\\Font\\FontType3' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Font/FontType3.php',
+        'Smalot\\PdfParser\\Header' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Header.php',
+        'Smalot\\PdfParser\\PDFObject' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/PDFObject.php',
+        'Smalot\\PdfParser\\Page' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Page.php',
+        'Smalot\\PdfParser\\Pages' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Pages.php',
+        'Smalot\\PdfParser\\Parser' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/Parser.php',
+        'Smalot\\PdfParser\\RawData\\FilterHelper' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/RawData/FilterHelper.php',
+        'Smalot\\PdfParser\\RawData\\RawDataParser' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/RawData/RawDataParser.php',
+        'Smalot\\PdfParser\\XObject\\Form' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/XObject/Form.php',
+        'Smalot\\PdfParser\\XObject\\Image' => __DIR__ . '/..' . '/smalot/pdfparser/src/Smalot/PdfParser/XObject/Image.php',
+        'Symfony\\Polyfill\\Mbstring\\Mbstring' => __DIR__ . '/..' . '/symfony/polyfill-mbstring/Mbstring.php',
         'ZipStream\\CentralDirectoryFileHeader' => __DIR__ . '/..' . '/maennchen/zipstream-php/src/CentralDirectoryFileHeader.php',
         'ZipStream\\CompressionMethod' => __DIR__ . '/..' . '/maennchen/zipstream-php/src/CompressionMethod.php',
         'ZipStream\\DataDescriptor' => __DIR__ . '/..' . '/maennchen/zipstream-php/src/DataDescriptor.php',
@@ -690,6 +771,7 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         return \Closure::bind(function () use ($loader) {
             $loader->prefixLengthsPsr4 = ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551::$prefixLengthsPsr4;
             $loader->prefixDirsPsr4 = ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551::$prefixDirsPsr4;
+            $loader->prefixesPsr0 = ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551::$prefixesPsr0;
             $loader->classMap = ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551::$classMap;
 
         }, null, ClassLoader::class);
