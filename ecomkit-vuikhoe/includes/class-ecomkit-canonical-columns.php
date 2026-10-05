@@ -4,14 +4,15 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Canonical_Columns {
-	public const VERSION = 'v3';
+	public const VERSION = 'v4';
 	private const MONEY_KEYS = array( 'amount_collected', 'difference_amount', 'product_price_vat_8', 'total_amount_to_collect', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
 
 	public static function is_money( string $key ): bool { return in_array( $key, self::MONEY_KEYS, true ); }
 
 	/**
 	 * Verified legacy workbook formulas. Metadata only: no source for all internal
-	 * operands exists today, so canonical v3 must not evaluate these formulas.
+	 * No approved exact-decimal arithmetic/precision policy exists yet, so v4
+	 * must not evaluate these formulas even when the direct sources exist.
 	 * Ratios are fractions (0.0393 = 3.93%), never multiplied by 100 here.
 	 *
 	 * @return array<string,array{numerator:array<int,string>,denominator:?string,subtract_from:?string}>
@@ -56,16 +57,16 @@ final class Ecomkit_Vuikhoe_Canonical_Columns {
 			array( 'phone', 'SĐT', 'SHOPEE_ORDER_DETAIL_AVAILABLE' ),
 			array( 'address', 'Địa Chỉ', 'SHOPEE_ORDER_DETAIL_AVAILABLE' ),
 			array( 'province_city', 'Tỉnh/TP', 'SHOPEE_ORDER_DETAIL_AVAILABLE' ),
-			array( 'vat_issued_date', 'Ngày Xuất VAT', 'UNMAPPED_NO_SOURCE' ),
-			array( 'note', 'Ghi Chú', 'UNMAPPED_NO_SOURCE' ),
+			array( 'vat_issued_date', 'Ngày Xuất VAT', 'INTERNAL_EXCEL' ),
+			array( 'note', 'Ghi Chú', 'INTERNAL_EXCEL' ),
 			array( 'amount_collected', 'Đã Thu Tiền', 'FUTURE_PAYMENT_ESCROW' ),
 			array( 'receivable_status', 'Trạng Thái Công Nợ', 'FUTURE_PAYMENT_ESCROW' ),
 			array( 'difference_amount', 'Chênh lệch', 'UNRESOLVED_BROKEN_LEGACY_REFERENCE' ),
-			array( 'product_price_vat_8', 'Giá SP (VAT 8%)', 'UNMAPPED_NO_SOURCE' ),
+			array( 'product_price_vat_8', 'Giá SP (VAT 8%)', 'INTERNAL_EXCEL' ),
 			array( 'total_cost_percent', '% Tổng Chi Phí', 'DERIVED_LEGACY_FORMULA_GATED' ),
 			array( 'total_amount_to_collect', 'Tổng Tiền Sẽ Thu', 'SHOPEE_PAYMENT_ESCROW' ),
-			array( 'affiliate_fee_vuikhoe', 'Phí Affiliate (Vui Khỏe)', 'UNMAPPED_NO_SOURCE' ),
-			array( 'discount_vuikhoe', 'Chiết Khấu (Vui Khỏe)', 'UNMAPPED_NO_SOURCE' ),
+			array( 'affiliate_fee_vuikhoe', 'Phí Affiliate (Vui Khỏe)', 'INTERNAL_EXCEL' ),
+			array( 'discount_vuikhoe', 'Chiết Khấu (Vui Khỏe)', 'INTERNAL_EXCEL' ),
 			array( 'discount_percent_vuikhoe', '% Chiết Khấu Vui Khỏe', 'DERIVED_LEGACY_FORMULA_GATED' ),
 			array( 'fixed_platform_fee', 'Phí Cố Định (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),
 			array( 'service_platform_fee', 'Phí dịch vụ (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),

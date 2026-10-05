@@ -19,6 +19,7 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 	private const PRODUCT_NAME_HEADER = 'Tên hàng hóa';
 	private const QUANTITY_HEADER = 'Số lg';
 	private const ORDER_DATE_HEADER = 'Ngày đặt';
+	private const INTERNAL_HEADERS = array( 'Giá SP (VAT 8%)' => 'product_price_vat_8', 'Phí Affiliate (Vui Khỏe)' => 'affiliate_fee_vuikhoe', 'Chiết Khấu (Vui Khỏe)' => 'discount_vuikhoe', 'Ngày Xuất VAT' => 'vat_issued_date', 'Ghi Chú' => 'note' );
 
 	public function __construct( private bool $skip_runtime_check = false ) {}
 
@@ -158,7 +159,24 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 					self::ORDER_DATE_HEADER
 				);
 			}
-			$orders[] = array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'eshop_order_code' => isset( $columns['Mã đơn hàng eShop'] ) ? $this->column_text( $row['cells'], $columns, 'Mã đơn hàng eShop' ) : null, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() );
+			$internal = array_fill_keys( array_values( self::INTERNAL_HEADERS ), null );
+			foreach ( self::INTERNAL_HEADERS as $label => $field ) {
+				if ( ! isset( $columns[ $label ] ) ) { continue; }
+				$cell = $sheet->getCell( array( $columns[ $label ], $row_number ) );
+				if ( 'Ngày Xuất VAT' === $label ) {
+					$parsed_internal = $this->parse_vat_date_cell( $cell );
+				} elseif ( 'Ghi Chú' === $label ) {
+					$text = $this->column_text( $row['cells'], $columns, $label );
+					$parsed_internal = array( 'value' => '' === $text ? null : $text, 'state' => 'valid' );
+				} else {
+					$parsed_internal = $this->parse_internal_money( $this->safe_cell_value( $cell ) );
+				}
+				$internal[ $field ] = $parsed_internal['value'];
+				if ( 'invalid' === $parsed_internal['state'] ) {
+					$errors[] = $this->row_error( 'EXCEL_INVALID_INTERNAL_FIELD', sprintf( 'Giá trị “%s” ở dòng %d không hợp lệ.', $label, $row_number ), 'Sửa giá trị nguồn trong Excel (tiền dạng số chính xác; Ngày Xuất VAT dạng ngày hợp lệ) rồi tải lại file.', $sheet->getTitle(), $row_number, $this->safe_order_date_raw( $this->safe_cell_value( $cell ) ), array(), $label );
+				}
+			}
+			$orders[] = array_merge( array( 'order_code' => $parsed['code'], 'platform' => $parsed['platform'], 'raw_platform' => $parsed['raw_platform'], 'raw_identity' => $raw_identity, 'order_date' => $order_date['value'], 'order_date_precision' => $order_date['precision'], 'eshop_order_code' => isset( $columns['Mã đơn hàng eShop'] ) ? $this->column_text( $row['cells'], $columns, 'Mã đơn hàng eShop' ) : null, 'sheet' => $sheet->getTitle(), 'row' => $row_number, 'raw_cells' => $row['cells'], 'items' => array() ), $internal );
 			$current_index = array_key_last( $orders );
 			$platform_counts[ $parsed['platform'] ] = ( $platform_counts[ $parsed['platform'] ] ?? 0 ) + 1;
 			if ( 'VALID_ITEM' === $product_structure ) {
@@ -177,6 +195,37 @@ final class Ecomkit_Vuikhoe_Excel_Service {
 			'errors' => $errors,
 			'raw' => array( 'parser_version' => self::PARSER_VERSION, 'sheet' => $sheet->getTitle(), 'header_row' => $header_row, 'headers' => array_values( $headers ), 'column_map' => $columns, 'date_column' => $columns[ self::ORDER_DATE_HEADER ] ?? null, 'source_mode' => $source_mode, 'item_rows' => $item_rows, 'platform_counts' => $platform_counts, 'classifications' => $classifications, 'rows' => $rows ),
 		);
+	}
+
+	/** Exact decimal text only; Excel numeric doubles are accepted only when integral. */
+	private function parse_internal_money( mixed $value ): array {
+		if ( null === $value || '' === trim( (string) $value ) ) { return array( 'value' => null, 'state' => 'blank' ); }
+		if ( is_float( $value ) ) {
+			if ( ! is_finite( $value ) || floor( $value ) !== $value || abs( $value ) > 9007199254740991 ) { return array( 'value' => null, 'state' => 'invalid' ); }
+			$value = sprintf( '%.0f', $value );
+		}
+		if ( ! is_int( $value ) && ! is_string( $value ) ) { return array( 'value' => null, 'state' => 'invalid' ); }
+		$text = trim( (string) $value );
+		if ( 1 !== preg_match( '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]{1,4})?$/D', $text ) || strlen( explode( '.', ltrim( $text, '-' ) )[0] ) > 16 ) { return array( 'value' => null, 'state' => 'invalid' ); }
+		return array( 'value' => $text, 'state' => 'valid' );
+	}
+
+	/** VAT invoice date is a calendar date, never a timezone-converted instant. */
+	private function parse_vat_date_cell( Cell $cell ): array {
+		$value = $this->safe_cell_value( $cell );
+		if ( null === $value || '' === trim( (string) $value ) ) { return array( 'value' => null, 'state' => 'blank' ); }
+		if ( ( is_int( $value ) || is_float( $value ) ) && ExcelDate::isDateTime( $cell ) ) {
+			try { $text = ExcelDate::excelToDateTimeObject( (float) $value )->format( 'Y-m-d' ); }
+			catch ( Throwable ) { return array( 'value' => null, 'state' => 'invalid' ); }
+		} elseif ( is_string( $value ) ) {
+			$text = trim( $value );
+		} else { return array( 'value' => null, 'state' => 'invalid' ); }
+		foreach ( array( 'd/m/Y', 'Y-m-d' ) as $format ) {
+			$date = DateTimeImmutable::createFromFormat( '!' . $format, $text, new DateTimeZone( 'UTC' ) );
+			$errors = DateTimeImmutable::getLastErrors();
+			if ( false !== $date && ( false === $errors || ( 0 === $errors['warning_count'] && 0 === $errors['error_count'] ) ) && $date->format( $format ) === $text ) { return array( 'value' => $date->format( 'Y-m-d 00:00:00' ), 'state' => 'valid' ); }
+		}
+		return array( 'value' => null, 'state' => 'invalid' );
 	}
 
 	/** @return array{value:?string,precision:?string,state:string,safe_raw:?string} */

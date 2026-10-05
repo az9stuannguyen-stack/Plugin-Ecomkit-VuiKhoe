@@ -1,5 +1,5 @@
 <?php
-/** Pure deterministic projection from persisted Order evidence to canonical v3. */
+/** Pure deterministic projection from persisted Order evidence to canonical v4. */
 
 defined( 'ABSPATH' ) || exit;
 
@@ -33,6 +33,11 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 		}
 		$values['raw_order_code'] = $this->scalar( $order['raw_order_code'] ?? $order['marketplace_order_id'] ?? null );
 		$values['sales_channel'] = $this->scalar( $order['platform'] ?? null );
+		foreach ( array( 'product_price_vat_8', 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ) as $key ) {
+			$values[ $key ] = $this->internal_money( $order[ $key ] ?? null );
+		}
+		$values['vat_issued_date'] = $this->vat_date( $order['vat_issued_date'] ?? null );
+		$values['note'] = $this->scalar( $order['note'] ?? null );
 		if ( $matched ) {
 			$values['raw_order_code'] ??= $this->scalar( $provider['rawOrderCode'] ?? $provider['marketplaceOrderId'] ?? null );
 			$values['sales_channel'] ??= $this->scalar( $provider['platform'] ?? null );
@@ -65,6 +70,8 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			'version' => Ecomkit_Vuikhoe_Canonical_Columns::VERSION,
 			'order_date' => $order['order_date'] ?? null, 'raw_order_code' => $order['raw_order_code'] ?? null,
 			'eshop_order_code' => $order['eshop_order_code'] ?? null, 'raw_source_metadata' => $order['raw_source_metadata'] ?? null,
+			'product_price_vat_8' => $order['product_price_vat_8'] ?? null, 'affiliate_fee_vuikhoe' => $order['affiliate_fee_vuikhoe'] ?? null,
+			'discount_vuikhoe' => $order['discount_vuikhoe'] ?? null, 'vat_issued_date' => $order['vat_issued_date'] ?? null, 'note' => $order['note'] ?? null,
 			'batch_source' => array_intersect_key( $batch_source, array_flip( array( 'parser_version', 'header_row', 'date_column', 'valid_rows', 'item_rows' ) ) ),
 			'source_refs' => $order['source_refs'] ?? null,
 			'platform' => $order['platform'] ?? null, 'matching_status' => $order['matching_status'] ?? null,
@@ -130,6 +137,17 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 	private function payment_number( mixed $value ): int|float|string|null {
 		if ( is_int( $value ) || is_float( $value ) ) { return $value; }
 		return is_string( $value ) && is_numeric( $value ) ? $value : null;
+	}
+
+	private function internal_money( mixed $value ): ?string {
+		if ( is_int( $value ) ) { $value = (string) $value; }
+		return is_string( $value ) && 1 === preg_match( '/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]{1,4})?$/D', $value ) ? $value : null;
+	}
+
+	private function vat_date( mixed $value ): ?string {
+		if ( ! is_string( $value ) || 1 !== preg_match( '/^\d{4}-\d{2}-\d{2} 00:00:00$/D', $value ) ) { return null; }
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, new DateTimeZone( 'UTC' ) );
+		return false !== $date && $date->format( 'Y-m-d H:i:s' ) === $value ? substr( $value, 0, 10 ) : null;
 	}
 
 	private function date_value( mixed $value, string $kind ): ?string {

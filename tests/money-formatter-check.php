@@ -18,7 +18,7 @@ foreach ( $cases as [ $input, $expected ] ) {
 $columns = Ecomkit_Vuikhoe_Canonical_Columns::all();
 $money = array_values( array_filter( $columns, static fn( array $column ): bool => Ecomkit_Vuikhoe_Canonical_Columns::is_money( $column['key'] ) ) );
 $expected_keys = array( 'amount_collected', 'difference_amount', 'product_price_vat_8', 'total_amount_to_collect', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
-if ( 24 !== count( $columns ) || $expected_keys !== array_column( $money, 'key' ) || 'v3' !== Ecomkit_Vuikhoe_Canonical_Columns::VERSION ) { throw new RuntimeException( 'Money column classification changed.' ); }
+if ( 24 !== count( $columns ) || $expected_keys !== array_column( $money, 'key' ) || 'v4' !== Ecomkit_Vuikhoe_Canonical_Columns::VERSION ) { throw new RuntimeException( 'Money column classification changed.' ); }
 foreach ( array( 'total_cost_percent', 'discount_percent_vuikhoe', 'platform_cost_percent', 'eshop_order_code', 'raw_order_code' ) as $key ) { if ( Ecomkit_Vuikhoe_Canonical_Columns::is_money( $key ) ) { throw new RuntimeException( 'Non-money column classified as money.' ); } }
 $view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/results.php' );
 if ( ! str_contains( $view, 'Ecomkit_Vuikhoe_Money_Formatter::format_exact( $value )' ) || ! str_contains( $view, 'esc_html( (string) $display )' ) ) { throw new RuntimeException( 'Result UI exact formatting or output escaping missing.' ); }

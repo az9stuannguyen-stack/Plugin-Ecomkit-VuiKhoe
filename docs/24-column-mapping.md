@@ -1,5 +1,23 @@
 # Hợp đồng canonical 24 cột
 
+> Trạng thái hiện hành WP.6G: canonical `v4`. Các đoạn lịch sử bên dưới mô tả quyết định ở stage trước; bảng WP.6G ngay sau đây là nguồn hiệu lực cho năm trường nội bộ.
+
+## WP.6G — nguồn nội bộ Excel tùy chọn
+
+File upload hiện tại có thể giữ nguyên bảy header production; thiếu năm header sau **không phải lỗi**. Parser dùng đúng hàng tiêu đề đã khám phá, không dùng vị trí cột vật lý. Giá trị chỉ lấy ở hàng Order cha; hàng item tiếp nối không ghi đè.
+
+| Canonical # | Nhãn/header Excel chính xác | Structured Order field | Thiếu/không hợp lệ | Provider fallback |
+| ---: | --- | --- | --- | --- |
+| 10 | `Ngày Xuất VAT` | `vat_issued_date` | `NULL`; ngày không hợp lệ tạo warning | Không |
+| 11 | `Ghi Chú` | `note` | `NULL` | Không |
+| 15 | `Giá SP (VAT 8%)` | `product_price_vat_8` | `NULL`; tiền không hợp lệ tạo warning | Không |
+| 18 | `Phí Affiliate (Vui Khỏe)` | `affiliate_fee_vuikhoe` | `NULL`; tiền không hợp lệ tạo warning | Không; đặc biệt không dùng `affiliateCommissionFee` |
+| 19 | `Chiết Khấu (Vui Khỏe)` | `discount_vuikhoe` | `NULL`; tiền không hợp lệ tạo warning | Không; không dùng voucher Shopee |
+
+Tiền lưu dạng decimal không có dấu phân tách hàng nghìn; ô trống là `NULL`, số 0 nguồn là `0`. Numeric Excel kiểu double chỉ được nhận nếu là số nguyên chính xác trong ngưỡng an toàn; số lẻ cần nhập bằng text decimal tối đa bốn chữ số phần thập phân để tránh làm tròn nhị phân. Ngày Xuất VAT là **ngày lịch** (`YYYY-MM-DD 00:00:00` trong DB), không chuyển timezone từ ngày đặt. Ghi Chú là text và được escape khi hiển thị. Raw cells, header map, sheet/row provenance giữ nguyên. Các structured field này có thể được nguồn nội bộ khác điền sau này mà không cần đổi physical Excel column.
+
+Snapshot `v1`/`v2`/`v3` trở thành stale, materialize lại từ Orders đã lưu để tạo `v4`. Batch cũ thiếu structured internal values vẫn `NULL`; không suy diễn từ raw Shopee/Payment. Tỷ lệ `% Tổng Chi Phí`, `% Chiết Khấu Vui Khỏe`, `% Chi Phí Sàn TMĐT` và fallback legacy của `Tổng Tiền Sẽ Thu` vẫn **gated** vì chưa có engine decimal chính xác/chính sách precision được duyệt. Escrow Shopee vẫn ưu tiên; `Chênh lệch` vẫn NULL do `#REF!` ở workbook cũ. Vẫn đúng 24 cột, một Order một Result row; WP.7 chưa bắt đầu.
+
 ## 1. Quy tắc chung
 
 - Tên, thứ tự và số lượng cột dưới đây là contract bắt buộc.
@@ -23,16 +41,16 @@
 | 7 | SĐT | `phone` | text | Excel chưa map | `SHOPEE_ORDER_DETAIL`: `recipientPhone` khi `MATCHED` | Trống; không fallback buyer username |
 | 8 | Địa Chỉ | `address` | text | Excel chưa map | `SHOPEE_ORDER_DETAIL`: `recipientFullAddress` khi `MATCHED` | Trống; không tự ghép component |
 | 9 | Tỉnh/TP | `province_city` | text | Excel chưa map | `SHOPEE_ORDER_DETAIL`: `recipientState` > `recipientCity` > `recipientRegion` khi `MATCHED` | Trống; không suy từ full address |
-| 10 | Ngày Xuất VAT | `vat_issued_date` | date/datetime | `UNMAPPED` | Không có nguồn duyệt | Trống |
-| 11 | Ghi Chú | `note` | text | `UNMAPPED` | Không có nguồn duyệt | Trống |
+| 10 | Ngày Xuất VAT | `vat_issued_date` | date | `INTERNAL_EXCEL`: header tùy chọn `Ngày Xuất VAT`, lưu `orders.vat_issued_date` | Không fallback provider | Trống nếu thiếu/không hợp lệ |
+| 11 | Ghi Chú | `note` | text | `INTERNAL_EXCEL`: header tùy chọn `Ghi Chú`, lưu `orders.note` | Không fallback provider | Trống nếu thiếu |
 | 12 | Đã Thu Tiền | `amount_collected` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không suy từ COD/total | Trống |
 | 13 | Trạng Thái Công Nợ | `receivable_status` | text | `FUTURE_PAYMENT_ESCROW` | Chưa có payment evidence | Trống |
 | 14 | Chênh lệch | `difference_amount` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
-| 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | `UNMAPPED` | Không tính từ item price | Trống |
+| 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.product_price_vat_8` | Không tính từ giá Shopee/Payment | Trống nếu thiếu/không hợp lệ |
 | 16 | % Tổng Chi Phí | `total_cost_percent` | decimal(9,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
 | 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `escrowAmountAfterAdjustment` > `escrowAmount` | Không suy từ buyerTotalAmount | NULL nếu cả hai thiếu |
-| 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | `UNMAPPED` | Không tính | Trống |
-| 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | `UNMAPPED` | Không tính | Trống |
+| 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.affiliate_fee_vuikhoe` | Không dùng Shopee Affiliate | Trống nếu thiếu/không hợp lệ |
+| 19 | Chiết Khấu (Vui Khỏe) | `discount_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.discount_vuikhoe` | Không dùng Shopee voucher/discount | Trống nếu thiếu/không hợp lệ |
 | 20 | % Chiết Khấu Vui Khỏe | `discount_percent_vuikhoe` | decimal(9,4) | `UNMAPPED` | Không tính | Trống |
 | 21 | Phí Cố Định (TMĐT) | `fixed_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `commissionFee` | Trực tiếp, không tính | NULL nếu thiếu |
 | 22 | Phí dịch vụ (TMĐT) | `service_platform_fee` | decimal(20,4) | `SHOPEE_PAYMENT_ESCROW`: `serviceFee` | Trực tiếp, không tính | NULL nếu thiếu |

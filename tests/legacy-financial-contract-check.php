@@ -8,7 +8,7 @@ function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return j
 function contract_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 
 $columns = Ecomkit_Vuikhoe_Canonical_Columns::all();
-contract_check( 24 === count( $columns ) && 'v3' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
+contract_check( 24 === count( $columns ) && 'v4' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
 $contract = Ecomkit_Vuikhoe_Canonical_Columns::legacy_formula_contract();
 $fees = array( 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
 $all = array_merge( $fees, array( 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ) );
@@ -49,9 +49,10 @@ $order = array( 'platform' => 'SHOPEE', 'matching_status' => 'MATCHED', 'marketp
 	'payment_normalized_data' => json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'escrowAmountAfterAdjustment' => 218940, 'escrowAmount' => 220000, 'commissionFee' => 50265, 'serviceFee' => 3000, 'sellerTransactionFee' => 18481, 'affiliateCommissionFee' => 5000 ) ) );
 $result = $materializer->materialize( $order );
 contract_check( 218940 === $result['columns']['total_amount_to_collect'], 'Shopee Escrow lost precedence.' );
-foreach ( array( 'product_price_vat_8', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'total_cost_percent', 'platform_cost_percent', 'discount_percent_vuikhoe', 'difference_amount' ) as $key ) { contract_check( null === $result['columns'][ $key ], "Unverified source/formula populated $key." ); }
+contract_check( '308000' === $result['columns']['product_price_vat_8'] && '0' === $result['columns']['affiliate_fee_vuikhoe'] && '12108' === $result['columns']['discount_vuikhoe'], 'Verified internal source did not map directly.' );
+foreach ( array( 'total_cost_percent', 'platform_cost_percent', 'discount_percent_vuikhoe', 'difference_amount' ) as $key ) { contract_check( null === $result['columns'][ $key ], "Unapproved formula populated $key." ); }
 unset( $order['payment_normalized_data'] );
 $without_payment = $materializer->materialize( $order );
 contract_check( null === $without_payment['columns']['total_amount_to_collect'], 'Legacy fallback was activated without verified persisted operands.' );
-contract_check( 24 === count( $result['columns'] ) && 'v3' === $result['version'], 'Result contract changed.' );
+contract_check( 24 === count( $result['columns'] ) && 'v4' === $result['version'], 'Result contract changed.' );
 echo "WP.6F legacy contract and source gates: PASS\n";

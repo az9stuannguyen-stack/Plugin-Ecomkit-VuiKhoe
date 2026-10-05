@@ -159,6 +159,11 @@ final class Ecomkit_Vuikhoe_Import_Service {
 					'matching_status'         => null,
 					'order_date'              => $order['order_date'] ?? null,
 					'eshop_order_code'       => isset( $order['eshop_order_code'] ) && '' !== $order['eshop_order_code'] ? $order['eshop_order_code'] : null,
+					'product_price_vat_8' => $order['product_price_vat_8'] ?? null,
+					'affiliate_fee_vuikhoe' => $order['affiliate_fee_vuikhoe'] ?? null,
+					'discount_vuikhoe' => $order['discount_vuikhoe'] ?? null,
+					'vat_issued_date' => $order['vat_issued_date'] ?? null,
+					'note' => $order['note'] ?? null,
 					'raw_source_metadata'     => wp_json_encode( array( 'source' => 'EXCEL', 'combined_identity' => $order['raw_identity'], 'platform_label' => $order['raw_platform'], 'cells' => $order['raw_cells'], 'column_map' => $result['raw']['column_map'] ?? array(), 'order_date_precision' => $order['order_date_precision'] ?? null, 'order_date_storage' => ! empty( $order['order_date'] ) ? 'UTC' : null ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'source_refs'             => wp_json_encode( array( 'source' => 'EXCEL', 'sheet' => $order['sheet'], 'row' => $order['row'] ), JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE ),
 					'created_at'              => $now,
@@ -209,6 +214,12 @@ final class Ecomkit_Vuikhoe_Import_Service {
 				'date_column'    => isset( $result['raw']['date_column'] ) ? (int) $result['raw']['date_column'] : null,
 				'item_rows'      => (int) ( $result['raw']['item_rows'] ?? 0 ),
 				'platform_counts'=> $result['raw']['platform_counts'] ?? array(),
+				'internal_source_counts' => array_reduce( $result['orders'], static function ( array $counts, array $order ): array {
+					foreach ( array( 'product_price_vat_8', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'vat_issued_date', 'note' ) as $field ) {
+						$counts[ $field ] = ( $counts[ $field ] ?? 0 ) + ( null !== ( $order[ $field ] ?? null ) ? 1 : 0 );
+					}
+					return $counts;
+				}, array() ),
 				'failure_diagnostic' => $result['diagnostic'] ?? null,
 			);
 			$stage = 'BATCH_FINALIZE';

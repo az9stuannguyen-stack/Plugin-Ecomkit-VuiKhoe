@@ -214,3 +214,6 @@ Runtime `0.6.7`, schema giữ `8`, canonical giữ `v3`. Workbook legacy phê du
 
 Runtime `0.6.8`, schema `8`, canonical `v3`. Result có progress card responsive, phần trăm/counters từ persisted Batch state, nhãn tiếng Việt, AJAX admin read-only poll 2,5 giây và cảnh báo Cron sau 90 giây thiếu heartbeat. Trạng thái SUCCESS/WARNING đạt 100% khi Result rows sẵn sàng; Income EMPTY và ô thiếu nguồn không ngăn hoàn tất; hard ERROR không giả 100%. Lịch sử có trạng thái pipeline và tỷ lệ. Không thêm provider API, thay mapping, schema hoặc nút nghiệp vụ. Cần kiểm tra upload thật trên WordPress; WP.7 chưa bắt đầu.
 
+# WP.6G — Internal Excel sources
+
+Plugin 0.6.9 / DB 8 / canonical v4: năm trường nội bộ tùy chọn được lấy từ cùng workbook Excel, persist Order, materialize trực tiếp; bảy header cũ tiếp tục hợp lệ. Không thêm upload hay thao tác nghiệp vụ. Snapshot v1–v3 cần rematerialize. Ba tỷ lệ và fallback receivable legacy tiếp tục gated cho đến khi có exact decimal arithmetic và chính sách precision; Shopee Escrow không thay đổi. Cần manual WordPress test với workbook mở rộng. WP.7 chưa bắt đầu; Google Sheets/eShop adapter chỉ là lựa chọn tương lai.
