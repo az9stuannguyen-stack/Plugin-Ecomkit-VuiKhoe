@@ -9,6 +9,9 @@ function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return j
 function golden_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 
 $id = '260924TSBR7FC0';
+// Seller Center business evidence only, never a runtime API source. Its buyer voucher is distinct.
+$seller_center = array( 'product' => '312000', 'voucher_xtra' => '17160', 'buyer_shopee_voucher' => '50000', 'infrastructure' => '3000', 'piship' => '2700', 'service' => '20160' );
+golden_check( '17160' !== $seller_center['buyer_shopee_voucher'] && '3000' === Ecomkit_Vuikhoe_Exact_Financial_Math::subtract( $seller_center['service'], $seller_center['voucher_xtra'] ), 'Seller Center voucher concepts or infrastructure identity changed.' );
 $income = array(
 	'order_selling_price' => 312000, 'commission_fee' => 51480, 'service_fee' => 20160,
 	'shipping_seller_protection_fee_amount' => 2700, 'seller_transaction_fee' => 18720,
@@ -32,6 +35,7 @@ golden_check( '75900' === $projection['rational']['platform_cost_percent']['nume
 golden_check( '93060' === $projection['rational']['total_cost_percent']['numerator'] && '312000' === $projection['rational']['total_cost_percent']['denominator'], 'Total-cost ratio changed.' );
 golden_check( '0.055' === $c['discount_percent_vuikhoe'], 'Discount ratio changed.' );
 golden_check( '218940' === Ecomkit_Vuikhoe_Exact_Financial_Math::subtract( '312000', '93060' ), 'Exact fallback/escrow parity failed.' );
+golden_check( $seller_center['voucher_xtra'] === $c['discount_vuikhoe'] && $seller_center['product'] === $c['product_price_vat_8'] && '5700' === Ecomkit_Vuikhoe_Exact_Financial_Math::add( $seller_center['infrastructure'], $seller_center['piship'] ), 'Golden business evidence diverged.' );
 golden_check( '17,160' === Ecomkit_Vuikhoe_Money_Formatter::format_exact( $c['discount_vuikhoe'] ) && '5,700' === Ecomkit_Vuikhoe_Money_Formatter::format_exact( $c['service_platform_fee'] ) && '218,940' === Ecomkit_Vuikhoe_Money_Formatter::format_exact( $c['total_amount_to_collect'] ), 'Exact money display changed.' );
 golden_check( '5.5%' === Ecomkit_Vuikhoe_Exact_Financial_Math::format_percent( $projection['rational']['discount_percent_vuikhoe'] ), 'Discount percent display changed.' );
 golden_check( 20160 === $normalized['serviceFee'] && 2700 === $normalized['shippingSellerProtectionFeeAmount'] && 312000 === $normalized['orderSellingPrice'], 'Provider evidence was changed.' );
