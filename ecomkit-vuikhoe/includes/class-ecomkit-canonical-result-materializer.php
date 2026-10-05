@@ -1,5 +1,5 @@
 <?php
-/** Pure deterministic projection from persisted Order evidence to canonical v6. */
+/** Pure deterministic projection from persisted Order evidence to canonical v7. */
 
 defined( 'ABSPATH' ) || exit;
 
@@ -37,6 +37,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 		foreach ( array( 'product_price_vat_8', 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ) as $key ) {
 			$values[ $key ] = $this->internal_money( $order[ $key ] ?? null );
 		}
+		$source_metadata['productPrice'] = array( 'source' => null === $values['product_price_vat_8'] ? 'NULL_NO_VERIFIED_SOURCE' : 'EXCEL' );
 		$values['vat_issued_date'] = $this->vat_date( $order['vat_issued_date'] ?? null );
 		$values['note'] = $this->scalar( $order['note'] ?? null );
 		if ( $matched ) {
@@ -52,6 +53,15 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			}
 			$payment = $this->decode_provider( $order['payment_normalized_data'] ?? null );
 			if ( (string) ( $payment['marketplaceOrderId'] ?? '' ) === (string) ( $order['marketplace_order_id'] ?? '' ) ) {
+				$provider_price = $this->internal_money( $payment['orderSellingPrice'] ?? null );
+				if ( null !== $provider_price ) {
+					if ( null === $values['product_price_vat_8'] ) {
+						$values['product_price_vat_8'] = $provider_price;
+						$source_metadata['productPrice']['source'] = 'SHOPEE_OPENAPI_PAYMENT/order_selling_price';
+					} elseif ( Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $values['product_price_vat_8'], $provider_price ) !== 0 ) {
+						$source_metadata['productPrice']['discrepancy'] = array( 'excel' => $values['product_price_vat_8'], 'provider' => $provider_price );
+					}
+				}
 				$values['fixed_platform_fee'] = $this->payment_number( $payment['commissionFee'] ?? null );
 				$raw_payment = $this->decode_provider( $order['payment_raw_data'] ?? null );
 				$raw_income = (string) ( $raw_payment['order_sn'] ?? '' ) === (string) ( $order['marketplace_order_id'] ?? '' ) && is_array( $raw_payment['order_income'] ?? null ) ? $raw_payment['order_income'] : array();

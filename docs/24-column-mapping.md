@@ -6,6 +6,8 @@
 
 > WP.6H.3A: Seller Center của cùng đơn xác nhận riêng Voucher Xtra 17,160, Phí Hạ Tầng 3,000, PiShip 2,700 và giá sản phẩm 312,000; `SHOPEE_VOUCHER_DISCOUNT` 50,000 là khái niệm khác. Đây là bằng chứng nghiệp vụ, **không phải** JSON path của Open Platform. Workspace vẫn chưa có raw `get_escrow_detail` của chính đơn này. Không dùng API Seller Center riêng, không áp dụng thang 100000 của Seller Center cho OpenAPI, không bật provider fallback cho Giá SP/Chiết Khấu khi chưa xác minh nguồn chính thức. Trạng thái Voucher Xtra: `PROVIDER_VOUCHER_XTRA_SOURCE_NOT_AVAILABLE_IN_OPENAPI` chưa thể kết luận; hiện chỉ **chưa chứng minh** nguồn trong snapshot OpenAPI.
 
+> WP.6H.3B / canonical v7: audit OpenAPI production của `260924TSBR7FC0` xác nhận `payment_raw_data.order_income.order_selling_price=312000`, đúng giá sản phẩm Seller Center. Giá SP ưu tiên `orders.product_price_vat_8` (Excel), sau đó dùng `payment_normalized_data.orderSellingPrice` của đúng `marketplace_order_id`; thiếu cả hai = NULL. Chênh lệch giữa hai nguồn giữ giá Excel và lưu hai con số trong `source_metadata.productPrice.discrepancy`. Voucher Xtra 17,160 và `service_fee_infos` không có trong snapshot OpenAPI này; `voucher_from_shopee=50000` là buyer voucher, **không** map Chiết Khấu Vui Khỏe. Chiết khấu vẫn chỉ Excel; thiếu chiết khấu thì phí dịch vụ và tỷ lệ phụ thuộc vẫn NULL. Không migration DB, snapshot v1–v6 stale.
+
 ## WP.6H — Exact Financial Formula Engine (hiện hành)
 
 Canonical `v5` giữ đúng 24 scalar columns. Công thức legacy đã duyệt hoạt động tự động khi tất cả toán hạng của **từng công thức** có nguồn: `% Tổng Chi Phí=(L+M+N+I+J)/F`, `% Chiết Khấu Vui Khỏe=(I+J)/F`, `% Chi Phí Sàn TMĐT=(L+M+N)/F`; tỷ lệ lưu dưới dạng ratio, không nhân 100. F là Giá SP VAT 8%, I/J là hai field nội bộ Excel, L/M/N là ba phí Payment Shopee đã duyệt. NULL không phải 0; riêng F=0 làm ba tỷ lệ NULL với trạng thái `ZERO_DIVISOR`. Thiếu I/J không cản tỷ lệ phí sàn nếu F/L/M/N đầy đủ.
@@ -60,7 +62,7 @@ Snapshot `v1`/`v2`/`v3` trở thành stale, materialize lại từ Orders đã l
 | 12 | Đã Thu Tiền | `amount_collected` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không suy từ COD/total | Trống |
 | 13 | Trạng Thái Công Nợ | `receivable_status` | text | `FUTURE_PAYMENT_ESCROW` | Chưa có payment evidence | Trống |
 | 14 | Chênh lệch | `difference_amount` | decimal(20,4) | `FUTURE_PAYMENT_ESCROW` | Không tính | Trống |
-| 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.product_price_vat_8` | Không tính từ giá Shopee/Payment | Trống nếu thiếu/không hợp lệ |
+| 15 | Giá SP (VAT 8%) | `product_price_vat_8` | decimal(20,4) | Excel `orders.product_price_vat_8`, kế tiếp Shopee Payment `orderSellingPrice` của đúng đơn | Không dùng buyer total; khác Excel thì giữ Excel và ghi discrepancy | Trống nếu cả hai thiếu/không hợp lệ |
 | 16 | % Tổng Chi Phí | `total_cost_percent` | ratio string + exact rational metadata | `(L+M+N+I+J)/F` khi đủ nguồn | Không dùng float | Trống nếu thiếu toán hạng hoặc F=0 |
 | 17 | Tổng Tiền Sẽ Thu | `total_amount_to_collect` | decimal string/source value | `escrowAmountAfterAdjustment` > `escrowAmount` > `F-(L+M+N+I+J)` khi đủ nguồn | Không suy từ buyerTotalAmount | NULL nếu cả hai Escrow và toàn bộ công thức thiếu |
 | 18 | Phí Affiliate (Vui Khỏe) | `affiliate_fee_vuikhoe` | decimal(20,4) | `INTERNAL_EXCEL`: header tùy chọn cùng tên, lưu `orders.affiliate_fee_vuikhoe` | Không dùng Shopee Affiliate | Trống nếu thiếu/không hợp lệ |

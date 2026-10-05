@@ -8,7 +8,7 @@ function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return j
 function contract_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 
 $columns = Ecomkit_Vuikhoe_Canonical_Columns::all();
-contract_check( 24 === count( $columns ) && 'v6' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
+contract_check( 24 === count( $columns ) && 'v7' === Ecomkit_Vuikhoe_Canonical_Columns::VERSION, 'Canonical shape/version changed.' );
 $contract = Ecomkit_Vuikhoe_Canonical_Columns::legacy_formula_contract();
 $fees = array( 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
 $all = array_merge( $fees, array( 'affiliate_fee_vuikhoe', 'discount_vuikhoe' ) );
@@ -55,7 +55,7 @@ contract_check( null === $result['columns']['difference_amount'], 'Broken differ
 unset( $order['payment_normalized_data'] );
 $without_payment = $materializer->materialize( $order );
 contract_check( null === $without_payment['columns']['total_amount_to_collect'], 'Legacy fallback was activated without verified platform fees.' );
-contract_check( 24 === count( $result['columns'] ) && 'v6' === $result['version'], 'Result contract changed.' );
+contract_check( 24 === count( $result['columns'] ) && 'v7' === $result['version'], 'Result contract changed.' );
 $math = Ecomkit_Vuikhoe_Exact_Financial_Math::class;
 $complete = $order;
 $complete['payment_normalized_data'] = json_encode( array( 'marketplaceOrderId' => 'TEST-SHP-001', 'commissionFee' => 50265, 'serviceFee' => 15108, 'shippingSellerProtectionFeeAmount' => 0, 'sellerTransactionFee' => 18481, 'affiliateCommissionFee' => 5000 ) );

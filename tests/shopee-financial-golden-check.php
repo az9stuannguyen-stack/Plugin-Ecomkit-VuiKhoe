@@ -26,7 +26,7 @@ $order = array(
 );
 $projection = ( new Ecomkit_Vuikhoe_Canonical_Result_Materializer() )->materialize( $order );
 $c = $projection['columns'];
-golden_check( 'v6' === $projection['version'] && 24 === count( $c ), 'Canonical version/column count changed.' );
+golden_check( 'v7' === $projection['version'] && 24 === count( $c ), 'Canonical version/column count changed.' );
 foreach ( array( 'product_price_vat_8' => '312000', 'affiliate_fee_vuikhoe' => '0', 'discount_vuikhoe' => '17160', 'service_platform_fee' => '5700' ) as $key => $expected ) {
 	golden_check( $expected === $c[ $key ], "Golden $key mismatch." );
 }
@@ -50,5 +50,5 @@ $with_voucher_like_fields['order_income']['voucher_from_seller'] = 17160;
 $without_internal['payment_raw_data'] = json_encode( $with_voucher_like_fields );
 $without_internal['payment_normalized_data'] = json_encode( Ecomkit_Vuikhoe_Shopee_Payment_Normalizer::normalize( $with_voucher_like_fields ) );
 $unverified = ( new Ecomkit_Vuikhoe_Canonical_Result_Materializer() )->materialize( $without_internal )['columns'];
-golden_check( null === $unverified['product_price_vat_8'] && null === $unverified['discount_vuikhoe'] && null === $unverified['service_platform_fee'], 'Unproven provider price/voucher was promoted to canonical.' );
+golden_check( '312000' === $unverified['product_price_vat_8'] && null === $unverified['discount_vuikhoe'] && null === $unverified['service_platform_fee'], 'Verified provider price or unproven voucher fallback violated.' );
 echo "WP.6H.3 golden accounting fixture: PASS (Excel price/discount; provider Voucher Xtra unproven)\n";
