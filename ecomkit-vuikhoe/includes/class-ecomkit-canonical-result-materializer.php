@@ -1,5 +1,5 @@
 <?php
-/** Pure deterministic projection from persisted Order evidence to canonical v8. */
+/** Pure deterministic projection from persisted Order evidence to canonical v9. */
 
 defined( 'ABSPATH' ) || exit;
 
@@ -39,6 +39,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			$values[ $key ] = $this->internal_money( $order[ $key ] ?? null );
 		}
 		$source_metadata['productPrice'] = array( 'source' => null === $values['product_price_vat_8'] ? 'NULL_NO_VERIFIED_SOURCE' : 'EXCEL' );
+		$source_metadata['affiliateVuikhoe'] = array( 'source' => null === $values['affiliate_fee_vuikhoe'] ? 'NULL_NO_VERIFIED_SOURCE' : 'EXCEL/Phí Affiliate (Vui Khỏe)' );
 		$raw_excel = $this->decode_provider( $order['raw_source_metadata'] ?? null );
 		$discount_conflict = ! empty( $raw_excel['discount_vuikhoe_conflict'] ) || $this->legacy_excel_discount_conflict( $raw_excel );
 		$discount_label = $raw_excel['discount_vuikhoe_source'] ?? null;
@@ -61,6 +62,19 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Materializer {
 			}
 			$payment = $this->decode_provider( $order['payment_normalized_data'] ?? null );
 			if ( (string) ( $payment['marketplaceOrderId'] ?? '' ) === (string) ( $order['marketplace_order_id'] ?? '' ) ) {
+				$provider_affiliate = $this->exact_payment_number( $payment['affiliateCommissionFee'] ?? null );
+				if ( null !== $provider_affiliate && Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $provider_affiliate, '0' ) < 0 ) {
+					$source_metadata['affiliateVuikhoe']['diagnostic'] = 'SHOPEE_AFFILIATE_UNEXPECTED';
+					$provider_affiliate = null;
+				}
+				if ( null !== $provider_affiliate ) {
+					if ( null === $values['affiliate_fee_vuikhoe'] ) {
+						$values['affiliate_fee_vuikhoe'] = $provider_affiliate;
+						$source_metadata['affiliateVuikhoe']['source'] = 'SHOPEE_OPENAPI_PAYMENT/affiliateCommissionFee';
+					} elseif ( Ecomkit_Vuikhoe_Exact_Financial_Math::compare( $values['affiliate_fee_vuikhoe'], $provider_affiliate ) !== 0 ) {
+						$source_metadata['affiliateVuikhoe']['discrepancy'] = array( 'excel_affiliate' => $values['affiliate_fee_vuikhoe'], 'provider_affiliate' => $provider_affiliate );
+					}
+				}
 				$provider_price = $this->internal_money( $payment['orderSellingPrice'] ?? null );
 				if ( null !== $provider_price ) {
 					if ( null === $values['product_price_vat_8'] ) {

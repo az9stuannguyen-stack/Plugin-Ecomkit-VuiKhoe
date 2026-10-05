@@ -20,7 +20,7 @@ $materializer = new Ecomkit_Vuikhoe_Canonical_Result_Materializer();
 $a = fee_order( 31270, 2700, '28270', 364380 );
 $a_raw = $a['payment_raw_data']; $a_normalized = $a['payment_normalized_data'];
 $result = $materializer->materialize( $a ); $columns = $result['columns'];
-fee_check( 'v8' === $result['version'] && 24 === count( $columns ) && '5700' === $columns['service_platform_fee'], 'Order A fee/version/shape failed.' );
+fee_check( 'v9' === $result['version'] && 24 === count( $columns ) && '5700' === $columns['service_platform_fee'], 'Order A fee/version/shape failed.' );
 fee_check( '121350' === $result['rational']['platform_cost_percent']['numerator'] && '149620' === $result['rational']['total_cost_percent']['numerator'] && '514000' === $result['rational']['total_cost_percent']['denominator'], 'Order A exact formula numerator failed.' );
 fee_check( 364380 === $columns['total_amount_to_collect'] && 'READY' === $result['formula_state']['service_platform_fee']['status'], 'Escrow precedence or service state failed.' );
 fee_check( '31270' === $result['source_metadata']['serviceFeeReclassification']['providerServiceFee'] && '5700' === $result['source_metadata']['serviceFeeReclassification']['canonicalServiceFee'] && $a_raw === $a['payment_raw_data'] && $a_normalized === $a['payment_normalized_data'], 'Source evidence mutated or audit metadata lost.' );

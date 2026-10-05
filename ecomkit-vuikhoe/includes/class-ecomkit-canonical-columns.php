@@ -4,7 +4,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Canonical_Columns {
-	public const VERSION = 'v8';
+	public const VERSION = 'v9';
 	private const MONEY_KEYS = array( 'amount_collected', 'difference_amount', 'product_price_vat_8', 'total_amount_to_collect', 'affiliate_fee_vuikhoe', 'discount_vuikhoe', 'fixed_platform_fee', 'service_platform_fee', 'transaction_platform_fee' );
 
 	public static function is_money( string $key ): bool { return in_array( $key, self::MONEY_KEYS, true ); }
@@ -64,7 +64,7 @@ final class Ecomkit_Vuikhoe_Canonical_Columns {
 			array( 'product_price_vat_8', 'Giá SP (VAT 8%)', 'EXCEL_THEN_SHOPEE_PAYMENT_FALLBACK' ),
 			array( 'total_cost_percent', '% Tổng Chi Phí', 'DERIVED_LEGACY_FORMULA' ),
 			array( 'total_amount_to_collect', 'Tổng Tiền Sẽ Thu', 'SHOPEE_PAYMENT_ESCROW' ),
-			array( 'affiliate_fee_vuikhoe', 'Phí Affiliate (Vui Khỏe)', 'INTERNAL_EXCEL' ),
+			array( 'affiliate_fee_vuikhoe', 'Phí Affiliate (Vui Khỏe)', 'EXCEL_THEN_SHOPEE_PAYMENT_FALLBACK' ),
 			array( 'discount_vuikhoe', 'Chiết Khấu (Vui Khỏe)', 'EXCEL_THEN_SHOPEE_PAYMENT_DERIVED_FALLBACK' ),
 			array( 'discount_percent_vuikhoe', '% Chiết Khấu Vui Khỏe', 'DERIVED_LEGACY_FORMULA' ),
 			array( 'fixed_platform_fee', 'Phí Cố Định (TMĐT)', 'SHOPEE_PAYMENT_ESCROW' ),

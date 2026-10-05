@@ -10,7 +10,7 @@ $payment = array( 'marketplaceOrderId' => $id, 'orderSellingPrice' => 312000, 'v
 $base = array( 'platform' => 'SHOPEE', 'matching_status' => 'MATCHED', 'marketplace_order_id' => $id, 'product_price_vat_8' => null, 'affiliate_fee_vuikhoe' => null, 'discount_vuikhoe' => null, 'payment_normalized_data' => json_encode( $payment ) );
 $m = new Ecomkit_Vuikhoe_Canonical_Result_Materializer();
 $fallback = $m->materialize( $base );
-price_check( 'v8' === $fallback['version'] && 24 === count( $fallback['columns'] ), 'Canonical shape/version failed.' );
+price_check( 'v9' === $fallback['version'] && 24 === count( $fallback['columns'] ), 'Canonical shape/version failed.' );
 price_check( '312000' === $fallback['columns']['product_price_vat_8'] && 'SHOPEE_OPENAPI_PAYMENT/order_selling_price' === $fallback['source_metadata']['productPrice']['source'], 'Provider fallback/provenance failed.' );
 price_check( '17160' === $fallback['columns']['discount_vuikhoe'] && '5700' === $fallback['columns']['service_platform_fee'] && null === $fallback['columns']['discount_percent_vuikhoe'] && '75900' === $fallback['rational']['platform_cost_percent']['numerator'], 'Service-derived voucher or missing Affiliate gate failed.' );
 price_check( 51480 === $fallback['columns']['fixed_platform_fee'] && 18720 === $fallback['columns']['transaction_platform_fee'] && 218940 === $fallback['columns']['total_amount_to_collect'], 'Payment direct mapping/escrow failed.' );

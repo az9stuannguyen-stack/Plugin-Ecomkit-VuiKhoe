@@ -6,11 +6,11 @@ require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 function wp_json_encode( mixed $value, int $flags = 0 ): string|false { return json_encode( $value, $flags ); }
 function voucher_check( bool $ok, string $message ): void { if ( ! $ok ) { throw new RuntimeException( $message ); } }
 $id = '260924TSBR7FC0';
-$base_payment = array( 'marketplaceOrderId' => $id, 'orderSellingPrice' => 312000, 'commissionFee' => 51480, 'serviceFee' => 20160, 'shippingSellerProtectionFeeAmount' => 2700, 'sellerTransactionFee' => 18720, 'escrowAmountAfterAdjustment' => 218940, 'voucherFromShopee' => 50000, 'affiliateCommissionFee' => 900 );
+$base_payment = array( 'marketplaceOrderId' => $id, 'orderSellingPrice' => 312000, 'commissionFee' => 51480, 'serviceFee' => 20160, 'shippingSellerProtectionFeeAmount' => 2700, 'sellerTransactionFee' => 18720, 'escrowAmountAfterAdjustment' => 218940, 'voucherFromShopee' => 50000 );
 $base = array( 'platform' => 'SHOPEE', 'matching_status' => 'MATCHED', 'marketplace_order_id' => $id, 'product_price_vat_8' => null, 'affiliate_fee_vuikhoe' => null, 'discount_vuikhoe' => null, 'payment_normalized_data' => json_encode( $base_payment ) );
 $materializer = new Ecomkit_Vuikhoe_Canonical_Result_Materializer();
 $golden = $materializer->materialize( $base ); $c = $golden['columns']; $m = $golden['source_metadata'];
-voucher_check( 'v8' === $golden['version'] && 24 === count( $c ) && '312000' === $c['product_price_vat_8'], 'Version/shape/product fallback failed.' );
+voucher_check( 'v9' === $golden['version'] && 24 === count( $c ) && '312000' === $c['product_price_vat_8'], 'Version/shape/product fallback failed.' );
 voucher_check( '3000' === $m['serviceFeeReclassification']['infrastructureFee'] && '17160' === $m['serviceFeeReclassification']['derivedVoucherXtra'] && '17160' === $c['discount_vuikhoe'] && '5700' === $c['service_platform_fee'], 'Golden derivation failed.' );
 voucher_check( 51480 === $c['fixed_platform_fee'] && 18720 === $c['transaction_platform_fee'] && 218940 === $c['total_amount_to_collect'] && null === $c['affiliate_fee_vuikhoe'], 'Payment/affiliate source isolation failed.' );
 voucher_check( 'SHOPEE_OPENAPI_PAYMENT_DERIVED/serviceFee-minus-infrastructure' === $m['discountVuikhoe']['source'] && 'SHOPEE_OPENAPI_PAYMENT_DERIVED/infrastructure-plus-piship' === $m['serviceFeeReclassification']['source'], 'Derived provenance failed.' );
