@@ -1,6 +1,6 @@
-# Lazada seller authorization — WP.6J.2
+# Lazada authorization and Order client — WP.6J.3A
 
-Plugin 0.7.18, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token exchange and refresh are implemented; Order/Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Live seller authorization remains unverified.
+Plugin 0.7.19, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh and an in-memory Order client are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Live seller authorization and live Order response shape remain unverified. The user explicitly authorized automated-only WP.6J.3A while seller login is unavailable.
 
 ## Architecture audit
 
@@ -56,4 +56,22 @@ Lazada buyer PII availability can require **Sensitive Data Privilege / security 
 
 Official references: [App parameters and privileges](https://open.lazada.com/apps/doc/doc?docId=108055&nodeId=10433), [Seller authorization](https://open.lazada.com/apps/doc/doc?docId=108260&nodeId=10533), [Signing contract](https://open.lazada.com/apps/doc/doc?docId=108068&nodeId=10400), [Official signing fixture](https://open.lazada.com/apps/doc/doc?docId=108069&nodeId=10400), [Token response](https://open.lazada.com/apps/doc/api?path=%2Fauth%2Ftoken%2Frefresh), [Refresh expiry policy](https://open.lazada.com/apps/doc/doc?docId=121782&nodeId=45695).
 
-WP.6J.3 remains gated on live ACTIVE/READY authorization. WP.7 remains gated on completed live Lazada integration.
+## Order client contract (automated-only)
+
+`Ecomkit_Vuikhoe_Lazada_Order_Client` is deliberately not registered as an admin action or pipeline stage. Its methods `get_orders(query)`, `get_order(id)`, `get_order_items(id)` use `/orders/get`, `/order/get`, `/order/items/get` at the centralized VN base. `/orders/items/get` is a route constant only: bulk request shape is deferred, not fabricated. There is no live diagnostic button or token input in this stage.
+
+The client obtains access through the existing lifecycle, then signs form POST common/business parameters with the existing Lazada signer. HTTP uses TLS verification, no redirect, timeout 20 seconds, 2 MiB response limit and no automatic retries. Tokens/signature/secret never enter request URL or client logs. Diagnostics are allowlisted to API path, connection ID, validated order ID, offset/limit, HTTP status, redacted provider code/message/request ID. Auth failures stop before seller HTTP. Unknown provider errors are not assigned speculative business meanings.
+
+The immutable query accepts only officially verified minimum filters: timezone-aware `DateTimeImmutable created_after`, optional raw `status`, limit 1–100, offset 0–5000. Date serialization preserves the supplied timezone using ISO `Y-m-dTH:i:s±HH:MM`; no implicit PHP-local timezone. `created_before`, update filters and sort parameters are intentionally not sent until their current official contract is accessible/verified.
+
+`paginate()` defaults to 100 per page, offsets 0/100/200, at most 51 pages. Full-page progression uses the requested limit. Short/empty page or coherent `countTotal` can prove completion. Repeated page/overlapping ID, changing/malformed count metadata, oversized page or contradictory short page fails closed. Safety page-bound exhaustion is an explicit pagination error; continuing beyond offset 5000 is `LAZADA_ORDER_WINDOW_TOO_LARGE`, requiring caller-controlled time-window splitting later. It never returns a partial listing as complete. Single-page `get_orders()` is explicitly one page, not an implicit full listing.
+
+Provider IDs remain exact decimal strings paired with connection ID (Lazada order IDs are only shop-unique). DTOs preserve raw order status collections and individual item status strings, never one Vietnamese business label. Distinct item IDs sharing a SKU are preserved separately; duplicated item ID or wrong order association is rejected. Shipping components remain separate, with absent/masked PII accepted. They are in-memory potentially sensitive provider data, not diagnostics. No raw live payload, buyer PII or DTO is persisted by this client.
+
+Price/voucher/shipping_fee and item prices are exact validated decimal strings, with explicit zero distinct from null. JSON numeric lexemes, including large IDs and decimals, are preserved before decoding; no PHP float accounting, scale conversion or financial calculation. Missing timestamps/fields remain null; returned timestamps remain provider strings, not guessed timezone dates. Unknown fields are not dumped into metadata. There is NO canonical product/receivable/fee/status mapping.
+
+Official references: [Get Order tutorial: query, pagination, shop identity, item statuses and fields](https://open.lazada.com/apps/doc/doc?docId=121327&nodeId=29616), [GetOrders API](https://open.lazada.com/apps/doc/api?path=%2Forders%2Fget), [HTTP requests](https://open.lazada.com/apps/doc/doc?docId=108066&nodeId=10448), [Sensitive Data Privilege / DataMoat](https://open.lazada.com/apps/doc/doc?docId=108297&nodeId=10784). Masked/missing buyer data is not itself OAuth failure.
+
+## Next live gate — WP.6J.3B
+
+First complete real WP.6J.2 authorization and verify ACTIVE/READY + actual identity path. Then, under controlled admin/developer execution, read GetOrders for a narrow starting date, inspect safe actual response shape, and read one known order plus its items. Confirm dates, IDs, statuses, PII availability, POST compatibility and pagination. Client minimum query currently has no `created_before`; do not pretend it enforces an upper date bound. Do not start automatic exact reconciliation WP.6J.4 until live Order validation passes. WP.7 remains blocked.

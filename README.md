@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6J.2 — Lazada Seller Authorization**, plugin `0.7.18`, DB `9`, canonical `v9`. Marketplace hỗ trợ OAuth Lazada VN, token mã hóa và lifecycle/refresh; chưa triển khai Order/Financial API hoặc xử lý đơn Lazada. Kiểm thử dùng transport giả; ủy quyền live vẫn là gate bắt buộc. Shopee baseline giữ nguyên; access tiếp tục `manage_options`. Không dependency/migration mới. Xem [Hướng dẫn cấu hình Lazada](docs/lazada-integration.md). WP.6J.3 chỉ bắt đầu sau live authorization PASS; WP.7 chưa bắt đầu.
+Hiện tại: **WP.6J.3A — Lazada Order Client (automated-only)**, plugin `0.7.19`, DB `9`, canonical `v9`. Có client GetOrders/GetOrder/GetOrderItems, pagination và DTO in-memory; chưa nối pipeline, lưu provider orders hoặc map tài chính Lazada. OAuth/live Order API vẫn PENDING; mọi kiểm thử dùng transport giả. Shopee baseline giữ nguyên, không migration/dependency mới. Xem [Hướng dẫn Lazada](docs/lazada-integration.md). Gate tiếp theo WP.6J.3B live validation; WP.7 chưa bắt đầu.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 
