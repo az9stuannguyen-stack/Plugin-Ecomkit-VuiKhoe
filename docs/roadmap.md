@@ -221,3 +221,6 @@ Plugin 0.7.0 / DB 8 / canonical v5: ba tỷ lệ legacy và fallback Tổng Ti�
 # WP.6G — Internal Excel sources
 
 Plugin 0.6.9 / DB 8 / canonical v4: năm trường nội bộ tùy chọn được lấy từ cùng workbook Excel, persist Order, materialize trực tiếp; bảy header cũ tiếp tục hợp lệ. Không thêm upload hay thao tác nghiệp vụ. Snapshot v1–v3 cần rematerialize. Ba tỷ lệ và fallback receivable legacy tiếp tục gated cho đến khi có exact decimal arithmetic và chính sách precision; Shopee Escrow không thay đổi. Cần manual WordPress test với workbook mở rộng. WP.7 chưa bắt đầu; Google Sheets/eShop adapter chỉ là lựa chọn tương lai.
+# WP.6H.1A — Safe Payment snapshot audit
+
+Plugin 0.7.1 / DB 8 / canonical v5: thêm công cụ chẩn đoán phí Shopee admin-only trong Kết quả, đọc Payment snapshot đã lưu theo Batch + marketplace order ID chính xác; AJAX POST hiển thị và POST tải JSON projection tài chính an toàn. Không provider call, data mutation hay mapping change. Cần chạy với hai đơn production và gửi lại JSON an toàn để kết thúc audit WP.6H.1; chỉ sau đó cân nhắc WP.6H.2. WP.7 chưa bắt đầu.

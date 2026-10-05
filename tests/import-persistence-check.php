@@ -2,7 +2,7 @@
 /** WP.2A persistence checks with an in-memory wpdb double. */
 declare(strict_types=1);
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.0' );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.1' );
 define( 'ECOMKIT_VUIKHOE_DB_VERSION', 8 );
 define( 'ARRAY_A', 'ARRAY_A' );
 function wp_max_upload_size(): int { return 20 * 1024 * 1024; }

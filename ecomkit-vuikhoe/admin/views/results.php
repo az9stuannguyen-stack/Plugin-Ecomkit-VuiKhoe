@@ -64,6 +64,57 @@
 <p><?php echo esc_html( sprintf( 'Batch: %s | Đơn: %d | Shopee: %d | Lazada: %d | Matched: %d | Missing: %d | Detail missing: %d | Sẵn sàng: %d | Cảnh báo: %d', (string) $batch['status'], $counts['total'], $counts['SHOPEE'], $counts['LAZADA'], $counts['MATCHED'], $counts['NOT_FOUND_IN_SHOPEE'], $counts['DETAIL_MISSING'], $counts['ready'], $counts['warnings'] ) ); ?></p>
 <?php if ( is_array( $result['reconciliation'] ) ) : ?><p><?php echo esc_html( sprintf( 'Đối chiếu Shopee: %s | provider_windows_executed: %d | shopee_api_calls: %d', (string) ( $result['reconciliation']['status'] ?? '' ), (int) ( $result['reconciliation']['provider_windows_executed'] ?? 0 ), (int) ( $result['reconciliation']['shopee_api_calls'] ?? 0 ) ) ); ?></p><?php endif; ?>
 <details><summary><?php echo esc_html__( 'Chẩn đoán nâng cao', 'ecomkit-vuikhoe' ); ?></summary>
+<h2><?php echo esc_html__( 'Kiểm tra nguồn phí Shopee', 'ecomkit-vuikhoe' ); ?></h2>
+<p><?php echo esc_html__( 'Chỉ đọc Payment snapshot đã lưu cho mã đơn sàn chính xác trong Batch này. Không gọi Shopee, không cập nhật dữ liệu. Nhập tối đa 10 mã, mỗi dòng một mã.', 'ecomkit-vuikhoe' ); ?></p>
+<form id="ecomkit-fee-audit-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" data-ajax-nonce="<?php echo esc_attr( wp_create_nonce( 'ecomkit_shopee_fee_audit' ) ); ?>">
+<input type="hidden" name="action" value="ecomkit_shopee_fee_audit_export"><input type="hidden" name="batch_id" value="<?php echo esc_attr( (string) $batch['id'] ); ?>"><?php wp_nonce_field( 'ecomkit_shopee_fee_audit_export', 'ecomkit_fee_audit_nonce' ); ?>
+<label for="ecomkit-fee-audit-ids"><?php echo esc_html__( 'Mã đơn sàn Shopee', 'ecomkit-vuikhoe' ); ?></label><br><textarea id="ecomkit-fee-audit-ids" name="order_sns" rows="3" cols="35" required placeholder="Mỗi dòng một order_sn"></textarea><br>
+<button type="button" class="button button-secondary" id="ecomkit-fee-audit-inspect"><?php echo esc_html__( 'Kiểm tra nguồn phí Shopee', 'ecomkit-vuikhoe' ); ?></button> <?php submit_button( __( 'Xuất JSON chẩn đoán phí', 'ecomkit-vuikhoe' ), 'secondary', '', false ); ?>
+</form>
+<div id="ecomkit-fee-audit-output" role="status" aria-live="polite"></div>
+<script>
+(function () {
+    const form = document.getElementById('ecomkit-fee-audit-form');
+    const output = document.getElementById('ecomkit-fee-audit-output');
+    const button = document.getElementById('ecomkit-fee-audit-inspect');
+    if (!form || !output || !button) return;
+    const line = (parent, text, tag = 'p') => { const node = document.createElement(tag); node.textContent = text; parent.appendChild(node); return node; };
+    const table = (parent, rows, exactPaths) => {
+        const node = document.createElement('table'); node.className = 'widefat striped';
+        const head = document.createElement('thead'); const tr = document.createElement('tr');
+        ['Field path', 'Value', 'Type'].forEach(label => line(tr, label, 'th')); head.appendChild(tr); node.appendChild(head);
+        const body = document.createElement('tbody');
+        rows.forEach(item => { const row = document.createElement('tr');
+            line(row, item.path, 'td');
+            const value = line(row, item.value === null ? '—' : String(item.value), 'td');
+            if (exactPaths.has(item.path)) { value.textContent += ' — trùng chính xác 5700'; value.style.fontWeight = 'bold'; }
+            line(row, item.type, 'td'); body.appendChild(row);
+        }); node.appendChild(body); parent.appendChild(node);
+    };
+    button.addEventListener('click', async () => {
+        output.replaceChildren(); line(output, 'Đang đọc snapshot Payment đã lưu…'); button.disabled = true;
+        const body = new URLSearchParams(); body.set('action', 'ecomkit_shopee_fee_audit');
+        body.set('nonce', form.dataset.ajaxNonce); body.set('batch_id', form.elements.batch_id.value);
+        body.set('order_sns', form.elements.order_sns.value);
+        try {
+            const response = await fetch(form.dataset.ajax, { method: 'POST', credentials: 'same-origin', cache: 'no-store', body });
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.data || !Array.isArray(payload.data.orders)) throw new Error('Không thể đọc snapshot Payment trong Batch này.');
+            output.replaceChildren();
+            payload.data.orders.forEach(order => {
+                line(output, 'Order SN: ' + order.marketplace_order_id, 'h3');
+                line(output, 'Payment fetched at: ' + (order.payment_fetched_at || '—') + ' · request_id: ' + (order.payment_request_id || '—'));
+                const origin = order.financial_paths.find(item => item.path === 'payment_raw_data.order_income.service_fee');
+                line(output, 'Phí dịch vụ (TMĐT) ← serviceFee ← payment_raw_data.order_income.service_fee: ' + (origin ? String(origin.value) : '—') + ' (normalized: ' + (order.normalized_financial.serviceFee === null ? '—' : String(order.normalized_financial.serviceFee)) + ')');
+                line(output, 'Exact 5700 matches: ' + (order.exact_5700_matches.length ? order.exact_5700_matches.map(item => item.path).join(', ') : 'NONE'));
+                const normalized = Object.entries(order.normalized_financial).map(([key, value]) => ({path: 'payment_normalized_data.' + key, value, type: value === null ? 'null' : typeof value}));
+                table(output, normalized.concat(order.financial_paths), new Set(order.exact_5700_matches.map(item => item.path)));
+            });
+        } catch (error) { output.replaceChildren(); line(output, error.message || 'Không thể đọc snapshot Payment.'); }
+        finally { button.disabled = false; }
+    });
+})();
+</script>
 <?php if ( is_array( $progress ) && in_array( $progress['status'], array( 'WARNING', 'ERROR' ), true ) ) : ?><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="ecomkit_pipeline_resume"><input type="hidden" name="batch_id" value="<?php echo esc_attr( (string) $batch['id'] ); ?>"><?php wp_nonce_field( 'ecomkit_pipeline_resume', 'ecomkit_pipeline_nonce' ); ?><?php submit_button( __( 'Tiếp tục xử lý sau khi kiểm tra cảnh báo', 'ecomkit-vuikhoe' ), 'secondary', '', false ); ?></form><?php endif; ?>
 <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><input type="hidden" name="action" value="ecomkit_vuikhoe_materialize_results"><input type="hidden" name="batch_id" value="<?php echo esc_attr( (string) $batch['id'] ); ?>"><?php wp_nonce_field( 'ecomkit_vuikhoe_materialize_results', 'ecomkit_result_nonce' ); ?><?php submit_button( __( 'Tạo / Làm mới kết quả 24 cột', 'ecomkit-vuikhoe' ), 'secondary', '', false ); ?></form>
 <h2><?php echo esc_html__( 'Tài chính Shopee', 'ecomkit-vuikhoe' ); ?></h2>

@@ -33,6 +33,7 @@ return array(
     'Ecomkit_Vuikhoe_Canonical_Columns' => $baseDir . '/includes/class-ecomkit-canonical-columns.php',
     'Ecomkit_Vuikhoe_Canonical_Result_Materializer' => $baseDir . '/includes/class-ecomkit-canonical-result-materializer.php',
     'Ecomkit_Vuikhoe_Exact_Financial_Math' => $baseDir . '/includes/class-ecomkit-exact-financial-math.php',
+    'Ecomkit_Vuikhoe_Shopee_Fee_Audit' => $baseDir . '/includes/class-ecomkit-shopee-fee-audit.php',
     'Ecomkit_Vuikhoe_Canonical_Result_Service' => $baseDir . '/includes/class-ecomkit-canonical-result-service.php',
     'Ecomkit_Vuikhoe_Credential_Encryption' => $baseDir . '/includes/class-ecomkit-credential-encryption.php',
     'Ecomkit_Vuikhoe_Credential_Key_Resolver' => $baseDir . '/includes/class-ecomkit-credential-key-resolver.php',

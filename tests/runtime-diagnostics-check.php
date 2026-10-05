@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
-define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.0' );
+define( 'ECOMKIT_VUIKHOE_VERSION', '0.7.1' );
 define( 'ECOMKIT_VUIKHOE_DB_VERSION', 8 );
 define( 'ECOMKIT_VUIKHOE_DIR', __DIR__ . '/../ecomkit-vuikhoe/' );
 $GLOBALS['wp_version'] = '6.6';

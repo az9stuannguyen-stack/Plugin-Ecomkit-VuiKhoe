@@ -1,5 +1,7 @@
 # Hợp đồng canonical 24 cột
 
+> WP.6H.1A: `payment_raw_data.order_income.service_fee → serviceFee → Phí dịch vụ (TMĐT)` vẫn là mapping code hiện hành nhưng được đánh dấu **SEMANTIC_PARITY_UNVERIFIED** sau khi hai đơn legacy không khớp. Công cụ chẩn đoán admin chỉ đọc snapshot đã lưu để tìm nguồn đúng; chưa sửa canonical, Payment hoặc công thức, chưa khẳng định field thay thế.
+
 ## WP.6H — Exact Financial Formula Engine (hiện hành)
 
 Canonical `v5` giữ đúng 24 scalar columns. Công thức legacy đã duyệt hoạt động tự động khi tất cả toán hạng của **từng công thức** có nguồn: `% Tổng Chi Phí=(L+M+N+I+J)/F`, `% Chiết Khấu Vui Khỏe=(I+J)/F`, `% Chi Phí Sàn TMĐT=(L+M+N)/F`; tỷ lệ lưu dưới dạng ratio, không nhân 100. F là Giá SP VAT 8%, I/J là hai field nội bộ Excel, L/M/N là ba phí Payment Shopee đã duyệt. NULL không phải 0; riêng F=0 làm ba tỷ lệ NULL với trạng thái `ZERO_DIVISOR`. Thiếu I/J không cản tỷ lệ phí sàn nếu F/L/M/N đầy đủ.

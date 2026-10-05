@@ -24,6 +24,8 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_reconcile_batch', array( $this, 'handle_shopee_reconcile_batch' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_materialize_results', array( $this, 'handle_materialize_results' ) );
 		add_action( 'admin_post_ecomkit_shopee_payment_test', array( $this, 'handle_shopee_payment_test' ) );
+		add_action( 'wp_ajax_ecomkit_shopee_fee_audit', array( $this, 'handle_shopee_fee_audit' ) );
+		add_action( 'admin_post_ecomkit_shopee_fee_audit_export', array( $this, 'handle_shopee_fee_audit_export' ) );
 		add_action( 'admin_post_ecomkit_shopee_income_test', array( $this, 'handle_shopee_income_test' ) );
 		add_action( 'admin_post_ecomkit_pipeline_resume', array( $this, 'handle_pipeline_resume' ) );
 		add_action( 'wp_ajax_ecomkit_pipeline_progress', array( $this, 'handle_pipeline_progress' ) );
@@ -114,6 +116,40 @@ final class Ecomkit_Vuikhoe_Admin {
 		$time = strtotime( $progress['updated_at'] . ' UTC' );
 		$progress['updated_local'] = false === $time ? '' : wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $time, wp_timezone() );
 		wp_send_json_success( array( 'batch_id' => $batch_id, 'progress' => $progress ) );
+	}
+
+	/** Read-only AJAX projection for the advanced admin diagnostic. */
+	public function handle_shopee_fee_audit(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_ajax_referer( 'ecomkit_shopee_fee_audit', 'nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		$input = wp_unslash( $_POST['order_sns'] ?? '' );
+		try {
+			if ( ! is_string( $input ) ) { throw new InvalidArgumentException( 'PAYMENT_AUDIT_IDS_INVALID' ); }
+			$data = ( new Ecomkit_Vuikhoe_Shopee_Fee_Audit() )->inspect_batch( $batch_id, Ecomkit_Vuikhoe_Shopee_Fee_Audit::parse_order_ids( $input ) );
+			wp_send_json_success( $data );
+		} catch ( Throwable ) { wp_send_json_error( array( 'message' => 'Không thể đọc snapshot Payment đã lưu cho đúng mã đơn trong Batch này. Kiểm tra mã đơn, Batch và dữ liệu Payment.' ), 400 ); }
+	}
+
+	/** Direct POST download; no transient, provider call, or persistence. */
+	public function handle_shopee_fee_audit_export(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_shopee_fee_audit_export', 'ecomkit_fee_audit_nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		$input = wp_unslash( $_POST['order_sns'] ?? '' );
+		try {
+			if ( ! is_string( $input ) ) { throw new InvalidArgumentException( 'PAYMENT_AUDIT_IDS_INVALID' ); }
+			$data = ( new Ecomkit_Vuikhoe_Shopee_Fee_Audit() )->inspect_batch( $batch_id, Ecomkit_Vuikhoe_Shopee_Fee_Audit::parse_order_ids( $input ) );
+			$json = wp_json_encode( $data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE );
+			if ( ! is_string( $json ) ) { throw new RuntimeException( 'PAYMENT_AUDIT_ENCODE_FAILED' ); }
+		} catch ( Throwable ) { wp_die( esc_html__( 'Không thể tạo JSON chẩn đoán an toàn từ snapshot Payment đã lưu.', 'ecomkit-vuikhoe' ), '', array( 'response' => 400 ) ); }
+		nocache_headers();
+		header( 'Content-Type: application/json; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="ecomkit-shopee-fee-audit.json"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'Cache-Control: private, no-store, max-age=0' );
+		echo $json; // Already projected to an explicit, PII-free allowlist.
+		exit;
 	}
 
 	public function handle_shopee_income_test(): void {
