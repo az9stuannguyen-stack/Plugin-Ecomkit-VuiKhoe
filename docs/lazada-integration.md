@@ -1,6 +1,43 @@
-# Lazada authorization, Order client and live diagnostic — WP.6J.3B
+# Lazada exact reconciliation — WP.6J.4
 
-Plugin 0.7.23, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator confirmed live OAuth ACTIVE/READY and reports manual refresh appears successful. All three Order reads failed live before this GET transport patch; successful live Order validation remains PENDING. No real Order request was made from this development workspace.
+Plugin 0.7.24, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, signed GET Order client, admin live diagnostic and explicit Batch reconciliation are implemented. Financial API/mapping and automatic Lazada processing are NOT implemented. Operator confirms OAuth FULL PASS LIVE and GetOrder/GetOrderItems/GetOrders FULL PASS: shop 100070635, Excel/provider ID 532935709720247, exact equality, raw status delivered, PII MASKED. WP.6J.4 reconciliation still requires its separate live manual gate. Automated tests use fake transport only; no real provider request from this development workspace.
+
+## Exact Batch reconciliation contract
+
+Only `orders.platform = LAZADA` rows with a non-empty string `marketplace_order_id` are eligible. Primary lookup: Excel marketplace_order_id → GetOrder(exact string) → strict `===` providerOrderId and connectionId checks → GetOrderItems(exact string). GetOrders, order date, ESHOP code, product/SKU, name, phone and address are not correctness dependencies. Leading zeros and IDs beyond JavaScript's safe integer are preserved; provider IDs never become PHP int/float or JavaScript Number.
+
+The explicit connection is an ACTIVE LAZADA entry in the existing generic connection model. READY/REFRESH_NEEDED uses the unchanged client/lifecycle, including refresh when required. REAUTH_REQUIRED blocks seller requests and records LAZADA_ORDER_AUTH_REQUIRED. Multiple active shops require explicit selection. Existing Order linkage cannot be rebound to a different shop; continuations are pinned to their selected connection. The same provider ID in different shops or historical Batches remains separate.
+
+### Persistence and state
+
+There is no external-provider order table to reuse: Shopee already persists provider evidence directly on the imported generic `orders` row. Lazada follows that model using existing `connection_id`, `matching_status`, `provider_normalized_data`, `matched_at` and `updated_at`. Existing unique key `(batch_id, connection_id, marketplace_order_id)` is unchanged; no schema change or new Lazada table. Original Excel identifiers/metadata/items, payment/income snapshots and canonical values remain untouched.
+
+Safe Lazada order DTO (without addressShipping) and every provider item DTO are stored as a replaceable `order` + `items` array inside provider_normalized_data. Each item has its distinct string orderItemId; same SKU items remain separate. These are provider evidence, not new imported order_items rows. Reruns replace the array rather than append; no duplicate external orders/items. No raw buyer payload is stored; provider_raw_data is NULL. PII availability alone is preserved as MASKED/AVAILABLE/MISSING; missing or masked PII never blocks matching. Raw order/item statuses and original string monetary values are retained without Vietnamese status or financial mapping.
+
+Current attempt outcomes:
+
+| Case | Persisted matching_status | Summary |
+| --- | --- | --- |
+| Exact GetOrder and successful GetOrderItems | MATCHED | matched |
+| Existing client demonstrates not found (GetOrder code 0 with empty data) | NOT_FOUND_IN_LAZADA | unmatched |
+| Network, auth, HTTP, permission, malformed provider data or ID mismatch | ERROR | errors |
+| Exact GetOrder followed by items failure | ERROR; exact_match=true retained | errors; GetOrder success recorded separately |
+
+Other provider codes are conservatively ERROR, not inferred not-found. The unchanged client rejects unexpected provider ID as LAZADA_ORDER_INVALID_RESPONSE; the orchestrator also validates strict ID/connection equality. No fuzzy acceptance or blind retry. Summary matched/unmatched/errors are mutually exclusive; items errors do not masquerade as a complete match. Empty items are a successful API result with count 0, not an invented item.
+
+Errors use generic `ecomkit_errors`, source LAZADA_RECON, preserving file/sheet/row, platform, exact marketplace ID, order/items stage, allowlisted code, friendly explanation, suggestion and existing redacted provider evidence. Each processed Order replaces only its own LAZADA_RECON errors; unrelated import/Shopee errors remain. Wrong-shop attempts retain the previous shop's provider snapshot. No token, signature, secret or raw buyer payload appears in stored diagnostics or admin output.
+
+### Bounded processing and admin action
+
+`Ecomkit_Vuikhoe_Lazada_Reconciliation_Service::reconcile_batch(batch_id, connection_id)` processes one eligible Order per explicit call by default. Internal callers may request at most five, with a 10-second elapsed budget checked between Orders. Each Order's evidence/state, errors and Batch checkpoint are committed in one transaction. A later failure cannot roll back earlier successful Orders. DB failures abort visibly; the uncommitted Order remains pending. The existing Lazada MySQL lock prevents concurrent reconciliation of one Batch; row identity is rechecked under FOR UPDATE before writes. Running automatic Shopee pipelines are blocked, not changed.
+
+Batch source_metadata.lazada_reconciliation stores total/eligible/skipped, matched/unmatched/errors, per-API success counts, processed count, last imported row ID and selected connection. PROCESSING means more Orders remain: the next explicit call resumes after that row. Completion is SUCCESS/WARNING/INCOMPLETE, and a subsequent run starts a fresh bounded reread. No cron, automatic retries, unbounded parallelism or upload integration. API timeouts remain 20 seconds each: an individual GetOrder/GetOrderItems pair, plus optional existing token refresh, can exceed a short host/proxy request limit. This stage does not guarantee completion within every hosting limit; interruption before the transaction leaves that Order uncommitted for explicit resume.
+
+In **Xử lý đơn hàng**, open the historical Batch and expand **Chẩn đoán nâng cao: Đối chiếu Lazada cho Batch**. Select the intended shop and press **Đối chiếu Lazada cho Batch**; if PROCESSING, use **Tiếp tục đối chiếu Lazada cho Batch** until terminal. Admin-only POST route `admin_post_ecomkit_lazada_reconcile_batch`, manage_options and nonce action `ecomkit_lazada_reconcile_batch` / field `ecomkit_lazada_reconcile_nonce`. The block shows summary and up to 100 safe provider evidence rows, separately from the unchanged canonical 24-column result table. The existing live diagnostic remains available.
+
+### WP.6J.4 manual live gate
+
+Deploy 0.7.24, hard refresh and use the existing historical Batch containing exact ID 532935709720247. Select shop 100070635; no reimport/date/list scan is required. Expected: MATCHED, GetOrder PASS, GetOrderItems PASS, exact provider ID, 1 item, raw statuses ["delivered"], MASKED accepted. Validate 529476639104228 independently if present; its existence is not assumed. Record summary/API/provider evidence, then rerun and verify no duplicate evidence/items or errors. Automated fixtures prove behavior only; WP.6J.4 becomes FULL PASS only after this live reconciliation test. No financial PASS claim. WP.6J.5/.6/.7 remain future work; WP.7 is not started.
 
 ## Architecture audit
 
@@ -105,4 +142,4 @@ The UI displays normalized provider amounts/statuses without interpreting accoun
 
 Response lives only in the AJAX response/browser memory; no options/transients, business tables, raw snapshots or canonical rows are written by the diagnostic. Reload clears it. The existing token lifecycle may rotate encrypted credentials as required, which is distinct from order payload persistence. No provider errors are retried blindly, and tokens/secrets/signatures are never displayed/logged by this tool. External web/APM HTTP-body logging must remain disabled/redacted as described above.
 
-Live report must record all three API outcomes, exact identity/status evidence, PII availability, offsets/request count, actual structural paths and one Excel exact comparison. No live Order call/result is available in this workspace yet; do not invent order IDs/statuses. Only after GetOrders/GetOrder/GetOrderItems and secret-safety PASS live may WP.6J.4 begin. WP.7 remains blocked.
+The earlier Order API live gate is now reported FULL PASS by the operator (evidence at the top). The historical diagnostic/routing/transport procedures above describe previous gates and fixes, not a new claim of calls from this workspace. Current next gate is WP.6J.4 live Batch reconciliation; WP.7 remains unopened.

@@ -23,6 +23,7 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_post_ecomkit_shopee_refresh_token', array( $this, 'handle_shopee_refresh_token' ) );
 		add_action( 'admin_post_ecomkit_shopee_test_order_api', array( $this, 'handle_shopee_test_order_api' ) );
 		add_action( 'admin_post_ecomkit_shopee_reconcile_batch', array( $this, 'handle_shopee_reconcile_batch' ) );
+		add_action( 'admin_post_ecomkit_lazada_reconcile_batch', array( $this, 'handle_lazada_reconcile_batch' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_materialize_results', array( $this, 'handle_materialize_results' ) );
 		add_action( 'admin_post_ecomkit_shopee_payment_test', array( $this, 'handle_shopee_payment_test' ) );
 		add_action( 'wp_ajax_ecomkit_shopee_fee_audit', array( $this, 'handle_shopee_fee_audit' ) );
@@ -64,6 +65,8 @@ final class Ecomkit_Vuikhoe_Admin {
 				'max_upload_size' => $imports->max_upload_bytes(),
 				'max_rows'        => Ecomkit_Vuikhoe_Excel_Service::MAX_ROWS,
 				'ready_connections' => $batch_id ? $reconciliation->ready_connections() : array(),
+				'lazada_connections' => $batch_id ? ( new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service() )->active_connections() : array(),
+				'lazada_evidence' => $batch_id ? ( new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service() )->batch_evidence( $batch_id ) : array(),
 			)
 		);
 	}
@@ -277,6 +280,22 @@ final class Ecomkit_Vuikhoe_Admin {
 			$allowed = array( 'CANONICAL_MAPPING_CONTRACT_INVALID', 'CANONICAL_ROW_BUILD_FAILED', 'CANONICAL_RESULT_PERSIST_FAILED', 'CANONICAL_SOURCE_INVALID' );
 			$code = in_array( $exception->getMessage(), $allowed, true ) ? $exception->getMessage() : 'CANONICAL_ROW_BUILD_FAILED';
 			$args = array( 'page' => 'ecomkit-vuikhoe-results', 'batch_id' => $batch_id, 'materialize_error' => strtolower( $code ) );
+		}
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) ); exit;
+	}
+
+	public function handle_lazada_reconcile_batch(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_lazada_reconcile_batch', 'ecomkit_lazada_reconcile_nonce' );
+		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
+		$connection = absint( wp_unslash( $_POST['connection_id'] ?? 0 ) );
+		$args = array( 'page' => 'ecomkit-vuikhoe-process', 'batch_id' => $batch_id );
+		try {
+			( new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service() )->reconcile_batch( $batch_id, $connection > 0 ? $connection : null );
+			$args['lazada_reconcile_notice'] = 'saved';
+		} catch ( Throwable $e ) {
+			$allowed = array( 'LAZADA_RECON_BATCH_NOT_ELIGIBLE', 'LAZADA_RECON_BATCH_BUSY', 'LAZADA_RECON_READ_FAILED', 'LAZADA_RECON_CONNECTION_CONFLICT', 'LAZADA_RECON_CONNECTION_AMBIGUOUS', 'LAZADA_ORDER_AUTH_REQUIRED', 'LAZADA_RECON_PERSIST_FAILED', 'LAZADA_LOCK_UNAVAILABLE' );
+			$args['lazada_reconcile_error'] = in_array( $e->getMessage(), $allowed, true ) ? $e->getMessage() : 'LAZADA_RECON_FAILED';
 		}
 		wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) ); exit;
 	}

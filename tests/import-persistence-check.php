@@ -112,4 +112,11 @@ $validate = new ReflectionMethod( $service, 'validate_upload' );
 $unsupported = $validate->invoke( $service, array( 'error' => UPLOAD_ERR_OK, 'tmp_name' => 'x', 'size' => 100 ), 'fixture.csv' );
 check_import( 'EXCEL_UNSUPPORTED_FILE_TYPE' === $unsupported['error_code'], 'Unsupported upload type was not blocked.' );
 
+$GLOBALS['wpdb'] = $large_db = new FakeWpdb();
+$persist->invoke( $service, 99, 'synthetic-lazada.xlsx', 1000, array(
+	'status' => 'SUCCESS', 'total_rows' => 1, 'valid_rows' => 1,
+	'orders' => array( array( 'order_code' => '987654321098765432109876543210', 'platform' => 'LAZADA', 'raw_platform' => 'Lazada', 'raw_identity' => "Lazada\n987654321098765432109876543210", 'sheet' => 'Orders', 'row' => 2, 'raw_cells' => array(), 'items' => array() ) ),
+	'errors' => array(), 'raw' => array( 'platform_counts' => array( 'LAZADA' => 1 ) ),
+) );
+check_import( $large_db->inserts[0]['data']['marketplace_order_id'] === '987654321098765432109876543210' && $large_db->inserts[0]['data']['platform'] === 'LAZADA', 'Large Lazada ID changed on import DB write.' );
 echo "WP.2B import persistence checks passed.\n";

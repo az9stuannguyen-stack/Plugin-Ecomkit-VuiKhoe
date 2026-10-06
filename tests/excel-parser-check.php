@@ -224,5 +224,12 @@ try {
 	file_put_contents( $invalid, 'not an xlsx file' );
 	assert_true( 'EXCEL_READ_ERROR' === $parser->parse( $invalid )['errors'][0]['error_code'], 'Invalid workbook was not handled safely.' );
 
+	$paths[] = $lazada_large = fixture( static function ( Spreadsheet $book ): void {
+		$sheet = $book->getActiveSheet();
+		$sheet->fromArray( array( 'STT', 'Sàn & Mã Đơn', 'Ngày đặt', 'Mã đơn hàng eShop', 'Mã hàng hóa', 'Tên hàng hóa', 'Số lg' ), null, 'A1' );
+		$sheet->fromArray( array( 1, "Lazada\n987654321098765432109876543210", '03/10/2026', 'ESHOP-DO-NOT-MATCH', 'SKU', 'Synthetic product', 1 ), null, 'A2' );
+	} );
+	$large_result = $parser->parse( $lazada_large );
+	assert_true( $large_result['orders'][0]['platform'] === 'LAZADA' && $large_result['orders'][0]['order_code'] === '987654321098765432109876543210', 'Large Lazada Excel string ID lost precision.' );
 	echo "WP.2B Excel parser checks passed.\n";
 } finally { foreach ( $paths as $path ) { @unlink( $path ); } }
