@@ -23,10 +23,16 @@ final class AuthNetworkError {}
 function wp_remote_retrieve_response_code( array $r ): int { return $r['status']; }
 function wp_remote_retrieve_body( array $r ): string { return $r['body']; }
 function wp_remote_post(): never { throw new RuntimeException( 'REAL_PROVIDER_CALL_FORBIDDEN' ); }
-function wp_remote_get(): never { throw new RuntimeException( 'REAL_PROVIDER_CALL_FORBIDDEN' ); }
+function wp_remote_get( string $url = '', array $args = array() ): mixed {
+	if ( isset( $GLOBALS['synthetic_lazada_read_transport'] ) ) { return ( $GLOBALS['synthetic_lazada_read_transport'] )( $url, $args ); }
+	throw new RuntimeException( 'REAL_PROVIDER_CALL_FORBIDDEN' );
+}
 function esc_html__( string $s, string $domain ): string { return $s; }
 function wp_die( mixed ...$args ): never { throw new RuntimeException( 'DENIED_403' ); }
-function check_admin_referer( string $action, string $field ): void { throw new RuntimeException( 'NONCE_DENIED' ); }
+function check_admin_referer( string $action, string $field ): void {
+	if ( 'ecomkit_lazada_reconcile_batch' === $action && 'ecomkit_lazada_reconcile_nonce' === $field && ! empty( $GLOBALS['synthetic_lazada_control_nonce'] ) && 'synthetic-nonce' === ( $_POST[$field] ?? '' ) ) { return; }
+	throw new RuntimeException( 'NONCE_DENIED' );
+}
 function add_action( string $hook, mixed $handler ): void { $GLOBALS['hooks'][$hook] = $handler; }
 final class AuthDb {
 	public string $prefix = 'test_'; public array $rows = array(); public int $insert_id = 0; public bool $fail_update = false; public bool $fail_lock = false;

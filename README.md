@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Hiện tại: **WP.6J.4 — Exact Excel ↔ Lazada Reconciliation**, plugin `0.7.24`, DB `9`, canonical `v9`. OAuth và ba Order API đã FULL PASS live theo xác nhận của người vận hành. Đối chiếu Batch Lazada dùng GetOrder bằng mã sàn string chính xác, rồi GetOrderItems; không cần GetOrders hoặc PII. Evidence lưu trên Order generic theo Batch/shop, không tạo bảng mới. Có action admin thủ công theo phần nhỏ và checkpoint; chưa nối upload tự động hoặc map trạng thái/tài chính Lazada. Shopee và 24 cột giữ nguyên. [Hướng dẫn và gate live reconciliation](docs/lazada-integration.md). WP.6J.4 còn chờ live reconciliation PASS; WP.7 chưa bắt đầu.
+Hiện tại: **WP.6J.4.1 — Lazada Batch Reconciliation Control**, plugin `0.7.25`, DB `9`, canonical `v9`. Đã đưa control Lazada vào **Công cụ quản trị nâng cao** trên cả trang Kết quả Batch và Xử lý đơn hàng, kèm shop ACTIVE, pending, tiếp tục checkpoint và bằng chứng từng API. Tái sử dụng service WP.6J.4; không đổi exact matching, persistence, API/OAuth hoặc Shopee. Làm mới 24 cột vẫn là thao tác riêng. [Hướng dẫn retest Batch #31](docs/lazada-integration.md). WP.6J.4 còn chờ live reconciliation PASS; chưa bắt đầu WP.6J.5 hoặc WP.7.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 

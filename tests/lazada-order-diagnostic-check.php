@@ -3,7 +3,7 @@ declare(strict_types=1);
 // Keep inherited fixture progress output buffered so callback header evidence is testable.
 ob_start();
 require __DIR__ . '/lazada-order-check.php';
-define('ECOMKIT_VUIKHOE_VERSION','0.7.24');
+define('ECOMKIT_VUIKHOE_VERSION','0.7.25');
 function check_ajax_referer(string $a,string $k,bool $stop=true): int|false { auth_check($a==='ecomkit_lazada_order_diagnostic' && $k==='nonce' && !$stop,'Nonce contract'); return $GLOBALS['nonce_valid'] ?? false; }
 function nocache_headers(): void {}
 function wp_unslash(array $v): array { return $v; }

@@ -100,7 +100,8 @@ final class Ecomkit_Vuikhoe_Admin {
 		}
 		$pipeline = null;
 		if ( $batch_id ) { try { $automatic = new Ecomkit_Vuikhoe_Auto_Pipeline(); $pipeline = $automatic->state( $batch_id ); if ( is_array( $pipeline ) && ! Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline )['terminal'] ) { $pipeline = $automatic->start( $batch_id ); } } catch ( Throwable ) { /* Retain ordinary Result access if scheduling is unavailable. */ } }
-		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'pipeline' => $pipeline, 'progress' => is_array( $pipeline ) ? Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test, 'income_test' => $income_test, 'financial_run' => $financial_run ) );
+		$lazada = new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service();
+		$this->render( 'results', array( 'batch_id' => $batch_id, 'batches' => $service->list_batches(), 'result' => $batch_id ? $service->get_batch_result( $batch_id, $platform, $matching ) : null, 'pipeline' => $pipeline, 'progress' => is_array( $pipeline ) ? Ecomkit_Vuikhoe_Auto_Pipeline::progress( $pipeline ) : null, 'platform_filter' => $platform, 'matching_filter' => $matching, 'payment_orders' => $batch_id ? ( new Ecomkit_Vuikhoe_Shopee_Payment_Service() )->eligible_orders( $batch_id ) : array(), 'payment_test' => $payment_test, 'income_test' => $income_test, 'financial_run' => $financial_run, 'lazada_connections' => $batch_id ? $lazada->active_connections() : array(), 'lazada_evidence' => $batch_id ? $lazada->batch_evidence( $batch_id ) : array(), 'lazada_return_page' => 'ecomkit-vuikhoe-results' ) );
 	}
 
 	/** Request-only PDF text extraction; never changes Batch, Order, canonical or cron state. */
@@ -289,7 +290,8 @@ final class Ecomkit_Vuikhoe_Admin {
 		check_admin_referer( 'ecomkit_lazada_reconcile_batch', 'ecomkit_lazada_reconcile_nonce' );
 		$batch_id = absint( wp_unslash( $_POST['batch_id'] ?? 0 ) );
 		$connection = absint( wp_unslash( $_POST['connection_id'] ?? 0 ) );
-		$args = array( 'page' => 'ecomkit-vuikhoe-process', 'batch_id' => $batch_id );
+		$return_page = ( $_POST['return_page'] ?? '' ) === 'ecomkit-vuikhoe-results' ? 'ecomkit-vuikhoe-results' : 'ecomkit-vuikhoe-process';
+		$args = array( 'page' => $return_page, 'batch_id' => $batch_id );
 		try {
 			( new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service() )->reconcile_batch( $batch_id, $connection > 0 ? $connection : null );
 			$args['lazada_reconcile_notice'] = 'saved';

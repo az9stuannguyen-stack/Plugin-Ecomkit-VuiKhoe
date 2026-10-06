@@ -32,7 +32,7 @@
 			<?php submit_button( __( 'Đối chiếu Shopee', 'ecomkit-vuikhoe' ), 'primary', 'submit', false ); ?>
 		</form>
 		<?php endif; ?></details>
-		<?php require __DIR__ . '/lazada-batch-reconciliation.php'; ?>
+		<details <?php if ( isset( $_GET['lazada_reconcile_notice'] ) || isset( $_GET['lazada_reconcile_error'] ) ) { echo 'open'; } ?>><summary>Công cụ quản trị nâng cao</summary><?php require __DIR__ . '/lazada-batch-reconciliation.php'; ?></details>
 		<?php $failure = $batch['metadata']['failure_diagnostic'] ?? null; if ( is_array( $failure ) && ! empty( $failure['stage'] ) ) : ?>
 		<h2><?php echo esc_html__( 'Chi tiết chẩn đoán', 'ecomkit-vuikhoe' ); ?></h2>
 		<table class="widefat striped" style="max-width:900px"><tbody>

@@ -17,7 +17,7 @@ final class Ecomkit_Vuikhoe_Lazada_Reconciliation_Service {
 		$result = array();
 		foreach ( $rows ?? array() as $row ) {
 			$e = json_decode( (string) ( $row['provider_normalized_data'] ?? '' ), true ); $e = is_array( $e ) ? $e : array();
-			$result[] = array( 'excel_id' => $row['marketplace_order_id'], 'state' => $row['matching_status'], 'provider_id' => $e['providerOrderId'] ?? null, 'exact_match' => $e['reconciliation']['exact_match'] ?? false, 'item_count' => is_array( $e['items'] ?? null ) ? count( $e['items'] ) : null, 'raw_statuses' => $e['order']['rawStatuses'] ?? array(), 'pii' => $e['order']['piiAvailability'] ?? null, 'error_code' => $e['reconciliation']['error_code'] ?? null );
+			$result[] = array( 'excel_id' => $row['marketplace_order_id'], 'state' => $row['matching_status'], 'provider_id' => $e['providerOrderId'] ?? null, 'exact_match' => $e['reconciliation']['exact_match'] ?? false, 'get_order_success' => $e['reconciliation']['get_order_success'] ?? null, 'get_items_success' => $e['reconciliation']['get_items_success'] ?? null, 'item_count' => is_array( $e['items'] ?? null ) ? count( $e['items'] ) : null, 'raw_statuses' => $e['order']['rawStatuses'] ?? array(), 'pii' => $e['order']['piiAvailability'] ?? null, 'error_code' => $e['reconciliation']['error_code'] ?? null );
 		}
 		return $result;
 	}

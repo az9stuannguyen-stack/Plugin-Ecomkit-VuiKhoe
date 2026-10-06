@@ -71,9 +71,10 @@
 <?php if ( ! empty( $recon_summary['shop_id'] ) ) : ?><p><?php echo esc_html( 'Shop đang sử dụng: ' . (string) $recon_summary['shop_id'] . '. Hãy xác nhận file thuộc đúng shop này; đây là gợi ý kiểm tra, chưa phải nguyên nhân đã xác định.' ); ?></p><?php endif; ?>
 <?php if ( 0 === (int) ( $recon_summary['matched_count'] ?? 0 ) ) : ?><p><?php echo esc_html__( 'Không có đơn Shopee khớp nên hệ thống không gọi Order Detail, Payment/Escrow hoặc Income cho các đơn này. Các giá trị Excel vẫn có trong Result; nguồn Excel nội bộ thiếu giá trị được thông báo riêng.', 'ecomkit-vuikhoe' ); ?></p><?php endif; ?>
 </div><?php endif; ?>
-<details><summary><?php echo esc_html__( 'Công cụ quản trị nâng cao', 'ecomkit-vuikhoe' ); ?></summary>
+<details <?php if ( isset( $_GET['lazada_reconcile_notice'] ) || isset( $_GET['lazada_reconcile_error'] ) ) { echo 'open'; } ?>><summary><?php echo esc_html__( 'Công cụ quản trị nâng cao', 'ecomkit-vuikhoe' ); ?></summary>
 <p><?php echo esc_html__( 'Chỉ dùng khi cần kiểm tra kỹ thuật. Quy trình thông thường tự xử lý sau một lần tải Excel.', 'ecomkit-vuikhoe' ); ?></p>
 <?php if ( current_user_can( 'manage_options' ) ) : ?>
+<?php require __DIR__ . '/lazada-batch-reconciliation.php'; ?>
 <h2><?php echo esc_html__( 'Xuất trạng thái xử lý Batch', 'ecomkit-vuikhoe' ); ?></h2>
 <p><?php echo esc_html__( 'Chỉ đọc metadata đã lưu của Batch đang chọn và trạng thái kết nối/Cron hiện tại. Không gọi Shopee hoặc thay đổi tiến trình.', 'ecomkit-vuikhoe' ); ?></p>
 <form id="ecomkit-batch-state-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-ajax="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" data-nonce="<?php echo esc_attr( wp_create_nonce( 'ecomkit_batch_state_audit' ) ); ?>">
