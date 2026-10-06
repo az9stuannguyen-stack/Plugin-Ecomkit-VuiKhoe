@@ -63,5 +63,5 @@ $GLOBALS['admin_allowed'] = true;
 try { $admin->handle_batch_state_audit(); } catch ( StateResponse $response ) { state_check( $response->success && 23 === $response->data['batch']['id'], 'Admin AJAX failed.' ); }
 state_check( 4 === $db->reads && 0 === $db->writes, 'Admin AJAX mutated data.' );
 $view = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/admin/views/results.php' );
-state_check( str_contains( $view, "current_user_can( 'manage_options' )" ) && str_contains( $view, 'Xuất JSON trạng thái Batch' ) && ! str_contains( $view, 'output.innerHTML' ), 'Admin-only UI/DOM safety missing.' );
+state_check( str_contains( $view, "Ecomkit_Vuikhoe_Security::can_manage_ecomkit()" ) && str_contains( $view, 'Xuất JSON trạng thái Batch' ) && ! str_contains( $view, 'output.innerHTML' ), 'Admin-only UI/DOM safety missing.' );
 echo "WP.6H.2S Batch state audit: PASS\n";
