@@ -21,6 +21,32 @@ final class Ecomkit_Vuikhoe_Lazada_Reconciliation_Service {
 		}
 		return $result;
 	}
+	/** Persistent aggregate across the entire Batch, never the 100-row preview or provider. */
+	public function batch_summary( int $batch_id ): array {
+		Ecomkit_Vuikhoe_Security::require_management_capability(); global $wpdb; $t = Ecomkit_Vuikhoe_DB::table_names();
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT id, platform, marketplace_order_id, matching_status, provider_normalized_data FROM {$t['orders']} WHERE batch_id = %d AND platform = %s ORDER BY id ASC", $batch_id, 'LAZADA' ), ARRAY_A );
+		if ( ! is_array( $rows ) ) { throw new RuntimeException( 'LAZADA_RECON_READ_FAILED' ); }
+		return self::aggregate( $rows );
+	}
+	private static function terminal( array $row ): bool {
+		return in_array( $row['matching_status'] ?? '', array( 'MATCHED', 'NOT_FOUND_IN_LAZADA', 'UNMATCHED', 'ERROR' ), true );
+	}
+	private static function aggregate( array $rows ): array {
+		$s = array( 'total_lazada' => count( $rows ), 'eligible_count' => 0, 'skipped_blank' => 0, 'processed' => 0, 'matched' => 0, 'unmatched' => 0, 'errors' => 0, 'get_order_success' => 0, 'get_items_success' => 0, 'last_order_id' => 0 );
+		foreach ( $rows as $row ) {
+			if ( ! is_string( $row['marketplace_order_id'] ) || '' === $row['marketplace_order_id'] ) { ++$s['skipped_blank']; continue; }
+			++$s['eligible_count'];
+			if ( ! self::terminal( $row ) ) { continue; }
+			++$s['processed']; ++$s[ 'MATCHED' === $row['matching_status'] ? 'matched' : ( 'ERROR' === $row['matching_status'] ? 'errors' : 'unmatched' ) ];
+			$e = json_decode( (string) ( $row['provider_normalized_data'] ?? '' ), true );
+			$s['get_order_success'] += (int) ( $e['reconciliation']['get_order_success'] ?? false );
+			$s['get_items_success'] += (int) ( $e['reconciliation']['get_items_success'] ?? false );
+			$s['last_order_id'] = max( $s['last_order_id'], (int) $row['id'] );
+		}
+		$s['pending'] = $s['eligible_count'] - $s['processed'];
+		$s['status'] = $s['pending'] > 0 ? 'PROCESSING' : ( $s['errors'] ? 'INCOMPLETE' : ( $s['unmatched'] ? 'WARNING' : 'SUCCESS' ) );
+		return $s;
+	}
 	/** One order by default (at most two 20s reads); next explicit call resumes a persisted checkpoint.
 	 * Test/internal callers may choose up to five, never unbounded parallel work. */
 	public function reconcile_batch( int $batch_id, ?int $connection_id = null, int $max_orders = 1 ): array {
@@ -32,18 +58,26 @@ final class Ecomkit_Vuikhoe_Lazada_Reconciliation_Service {
 		$t = Ecomkit_Vuikhoe_DB::table_names();
 		$batch = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$t['batches']} WHERE id = %d", $batch_id ), ARRAY_A );
 		if ( ! is_array( $batch ) || 'EXCEL' !== $batch['source_type'] || ! in_array( $batch['status'], array( 'SUCCESS', 'WARNING' ), true ) ) { throw new RuntimeException( 'LAZADA_RECON_BATCH_NOT_ELIGIBLE' ); }
-		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT id, batch_id, platform, marketplace_order_id, connection_id, source_refs FROM {$t['orders']} WHERE batch_id = %d AND platform = %s ORDER BY id ASC", $batch_id, 'LAZADA' ), ARRAY_A );
+		$rows = $wpdb->get_results( $wpdb->prepare( "SELECT id, batch_id, platform, marketplace_order_id, connection_id, source_refs, matching_status, provider_normalized_data FROM {$t['orders']} WHERE batch_id = %d AND platform = %s ORDER BY id ASC", $batch_id, 'LAZADA' ), ARRAY_A );
 		if ( ! is_array( $rows ) ) { throw new RuntimeException( 'LAZADA_RECON_READ_FAILED' ); }
 		$eligible = array_values( array_filter( $rows, static fn( array $o ): bool => 'LAZADA' === $o['platform'] && is_string( $o['marketplace_order_id'] ) && '' !== $o['marketplace_order_id'] ) );
 		$metadata = json_decode( (string) ( $batch['source_metadata'] ?? '' ), true ); $metadata = is_array( $metadata ) ? $metadata : array();
 		if ( in_array( $metadata['auto_pipeline']['status'] ?? '', array( 'QUEUED', 'PROCESSING' ), true ) ) { throw new RuntimeException( 'LAZADA_RECON_BATCH_BUSY' ); }
 		if ( ! $eligible ) {
-			$summary = array( 'connection_id' => null, 'shop_id' => '', 'total_lazada' => count( $rows ), 'eligible_count' => 0, 'skipped_blank' => count( $rows ), 'matched' => 0, 'unmatched' => 0, 'errors' => 0, 'get_order_success' => 0, 'get_items_success' => 0, 'processed' => 0, 'last_order_id' => 0, 'status' => 'SUCCESS', 'completed_at' => current_time( 'mysql', true ) );
+			$summary = array( 'connection_id' => null, 'shop_id' => '', 'total_lazada' => count( $rows ), 'eligible_count' => 0, 'skipped_blank' => count( $rows ), 'matched' => 0, 'unmatched' => 0, 'errors' => 0, 'get_order_success' => 0, 'get_items_success' => 0, 'processed' => 0, 'pending' => 0, 'last_order_id' => 0, 'status' => 'SUCCESS', 'completed_at' => current_time( 'mysql', true ) );
 			$metadata['lazada_reconciliation'] = $summary;
 			if ( false === $wpdb->update( $t['batches'], array( 'source_metadata' => self::json( $metadata ) ), array( 'id' => $batch_id ) ) ) { throw new RuntimeException( 'LAZADA_RECON_PERSIST_FAILED' ); }
 			return $summary;
 		}
 		$previous = $metadata['lazada_reconciliation'] ?? array();
+		$persisted = self::aggregate( $rows );
+		$summary = array_merge( $previous, $persisted );
+		if ( 0 === $persisted['pending'] ) {
+			$summary['completed_at'] ??= current_time( 'mysql', true );
+			$metadata['lazada_reconciliation'] = $summary;
+			if ( false === $wpdb->update( $t['batches'], array( 'source_metadata' => self::json( $metadata ) ), array( 'id' => $batch_id ) ) ) { throw new RuntimeException( 'LAZADA_RECON_PERSIST_FAILED' ); }
+			return $summary;
+		}
 		$resume = 'PROCESSING' === ( $previous['status'] ?? '' );
 		if ( $resume ) {
 			if ( null !== $connection_id && $connection_id !== (int) $previous['connection_id'] ) { throw new RuntimeException( 'LAZADA_RECON_CONNECTION_CONFLICT' ); }
@@ -58,7 +92,9 @@ final class Ecomkit_Vuikhoe_Lazada_Reconciliation_Service {
 		foreach ( $connections as $c ) { if ( (int) $c['id'] === $connection_id ) { $connection = $c; break; } }
 		// An explicitly selected but no-longer-active shop is an auth error per eligible row, never unmatched.
 		$summary = $resume ? $previous : array( 'connection_id' => $connection_id, 'shop_id' => $connection['shop'] ?? '', 'total_lazada' => count( $rows ), 'eligible_count' => count( $eligible ), 'skipped_blank' => count( $rows ) - count( $eligible ), 'matched' => 0, 'unmatched' => 0, 'errors' => 0, 'get_order_success' => 0, 'get_items_success' => 0, 'processed' => 0, 'last_order_id' => 0, 'started_at' => current_time( 'mysql', true ) );
-		$pending = array_values( array_filter( $eligible, static fn( array $o ): bool => (int) $o['id'] > (int) $summary['last_order_id'] ) );
+		$summary = array_merge( $summary, $persisted );
+		$pending = array_values( array_filter( $eligible, static fn( array $o ): bool => ! self::terminal( $o ) ) );
+
 		$start = microtime( true ); $done = 0;
 		foreach ( $pending as $row ) {
 			if ( $done >= $limit || ( $done > 0 && microtime( true ) - $start >= 10 ) ) { break; }
@@ -67,7 +103,8 @@ final class Ecomkit_Vuikhoe_Lazada_Reconciliation_Service {
 			++$next['processed']; ++$next[ 'MATCHED' === $outcome['state'] ? 'matched' : ( 'UNMATCHED' === $outcome['state'] ? 'unmatched' : 'errors' ) ];
 			$next['get_order_success'] += (int) $outcome['get_order_success'];
 			$next['get_items_success'] += (int) $outcome['get_items_success'];
-			$next['last_order_id'] = (int) $row['id'];
+			$next['last_order_id'] = max( (int) $summary['last_order_id'], (int) $row['id'] );
+			$next['pending'] = count( $eligible ) - $next['processed'];
 			$next['status'] = $next['processed'] < count( $eligible ) ? 'PROCESSING' : ( $next['errors'] ? 'INCOMPLETE' : ( $next['unmatched'] ? 'WARNING' : 'SUCCESS' ) );
 			$next['completed_at'] = 'PROCESSING' === $next['status'] ? null : current_time( 'mysql', true );
 			$this->persist( $batch, $metadata, $row, $connection_id, $outcome, $next );

@@ -3,11 +3,11 @@ defined( 'ABSPATH' ) || exit;
 Ecomkit_Vuikhoe_Security::require_management_capability();
 $lazada_connections = array_values( array_filter( (array) ( $data['lazada_connections'] ?? array() ), static fn( array $c ): bool => 'ACTIVE' === ( $c['status'] ?? '' ) ) );
 $lazada_metadata = $batch['metadata'] ?? json_decode( (string) ( $batch['source_metadata'] ?? '' ), true );
-$lazada_summary = (array) ( $lazada_metadata['lazada_reconciliation'] ?? array() );
-$lazada_total = (int) ( $counts['LAZADA'] ?? $lazada_metadata['platform_counts']['LAZADA'] ?? $lazada_summary['total_lazada'] ?? count( $data['lazada_evidence'] ?? array() ) );
+$lazada_summary = array_merge( (array) ( $lazada_metadata['lazada_reconciliation'] ?? array() ), ( new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service() )->batch_summary( (int) $batch['id'] ) );
+$lazada_total = (int) $lazada_summary['total_lazada'];
 if ( $lazada_total < 1 ) { return; }
 $lazada_pending = max( 0, (int) ( $lazada_summary['eligible_count'] ?? $lazada_total ) - (int) ( $lazada_summary['processed'] ?? 0 ) );
-$lazada_resume = 'PROCESSING' === ( $lazada_summary['status'] ?? '' );
+$lazada_resume = $lazada_pending > 0 && ! empty( $lazada_summary['connection_id'] );
 ?>
 <section aria-label="Đối chiếu Lazada cho Batch">
 <h2>Đối chiếu Lazada cho Batch</h2>
