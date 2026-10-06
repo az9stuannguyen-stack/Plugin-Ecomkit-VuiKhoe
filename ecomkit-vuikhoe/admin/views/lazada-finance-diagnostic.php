@@ -4,7 +4,7 @@ Ecomkit_Vuikhoe_Security::require_management_capability();
 wp_enqueue_script( 'ecomkit-lazada-finance-diagnostic', plugins_url( 'assets/js/lazada-finance-diagnostic.js', ECOMKIT_VUIKHOE_FILE ), array(), ECOMKIT_VUIKHOE_VERSION, true );
 $finance_connections = ( new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service() )->active_connections();
 ?>
-<details style="margin-top:16px"><summary>Kiểm tra nguồn tài chính Lazada</summary>
+<details class="ecomkit-layout-1b0f4999"><summary>Kiểm tra nguồn tài chính Lazada</summary>
 <p>Chỉ đọc nguồn để audit, không lưu tài chính hoặc ghi 24 cột. Ngày dưới đây là ngày giao dịch, không phải ngày lên đơn. Thiếu dữ liệu không có nghĩa phí bằng 0.</p>
 <form data-lazada-finance action="<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>" method="post">
 <input type="hidden" name="action" value="ecomkit_lazada_finance_diagnostic">

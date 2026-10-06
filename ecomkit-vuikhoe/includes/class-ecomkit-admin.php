@@ -13,6 +13,7 @@ final class Ecomkit_Vuikhoe_Admin {
 	 */
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_ui' ) );
 		add_action( 'admin_post_ecomkit_lazada_save_config', array( $this, 'handle_lazada_save_config' ) );
 		add_action( 'admin_notices', array( $this, 'database_notice' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
@@ -35,6 +36,13 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'wp_ajax_ecomkit_pipeline_progress', array( $this, 'handle_pipeline_progress' ) );
 		add_action( 'wp_ajax_ecomkit_shopee_spx_pdf', array( $this, 'handle_shopee_spx_pdf' ) );
 		add_action( 'admin_post_ecomkit_shopee_financial_enrich', array( $this, 'handle_shopee_financial_enrich' ) );
+	}
+
+	/** Presentation asset only, never loaded on other WordPress/plugin screens. */
+	public function enqueue_ui(): void {
+		$page = is_string( $_GET['page'] ?? null ) ? $_GET['page'] : '';
+		if ( ! in_array( $page, array( self::MENU_SLUG, 'ecomkit-vuikhoe-process', 'ecomkit-vuikhoe-results', 'ecomkit-vuikhoe-errors', 'ecomkit-vuikhoe-history', 'ecomkit-vuikhoe-marketplace', 'ecomkit-vuikhoe-settings' ), true ) ) { return; }
+		wp_enqueue_style( 'ecomkit-admin', plugins_url( 'assets/css/admin.css', ECOMKIT_VUIKHOE_FILE ), array(), ECOMKIT_VUIKHOE_VERSION );
 	}
 
 	public function add_menu(): void {

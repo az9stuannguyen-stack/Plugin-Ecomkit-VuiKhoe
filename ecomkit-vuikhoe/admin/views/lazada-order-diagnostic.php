@@ -4,7 +4,7 @@ Ecomkit_Vuikhoe_Security::require_management_capability();
 wp_enqueue_script( 'ecomkit-lazada-order-diagnostic', plugins_url( 'assets/js/lazada-order-diagnostic.js', ECOMKIT_VUIKHOE_FILE ), array(), ECOMKIT_VUIKHOE_VERSION, true );
 $diagnostic_ready = array_values( array_filter( $lazada_connections, static fn( array $c ): bool => 'ACTIVE' === $c['status'] && in_array( $c['lifecycle'], array( 'READY', 'REFRESH_NEEDED' ), true ) ) );
 ?>
-<details id="ecomkit-lazada-order-diagnostic" style="margin-top:16px">
+<details id="ecomkit-lazada-order-diagnostic" class="ecomkit-layout-1b0f4999">
 <summary>Kiểm tra Lazada Order API</summary>
 <p>Chỉ kiểm tra đọc dữ liệu và mã đơn; không lưu đơn hoặc map tài chính.</p>
 <?php if ( empty( $diagnostic_ready ) ) : ?><p>Chưa thể kiểm tra Order API. Vui lòng kết nối Lazada trước.</p><?php endif; ?>
@@ -20,7 +20,7 @@ $diagnostic_ready = array_values( array_filter( $lazada_connections, static fn( 
 <p><button class="button button-primary" type="submit" <?php disabled( empty( $diagnostic_ready ) ); ?>>Kiểm tra đơn Lazada</button></p>
 </form>
 <p data-lazada-status role="status" aria-live="polite"></p>
-<pre data-lazada-summary style="white-space:pre-wrap"></pre>
-<details><summary>Chi tiết kỹ thuật</summary><pre data-lazada-output style="max-height:520px;overflow:auto;white-space:pre-wrap"></pre></details>
+<pre data-lazada-summary class="ecomkit-layout-a548ea71"></pre>
+<details><summary>Chi tiết kỹ thuật</summary><pre data-lazada-output class="ecomkit-layout-16667867"></pre></details>
 <noscript>Cần bật JavaScript để kiểm tra mà không lưu response vào database/transient.</noscript>
 </details>

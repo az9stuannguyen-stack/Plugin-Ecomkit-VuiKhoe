@@ -3,19 +3,19 @@
 declare(strict_types=1);
 ob_start();
 require __DIR__.'/access-restoration-check.php';
-define('ECOMKIT_VUIKHOE_DIR',__DIR__.'/../ecomkit-vuikhoe/');define('ECOMKIT_VUIKHOE_VERSION','0.7.32');define('ECOMKIT_VUIKHOE_MIN_PHP','8.1');define('ECOMKIT_VUIKHOE_MIN_WP','6.0');$wp_version='6.8';
+define('ECOMKIT_VUIKHOE_DIR',__DIR__.'/../ecomkit-vuikhoe/');define('ECOMKIT_VUIKHOE_VERSION','0.7.33');define('ECOMKIT_VUIKHOE_MIN_PHP','8.1');define('ECOMKIT_VUIKHOE_MIN_WP','6.0');$wp_version='6.8';
 function esc_html(mixed $s): string{return htmlspecialchars((string)$s);}
 function esc_attr(mixed $s): string{return esc_html($s);}function esc_url(string $s): string{return $s;}
 function admin_url(string $s): string{return 'https://example.test/wp-admin/'.$s;}
 function wp_unslash(mixed $v): mixed{return $v;}function absint(mixed $v): int{return abs((int)$v);}
 function get_current_user_id(): int{return 22;}function wp_max_upload_size(): int{return 1000000;}
-function size_format(int $v): string{return (string)$v;}function get_option(string $k): string{return 'Y-m-d';}
+function size_format(int $v): string{return '1 MB';}function get_option(string $k): string{return 'Y-m-d';}
 function wp_timezone(): DateTimeZone{return new DateTimeZone('UTC');}
 function wp_date(string $f,int $t,mixed $tz=null): string{return gmdate($f,$t);}
 function get_transient(string $k): mixed{return false;}function delete_transient(string $k): void{}
-function wp_nonce_field(string $a,string $k): void{echo '<input name="'.$k.'">';}
+function wp_nonce_field(string $a,string $k): void{echo '<input type="hidden" name="'.$k.'" value="synthetic">';}
 function disabled(mixed $v): void{}
-function selected(mixed $a,mixed $b): void{}function submit_button(mixed ...$a): void{echo '<button>submit</button>';}
+function selected(mixed $a,mixed $b): void{if($a==$b)echo 'selected';}function submit_button(mixed ...$a): void{echo '<button type="submit" class="button '.(($a[1]??'primary')==='primary'?'button-primary':'button-secondary').'">'.esc_html($a[0]).'</button>';}
 function check_admin_referer(string $a,string $k): void{if(empty($GLOBALS['nonce']))throw new RuntimeException('NONCE_DENIED');$GLOBALS['nonce_seen'][]=$a;}
 function check_ajax_referer(string $a,string $k,bool $stop=true): int|false{if(empty($GLOBALS['nonce'])){if($stop)throw new RuntimeException('NONCE_DENIED');return false;}$GLOBALS['nonce_seen'][]=$a;return 1;}
 function add_query_arg(mixed $a,string $url,mixed $third=null): string{if(is_string($a)){$a=[$a=>$url];$url=$third;}return $url.'?'.http_build_query($a);}
@@ -30,14 +30,14 @@ function wp_send_json_error(array $a,int $status=200): never{throw new AccessJso
 final class Ecomkit_Vuikhoe_DB{public static function diagnose(): array{return ['stored_version'=>9,'expected_version'=>9,'tables_ok'=>true,'tables'=>[]];}}
 final class Ecomkit_Vuikhoe_Import_Service{
  public function max_upload_bytes(): int{return 1000000;}public function get_batch_summary(int $id): mixed{return ['id'=>$id,'created_at'=>'2026-10-06','source_filename'=>'synthetic.xlsx','status'=>'SUCCESS','metadata'=>['platform_counts'=>['LAZADA'=>7]],'order_count'=>7,'error_count'=>0,'orders'=>[],'errors'=>[]];}
- public function list_batches(): array{return [];}public function list_errors(): array{return [];}
+ public function list_batches(): array{return $GLOBALS['ui_batches']??[];}public function list_errors(): array{return $GLOBALS['ui_errors']??[];}
  public function import_upload(array $file,int $user): int{access_check($file['name']==='synthetic.xlsx' && $user===22,'Upload inputs changed');++$GLOBALS['imports'];return 31;}
 }
 final class Ecomkit_Vuikhoe_Excel_Service{public const MAX_ROWS=10000;}
 final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service{public static function classify_summary(array $s): ?string{return null;}}
-final class Ecomkit_Vuikhoe_Lazada_Reconciliation_Service{}
-final class Ecomkit_Vuikhoe_Canonical_Result_Service{public static function clipboard_tsv(array $r,bool $headers=false): string{return 'EXACT-SYNTH';}public function list_batches(): array{return [];}public function get_batch_result(int $id,string $p,string $m): array{return ['batch'=>['id'=>$id,'created_at'=>'2026-10-06','source_filename'=>'synthetic.xlsx','status'=>'SUCCESS'],'counts'=>array_fill_keys(['total','SHOPEE','LAZADA','MATCHED','NOT_FOUND_IN_SHOPEE','DETAIL_MISSING','ready','warnings'],0),'reconciliation'=>null,'rows'=>[],'columns'=>[]];}}
-final class Ecomkit_Vuikhoe_Auto_Pipeline{public function start(int $id): void{++$GLOBALS['starts'];}public function state(int $id): ?array{return !empty($GLOBALS['polling'])?['status'=>'SUCCESS']:null;}public static function progress(array $s): array{return ['updated_at'=>'2026-10-06','terminal'=>true];}}
+final class Ecomkit_Vuikhoe_Lazada_Reconciliation_Service{public function active_connections(): array{return [];}}
+final class Ecomkit_Vuikhoe_Canonical_Result_Service{public static function clipboard_tsv(array $r,bool $headers=false): string{return 'EXACT-SYNTH';}public function list_batches(): array{return $GLOBALS['ui_batches']??[];}public function get_batch_result(int $id,string $p,string $m): array{if(isset($GLOBALS['ui_result']))return $GLOBALS['ui_result'];return ['batch'=>['id'=>$id,'created_at'=>'2026-10-06','source_filename'=>'synthetic.xlsx','status'=>'SUCCESS'],'counts'=>array_fill_keys(['total','SHOPEE','LAZADA','MATCHED','NOT_FOUND_IN_SHOPEE','DETAIL_MISSING','ready','warnings'],0),'reconciliation'=>null,'rows'=>[],'columns'=>[]];}}
+final class Ecomkit_Vuikhoe_Auto_Pipeline{public function start(int $id): void{++$GLOBALS['starts'];}public function state(int $id): ?array{return !empty($GLOBALS['polling'])||isset($GLOBALS['ui_progress'])?['status'=>'SUCCESS']:null;}public static function progress(array $s): array{return $GLOBALS['ui_progress']??['updated_at'=>'2026-10-06','terminal'=>true];}}
 final class Ecomkit_Vuikhoe_Shopee_SPX_Labels{public const MAX_BYTES=1000000;public static function process_temporary_upload(array $u,array $r): array{++$GLOBALS['pdfs'];return ['records'=>[['order_sn'=>'EXACT-SYNTH']]];}}
 require __DIR__.'/../ecomkit-vuikhoe/includes/class-ecomkit-canonical-columns.php';
 $normal=['dashboard_page','process_page','results_page','errors_page','history_page'];
