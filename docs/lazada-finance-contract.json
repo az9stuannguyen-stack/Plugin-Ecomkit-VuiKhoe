@@ -1,0 +1,194 @@
+[
+    {
+        "source":  "https://isvconsole.lazada.com/handler/share/apidoc/getApi?path=%2Ffinance%2Ftransaction%2Fdetail%2Fget",
+        "checked":  "2026-10-06",
+        "name":  "GetTransactionDetails",
+        "path":  "/finance/transaction/detail/get",
+        "method":  "get",
+        "last_modified":  "2022-09-16 17:21:26",
+        "parameters":  [
+                           {
+                               "name":  "trans_type",
+                               "required":  false,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "start_time",
+                               "required":  true,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "end_time",
+                               "required":  true,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "limit",
+                               "required":  false,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "offset",
+                               "required":  false,
+                               "type":  "String"
+                           }
+                       ],
+        "response_list":  "data",
+        "response_fields":  [
+                                "details",
+                                "seller_sku",
+                                "lazada_sku",
+                                "amount",
+                                "VAT_in_amount",
+                                "WHT_amount",
+                                "WHT_included_in_amount",
+                                "statement",
+                                "paid_status",
+                                "order_no",
+                                "orderItem_no",
+                                "orderItem_status",
+                                "shipping_provider",
+                                "shipping_speed",
+                                "shipment_type",
+                                "reference",
+                                "comment",
+                                "payment_ref_id",
+                                "fee_name",
+                                "transaction_date",
+                                "transaction_type",
+                                "transaction_number"
+                            ],
+        "date_examples":  [
+                              {
+                                  "name":  "start_time",
+                                  "example":  "2018-01-01"
+                              },
+                              {
+                                  "name":  "end_time",
+                                  "example":  "2018-01-24"
+                              }
+                          ]
+    },
+    {
+        "source":  "https://isvconsole.lazada.com/handler/share/apidoc/getApi?path=%2Ffinance%2Ftransaction%2Fdetails%2Fget",
+        "checked":  "2026-10-06",
+        "name":  "QueryTransactionDetails",
+        "path":  "/finance/transaction/details/get",
+        "method":  "get",
+        "last_modified":  "2022-07-28 17:04:38",
+        "parameters":  [
+                           {
+                               "name":  "offset",
+                               "required":  false,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "trans_type",
+                               "required":  false,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "trade_order_id",
+                               "required":  false,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "limit",
+                               "required":  false,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "start_time",
+                               "required":  true,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "end_time",
+                               "required":  true,
+                               "type":  "String"
+                           },
+                           {
+                               "name":  "trade_order_line_id",
+                               "required":  false,
+                               "type":  "String"
+                           }
+                       ],
+        "response_list":  "data",
+        "response_fields":  [
+                                "fee_type",
+                                "details",
+                                "seller_sku",
+                                "lazada_sku",
+                                "amount",
+                                "VAT_in_amount",
+                                "WHT_amount",
+                                "WHT_included_in_amount",
+                                "statement",
+                                "paid_status",
+                                "order_no",
+                                "orderItem_no",
+                                "orderItem_status",
+                                "shipping_provider",
+                                "shipping_speed",
+                                "shipment_type",
+                                "reference",
+                                "comment",
+                                "payment_ref_id",
+                                "fee_name",
+                                "transaction_date",
+                                "transaction_type",
+                                "transaction_number"
+                            ],
+        "date_examples":  [
+                              {
+                                  "name":  "start_time",
+                                  "example":  "2021-01-01"
+                              },
+                              {
+                                  "name":  "end_time",
+                                  "example":  "2021-01-05"
+                              }
+                          ]
+    },
+    {
+        "source":  "https://isvconsole.lazada.com/handler/share/apidoc/getApi?path=%2Ffinance%2Fpayout%2Fstatus%2Fget",
+        "checked":  "2026-10-06",
+        "name":  "GetPayoutStatus",
+        "path":  "/finance/payout/status/get",
+        "method":  "get",
+        "last_modified":  "2022-07-28 17:04:27",
+        "parameters":  [
+                           {
+                               "name":  "created_after",
+                               "required":  true,
+                               "type":  "String"
+                           }
+                       ],
+        "response_list":  "data",
+        "response_fields":  [
+                                "closing_balance",
+                                "guarantee_deposit",
+                                "payout",
+                                "paid",
+                                "statement_number",
+                                "created_at",
+                                "updated_at",
+                                "opening_balance",
+                                "item_revenue",
+                                "shipment_fee",
+                                "shipment_fee_credit",
+                                "other_revenue_total",
+                                "fees_total",
+                                "subtotal1",
+                                "refunds",
+                                "fees_on_refunds_total",
+                                "subtotal2"
+                            ],
+        "date_examples":  [
+                              {
+                                  "name":  "created_after",
+                                  "example":  "2018-01-01"
+                              }
+                          ]
+    }
+]

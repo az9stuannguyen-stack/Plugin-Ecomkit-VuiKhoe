@@ -1,0 +1,61 @@
+# WP.6J.5 — Lazada Financial Source Audit
+
+Plugin 0.7.27; DB 9; canonical v9; migration NONE. Code/fixtures PASS is separate from LIVE FINANCE REVIEW. WP.6J.4 FULL PASS LIVE is operator-confirmed (Batch #31: seven matches, no pending). No finance live output is available yet; no fee name, amount, currency, order allocation or canonical formula is asserted as live-verified here. Do not start WP.6J.6 or WP.7.
+
+## Official contract evidence (checked 2026-10-06)
+
+The current [Finance overview](https://open.lazada.com/apps/doc/doc?docId=108249&nodeId=10556) lists queryTransactionDetails. Its API reference is dynamic: static HTML has no parameter tables. The official page bundle `https://g.alicdn.com/lzd-op/platform-document/1.0.13/api-doc/index.js` loads `https://isvconsole.lazada.com/handler/share/apidoc/getApi?path=...`. Read-only requests to this official documentation endpoint returned the actual API metadata. [lazada-finance-contract.json](lazada-finance-contract.json) retains only public names, methods, required flags, field names and date examples; no sample authorization values or raw response data.
+
+| API / official reference | Method | Business parameters | Response / scope |
+|---|---|---|---|
+| [GetTransactionDetails](https://open.lazada.com/apps/doc/api?path=/finance/transaction/detail/get) | GET | Required start_time/end_time; optional trans_type, limit, offset | data[] transaction lines for seller/date period; no order filter |
+| [QueryTransactionDetails](https://open.lazada.com/apps/doc/api?path=/finance/transaction/details/get) | GET | Same dates/paging; optional trade_order_id, trade_order_line_id, trans_type | data[]; explicit order/item request filters; adds fee_type |
+| [GetPayoutStatus](https://open.lazada.com/apps/doc/api?path=/finance/payout/status/get) | GET | Required created_after | data[] seller statements; no order filter or documented paging |
+
+Vietnam base is https://api.lazada.vn/rest. All three require app_key, access_token, timestamp, sign_method and sign; existing SHA256 signer/token lifecycle/encrypted credentials are reused. No new auth stack. Query dates use documented YYYY-MM-DD examples, and its published error constraint requires a span below 180 days. The audit conservatively applies that local bound to both transaction routes. Exact inclusivity, transaction-day timezone, retention/lookback and any offset ceiling are not specified by these contract tables: UNKNOWN. UI date strings are validated with Asia/Ho_Chi_Minh independently of PHP default timezone; they are sent unchanged rather than pretending there is a verified UTC conversion. Local offset cap 1,000,000 is a safety policy, not a provider guarantee.
+
+Transactions support limit up to 500 and line offset. UI reads 100 lines per explicit click. A full page supplies next_offset; the admin can enter it for another explicit request. No automatic pagination/retry/fallback, no whole-window completion claim from a later page, no empty-page-as-zero-fee rule. A short first page is evidence for that requested window only. Singular vs plural paths are distinct contracts: selecting plural may require a permission not proven by the App's GetTransactionDetails permission. An error does not trigger a silent switch.
+
+Payout has no documented end bound/pagination. Its created_after uses YYYY-MM-DD in the official example. It can cover multiple orders and statements. Diagnostic retains a maximum 100-statement preview and marks truncation; it never allocates statement amounts to an order.
+
+## Provider fields versus business meaning
+
+Contract-level VERIFIED_DIRECT evidence exists for transaction `data[].amount` (signed transaction value), `transaction_type`, `fee_name`, `transaction_number`, `transaction_date`, `statement`, `paid_status`; plural also has `fee_type`. Amount, VAT_in_amount and WHT_amount stay exact decimal strings. The JSON decoder preserves unquoted numeric lexemes before PHP conversion. No float, rescaling, rounding, absolute-value conversion or sum. Missing values stay NULL; zero and negative zero remain their original strings. Currency is absent from the documented transaction fields: UNKNOWN. A valid explicit currency observed at runtime is displayed as observed, without assuming VND.
+
+Documented linking paths: `data[].order_no` is the order identifier, `data[].orderItem_no` an item number, and `data[].reference` an item reference. Requests may use trade_order_id/trade_order_line_id on the plural route. Diagnostic only accepts a row when order_no strictly equals the entered string. Item numbers/references are shown separately: their equality to GetOrderItems.order_item_id must be checked live, not inferred. A missing item reference is labeled ORDER_REFERENCE_ONLY, not proof that it is a distributable order-level fee. Two items, repeated SKU, multiple fee lines and duplicate/reversal transaction identities must not be collapsed or summed in this stage.
+
+Payout `data[].payout` is statement-level money; its official example contains an amount and ISO currency suffix. `paid` uses 1/0 for statement paid/not paid. `statement_number` identifies a statement; created_at/updated_at are statement timestamps. Closing/opening balance, refunds, fees_total, fees_on_refunds_total and other revenue fields concern the statement. Equality of transaction.statement and payout.statement_number is UNKNOWN (examples use different representations). No transaction-to-statement allocation or order-level paid/proceeds semantics is proven.
+
+The official transaction example contains Payment Fee with a negative amount; this establishes that signs matter, not a VN fee tariff. The plural example's fee_type and textual name are insufficient to establish a complete enum crosswalk. Current live fee names/sign frequencies are NOT YET OBSERVED. Diagnostic builds a per-page list of fee_type/fee_name/transaction_type with frequency, positive/negative/zero/missing counts and linkage scope. Each possible business meaning/confidence remains UNKNOWN. Negative records are not automatically called refunds/reversals without type evidence. Order raw confirmed/shipped/delivered status remains unchanged and is not a finance-completeness guarantee.
+
+Seller-funded vouchers, platform vouchers, subsidies, affiliate/campaign charges and discount adjustments require explicit VN transaction-name/type and funding evidence. GetOrder.voucher alone does not prove who funded it. Buyer subsidy is not Vui Khỏe discount. No explicit verified affiliate source has been established; this is UNKNOWN, not proof of absence or zero. No Shopee commissionFee/serviceFee/Infrastructure 3000/Voucher Xtra/PiShip/sellerTransactionFee/escrow rules are reused.
+
+## Canonical audit matrix — no mapping approved
+
+All target canonical classifications/confidences remain UNKNOWN. Source-level direct evidence above does not establish equivalence to Ecomkit's business columns. No VERIFIED_DERIVABLE formula exists. No global NOT_AVAILABLE claim is justified by inspecting these three APIs alone.
+
+| Canonical field | Provider candidate / field or type | Classification | Evidence / unresolved issue | Safe proposed rule | Confidence |
+|---|---|---|---|---|---|
+| Giá SP (VAT 8%) | GetOrder.price; GetOrderItems.item_price / paid_price; transaction.amount | UNKNOWN | Raw prices exist; per-item VAT8 basis, units and credit linkage not proven | Preserve candidates; NULL canonical | UNKNOWN |
+| Phí Affiliate (Vui Khỏe) | Transaction fee_type / fee_name / transaction_type + amount | UNKNOWN | No live affiliate charge/source proved | NULL, never default 0 | UNKNOWN |
+| Chiết Khấu (Vui Khỏe) | Order.voucher; discount/subsidy transaction names | UNKNOWN | Seller vs platform funding unproved | Keep components separate; NULL | UNKNOWN |
+| % Chiết Khấu Vui Khỏe | Verified discount + verified product base would be needed | UNKNOWN | Both canonical components unresolved | No division | UNKNOWN |
+| Phí Cố Định (TMĐT) | VN commission or other fee line, if actually observed | UNKNOWN | No approved fee enum/canonical equivalence | Do not reuse Shopee fee rule; NULL | UNKNOWN |
+| Phí dịch vụ (TMĐT) | VN service/campaign fee line, if observed | UNKNOWN | No live name/sign/scope proved | NULL | UNKNOWN |
+| Phí Giao Dịch (TMĐT) | transaction_type Payment Fee is a documentation candidate | UNKNOWN | Sample only; VN applicability and sign/reversal handling unresolved | No canonical assignment | UNKNOWN |
+| % Chi Phí Sàn TMĐT | Approved fee components / price base would be needed | UNKNOWN | Components, denominator and inclusion policy unresolved | No sum/division | UNKNOWN |
+| % Tổng Chi Phí | Approved costs / approved denominator would be needed | UNKNOWN | Affiliate/discount/fees/base unresolved | No formula | UNKNOWN |
+| Tổng Tiền Sẽ Thu | Transaction signed values; statement.payout / closing_balance | UNKNOWN | Order expected proceeds ≠ transaction settlement ≠ statement payout | No order sum/allocation | UNKNOWN |
+| Đã Thu Tiền | Transaction.paid_status; payout.paid / payout amount | UNKNOWN | Status evidence is not an order-level collected amount | NULL | UNKNOWN |
+| Trạng Thái Công Nợ | Transaction.paid_status; statement.paid | UNKNOWN | Statement raw status semantics known; order linkage/debt rule unproved | Preserve raw evidence only | UNKNOWN |
+| Chênh lệch | Approved receivable and collected values would be needed | UNKNOWN | Inputs unresolved | No subtraction | UNKNOWN |
+
+## Live procedure / safe output
+
+Deploy 0.7.27 and hard refresh. Go to Marketplace → collapsed **Kiểm tra nguồn tài chính Lazada**. Select ACTIVE VN shop 100070635, enter exact string 532935709720247, and choose a transaction date window (not merely order creation date) with span below 180 days. Default GetTransactionDetails matches the order locally from one page. Optional QueryTransactionDetails filters the order at provider if authorized; choose explicitly, with no automatic fallback. If next_offset is present, inspect later pages manually and retain window/page coverage in the report. Empty data is an availability observation for that query, not zero finance.
+
+Optional payout reads seller statements created after start date; optional GetOrder/GetOrderItems reads raw price/status candidates without buyer fields. Base audit is one read; payout adds one, order comparison adds two. Every read has 20s timeout; selecting all options can exceed short hosting limits. Run these separately if needed. No blind retry, no cron/upload integration, no persistent financial diagnostic/transient, no canonical write. Existing token lifecycle may refresh encrypted credentials; that is not finance persistence.
+
+Audit at least one shipped order selected from the actual Batch evidence (do not assume which of the other six IDs is shipped), ideally 2–3 orders spanning statuses and one/two items. Record safe API path/method/HTTP/code/request_id, query dates/offset/coverage, matched record count, distinct names/sign frequencies, amount strings, explicit/missing currency, order_no/orderItem_no/reference, transaction statement/paid_status and separate payout statement_number/paid/amount/currency. Record candidate price values and raw statuses. Remove buyer fields and all tokens/signatures/URLs with credentials. Do not commit live sensitive output. Review missing/negative/returned/canceled cases before approving any formula. Only after live evidence review and approval may WP.6J.6 implement proven mappings; UNKNOWN stays NULL.
+
+Security: manage_options + nonce `ecomkit_lazada_finance_diagnostic` in `nonce`, private authenticated AJAX only, WordPress admin_url('admin-ajax.php'), no full URL logging, safe text redaction and strict response field allowlist. Buyer details/comments/SKUs/free-form descriptions/payment bank references are excluded. Browser uses textContent, exact IDs remain strings, non-JSON/permission/network/provider failures are distinct and never retried automatically.

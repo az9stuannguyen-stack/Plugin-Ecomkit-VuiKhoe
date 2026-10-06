@@ -22,6 +22,7 @@ final class Ecomkit_Vuikhoe_Plugin {
 		( new Ecomkit_Vuikhoe_Shopee_OAuth() )->register();
 		( new Ecomkit_Vuikhoe_Lazada_OAuth() )->register();
 		( new Ecomkit_Vuikhoe_Lazada_Order_Diagnostic() )->register();
+		( new Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic() )->register();
 		( new Ecomkit_Vuikhoe_Auto_Pipeline() )->register();
 
 		if ( is_admin() ) {
