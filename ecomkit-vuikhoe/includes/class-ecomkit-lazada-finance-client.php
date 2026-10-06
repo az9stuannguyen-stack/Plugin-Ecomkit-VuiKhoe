@@ -23,6 +23,12 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 	private function text( mixed $value ): ?string {
 		return null === $value ? null : Ecomkit_Vuikhoe_Lazada_HTTP_Client::safe_text( $value, $this->secrets );
 	}
+	private static function identifier( mixed $value ): ?string {
+		if ( null === $value || '' === $value ) { return null; }
+		// Finance may use zero for an absent order/item reference. Keep the exact lexeme; do not infer a match.
+		if ( ! is_string( $value ) || ! preg_match( '/^[0-9]{1,40}$/D', $value ) ) { throw new RuntimeException( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
+		return $value;
+	}
 	/** Lossless JSON numeric lexemes, including unquoted decimals/large identifiers. */
 	private static function decode( string $body ): array {
 		$body = preg_replace_callback( '~"(?:[^"\\\\]|\\\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?(?=\s*[,}\]])~s', static fn( array $m ): string => '"' === $m[0][0] ? $m[0] : '"' . $m[0] . '"', $body );
@@ -54,19 +60,21 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 		return array( 'data' => $d['data'], 'diagnostic' => $diag );
 	}
 	/** One bounded page; filter locally with strict order_no equality. Singular endpoint has no order filter. */
-	public function transactions( string $order_id, string $start, string $end, int $offset = 0, int $limit = 100, bool $query = false ): array {
-		$order_id = Ecomkit_Vuikhoe_Lazada_Order_Normalizer::id( $order_id );
+	public function transactions( string $order_id, string $start, string $end, int $offset = 0, int $limit = 100, bool $query = false, bool $scan = false ): array {
+		$order_id = $scan ? '' : Ecomkit_Vuikhoe_Lazada_Order_Normalizer::id( $order_id );
+		if ( $scan ) { $query = true; }
 		$from = self::date( $start ); $to = self::date( $end );
 		if ( $to < $from || (int) $from->diff( $to )->days >= 180 || $offset < 0 || $offset > 1000000 || $limit < 1 || $limit > 500 ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); }
 		$p = array( 'start_time' => $start, 'end_time' => $end, 'trans_type' => '-1', 'offset' => (string) $offset, 'limit' => (string) $limit );
-		if ( $query ) { $p['trade_order_id'] = $order_id; }
+		if ( $query && ! $scan ) { $p['trade_order_id'] = $order_id; }
 		$r = $this->request( $query ? self::QUERY_TRANSACTIONS : self::TRANSACTIONS, $p ); $rows = array();
 		if ( count( $r['data'] ) > $limit ) { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( 'LAZADA_FINANCE_INVALID_RESPONSE', $r['diagnostic'] ); }
 		foreach ( $r['data'] as $raw ) {
 			if ( ! is_array( $raw ) ) { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( 'LAZADA_FINANCE_INVALID_RESPONSE', $r['diagnostic'] ); }
-			if ( $order_id !== ( $raw['order_no'] ?? null ) ) { continue; }
-			$safe = array( 'order_no' => $order_id );
-			foreach ( array( 'orderItem_no', 'reference' ) as $key ) { $v = $raw[$key] ?? null; $safe[$key] = null === $v || '' === $v ? null : Ecomkit_Vuikhoe_Lazada_Order_Normalizer::id( $v ); }
+			if ( ! $scan && $order_id !== ( $raw['order_no'] ?? null ) ) { continue; }
+			$provider_id = $raw['order_no'] ?? null;
+			$safe = array( 'order_no' => self::identifier( $provider_id ) );
+			foreach ( array( 'orderItem_no', 'reference' ) as $key ) { $safe[$key] = self::identifier( $raw[$key] ?? null ); }
 			foreach ( array( 'amount', 'VAT_in_amount', 'WHT_amount' ) as $key ) { $safe[$key] = self::decimal( $raw[$key] ?? null ); }
 			foreach ( array( 'fee_type', 'fee_name', 'transaction_type', 'transaction_number', 'transaction_date', 'statement', 'paid_status', 'orderItem_status', 'WHT_included_in_amount' ) as $key ) { $safe[$key] = $this->text( $raw[$key] ?? null ); }
 			// Currency is not documented in transaction response; retain only a valid explicit observed code, never infer VND.

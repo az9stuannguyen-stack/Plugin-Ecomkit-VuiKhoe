@@ -1,6 +1,6 @@
-# Lazada integration — WP.6J.5.1 Finance Diagnostic Route
+# Lazada integration — WP.6J.5.2 Finance Transaction Discovery
 
-Plugin 0.7.28, schema 9, canonical v9. No migration, dependency, extension or scheduled service added. Operator confirms OAuth, Order API and WP.6J.4 reconciliation FULL PASS LIVE: Batch #31 has seven Lazada matches, zero unmatched/errors/pending. Source-only Finance GET client and admin diagnostic are implemented; financial canonical mapping and automatic Lazada processing are NOT implemented. Automated tests use fake transport only. No real Finance request was made from this workspace. See [official Finance audit, full canonical matrix and live procedure](lazada-financial-source-audit.md) and [normalized official contract facts](lazada-finance-contract.json).
+Plugin 0.7.29, schema 9, canonical v9. No migration, dependency, extension or scheduled service added. Operator confirms OAuth, Order API and WP.6J.4 reconciliation FULL PASS LIVE: Batch #31 has seven Lazada matches, zero unmatched/errors/pending. Source-only Finance GET client and admin diagnostic are implemented; financial canonical mapping and automatic Lazada processing are NOT implemented. Automated tests use fake transport only. No real Finance request was made from this workspace. See [official Finance audit, full canonical matrix and live procedure](lazada-financial-source-audit.md) and [normalized official contract facts](lazada-finance-contract.json).
 
 ## Exact Batch reconciliation contract
 

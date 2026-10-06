@@ -19,15 +19,15 @@
             rows.forEach(row => { const tr = document.createElement('tr'); fields.forEach(key => { const td = document.createElement('td'); td.textContent = scalar(row[key]); tr.append(td); }); t.append(tr); }); output.append(t);
         }
         const diagFields = ['api_path', 'http_method', 'http_status', 'provider_code', 'safe_provider_message', 'request_id'];
-        text('p', `Order ID: ${result.order_id} · Candidate canonical: UNKNOWN · Không ghi tài chính/24 cột.`);
+        text('p', `Chế độ: ${result.audit_mode === 'scan' ? 'Quét giao dịch theo ngày' : 'Theo mã đơn'} · Order ID: ${result.order_id || '—'} · Candidate canonical: UNKNOWN · Không ghi tài chính/24 cột.`);
         if (result.transport) table([result.transport], ['layer', 'handler_reached', 'permission_passed', 'nonce_passed', 'finance_client_invoked', 'plugin_version']);
         for (const [stage, check] of Object.entries(result.checks || {})) {
             text('h3', `${stage}: ${check.success ? 'PASS' : 'FAIL'}`);
             if (!check.success) { text('p', check.classification || 'UNKNOWN'); table([check.evidence || {}], diagFields); continue; }
             const data = check.data;
             if (stage === 'transactions') {
-                text('p', `Giao dịch khớp mã trong trang: ${data.matched_count} · Toàn trang: ${data.page_count} · Coverage: ${data.coverage} · Offset tiếp theo: ${scalar(data.next_offset)}`);
-                table(data.records, ['transaction_type', 'fee_type', 'fee_name', 'amount', 'currency', 'order_no', 'orderItem_no', 'reference', 'linkage_scope', 'transaction_date', 'statement', 'paid_status', 'transaction_number', 'VAT_in_amount', 'WHT_amount', 'WHT_included_in_amount', 'orderItem_status', 'canonical_candidate']);
+                text('p', `Giao dịch hiển thị: ${data.matched_count} · Returned count: ${data.page_count} · Offset: ${data.offset} · Coverage: ${data.coverage} · Offset tiếp theo: ${scalar(data.next_offset)}`);
+                table(data.records, ['transaction_type', 'fee_type', 'fee_name', 'amount', 'currency', 'order_no', 'orderItem_no', 'reference', 'linkage_scope', 'ecomkit_presence', 'ecomkit_references', 'transaction_date', 'statement', 'paid_status', 'transaction_number', 'VAT_in_amount', 'WHT_amount', 'WHT_included_in_amount', 'orderItem_status', 'canonical_candidate']);
                 table([data.diagnostic], diagFields);
             } else if (stage === 'payout') {
                 text('p', `Statement của shop: ${data.provider_count} · Preview truncated: ${data.preview_truncated} · Liên kết payout→đơn: ${data.order_payout_link}`);
@@ -45,15 +45,45 @@
     if (typeof module !== 'undefined' && module.exports) module.exports = {readResponse, render};
     if (typeof document === 'undefined') return;
     document.querySelectorAll('[data-lazada-finance]').forEach(form => {
-        form.addEventListener('submit', async event => {
-            event.preventDefault(); const button = form.querySelector('button[type="submit"]'); const output = form.parentElement.querySelector('[data-lazada-finance-output]');
+        const next = form.querySelector('[data-lazada-finance-next]');
+        let nextOffset = null; let lastPayload = null;
+        const clearNext = () => { nextOffset = null; lastPayload = null; if (next) next.hidden = true; };
+        const mode = form.querySelector('[name="audit_mode"]');
+        if (mode && mode.tagName === 'SELECT') {
+            const updateMode = () => {
+                const scan = mode.value === 'scan';
+                form.querySelector('[name="order_id"]').required = !scan;
+                const endpoint = form.querySelector('[name="endpoint"]'); if (scan) endpoint.value = 'details'; endpoint.disabled = scan;
+                const orderCheck = form.querySelector('[name="check_order"]'); orderCheck.disabled = scan; if (scan) orderCheck.checked = false;
+                clearNext();
+            };
+            mode.addEventListener('change', updateMode); updateMode();
+            form.addEventListener('change', clearNext);
+        }
+        async function run(payload) {
+            const button = form.querySelector('button[type="submit"]'); const output = form.parentElement.querySelector('[data-lazada-finance-output]');
             if (button.disabled) return; button.disabled = true; output.textContent = 'Đang kiểm tra nguồn tài chính Lazada…';
+            if (next) next.hidden = true;
             try {
                 // input[name=action] shadows form.action in the real browser DOM.
-                const response = await fetch(form.getAttribute('action'), {method: 'POST', credentials: 'same-origin', body: new URLSearchParams(new FormData(form)), headers: {'Accept': 'application/json'}});
-                render(output, await readResponse(response));
-            } catch (error) { output.textContent = `Không thể hoàn tất kiểm tra: ${error.message || 'Lỗi mạng'}. Không tự động thử lại.`; }
+                const response = await fetch(form.getAttribute('action'), {method: 'POST', credentials: 'same-origin', body: payload, headers: {'Accept': 'application/json'}});
+                const result = await readResponse(response); render(output, result);
+                const offset = result.checks?.transactions?.data?.next_offset;
+                nextOffset = Number.isInteger(offset) && offset > 0 && offset <= 1000000 ? offset : null;
+                lastPayload = new URLSearchParams(payload);
+                if (next) next.hidden = nextOffset === null;
+            } catch (error) { clearNext(); output.textContent = `Không thể hoàn tất kiểm tra: ${error.message || 'Lỗi mạng'}. Không tự động thử lại.`; }
             finally { button.disabled = false; }
+        }
+        form.addEventListener('submit', async event => {
+            event.preventDefault(); await run(new URLSearchParams(new FormData(form)));
+        });
+        if (next && typeof next.addEventListener === 'function') next.addEventListener('click', async () => {
+            if (nextOffset === null || !lastPayload) return;
+            const payload = new URLSearchParams(lastPayload); payload.set('offset', String(nextOffset));
+            payload.delete('check_payout'); payload.delete('check_order'); // Next page reads Finance transactions only.
+            const offsetInput = form.querySelector('[name="offset"]'); if (offsetInput) offsetInput.value = String(nextOffset);
+            await run(payload);
         });
     });
 }());
