@@ -267,3 +267,6 @@ WP.6J.2 / 0.7.18: official Lazada seller authorization/token refresh implemented
 WP.6J.3A / 0.7.19: user approved automated-only Order client before live OAuth availability. GetOrders/GetOrder/GetOrderItems, signed lifecycle integration, pagination 100/100/37, offset-bound/repetition safety, exact provider DTOs tested with synthetic data. No production Orders persisted or automatic reconciliation/financial mapping. Next WP.6J.3B: real OAuth + live Order validation; only afterward WP.6J.4 exact reconciliation. WP.7 blocked.
 
 WP.6J.3B / 0.7.20: operator confirmed OAuth live ACTIVE/READY. Admin-only Order diagnostic shipped with fake tests; real GetOrders/GetOrder/GetOrderItems are still LIVE PENDING. No business persistence/canonical or financial mapping. Next: deploy, perform 3 live reads and exact Excel-ID pre-check, document safe actual response paths. WP.6J.4 and WP.7 not started.
+
+
+WP.6J.3B.1 / 0.7.21 simplifies only the admin diagnostic: date-only Asia/Ho_Chi_Minh midnight, single exact string ID, one direct GetOrder/GetOrderItems action and optional one-page GetOrders check. Offset and safe evidence are collapsed; independent endpoint results and safe response-error classification. Clients/OAuth/schema/canonical unchanged; no order persistence. Automated real provider calls: 0. Live Order validation pending; WP.6J.4 and WP.7 not started.

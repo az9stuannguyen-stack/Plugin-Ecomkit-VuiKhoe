@@ -1,6 +1,6 @@
 # Lazada authorization, Order client and live diagnostic — WP.6J.3B
 
-Plugin 0.7.20, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator has confirmed live OAuth ACTIVE/READY; live Order response validation remains PENDING. No real Order request was made from this development workspace.
+Plugin 0.7.21, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator has confirmed live OAuth ACTIVE/READY; live Order response validation remains PENDING. No real Order request was made from this development workspace.
 
 ## Architecture audit
 
@@ -72,15 +72,16 @@ Price/voucher/shipping_fee and item prices are exact validated decimal strings, 
 
 Official references: [Get Order tutorial: query, pagination, shop identity, item statuses and fields](https://open.lazada.com/apps/doc/doc?docId=121327&nodeId=29616), [GetOrders API](https://open.lazada.com/apps/doc/api?path=%2Forders%2Fget), [HTTP requests](https://open.lazada.com/apps/doc/doc?docId=108066&nodeId=10448), [Sensitive Data Privilege / DataMoat](https://open.lazada.com/apps/doc/doc?docId=108297&nodeId=10784). Masked/missing buyer data is not itself OAuth failure.
 
-## Live gate — WP.6J.3B procedure
+## Live gate ? WP.6J.3B.1 procedure
 
-1. Deploy 0.7.20. In Marketplace → Lazada Việt Nam confirm ACTIVE/READY. Optional manual refresh is a separate one-time live check; record whether performed and the resulting lifecycle. Its live result has not been reported yet.
-2. Expand **Kiểm tra Lazada Order API**. Select the connected shop; disconnected/non-usable connections are blocked both in UI and server. Native `manage_options` + AJAX nonce required; no new roles/capabilities. No raw token input.
-3. Choose a known narrow interval (at most 24 hours between input markers; defaults today in WordPress timezone). Click **Kiểm tra danh sách đơn Lazada**. Exactly one seller request reads offset 0, limit 100. IMPORTANT: only `created_after` is sent. End time is a REFERENCE ONLY and NOT enforced by provider; returned orders may lie beyond it. This is a bounded evidence sample, never claimed as a complete date-window reconciliation. Request count reports Order API calls only; lifecycle may additionally refresh a near-expiry token.
-4. Inspect order count, request ID, offset/countTotal, raw statuses and string IDs. If 100 records and more are indicated, manually enter the suggested next offset (100, 200...), only if needed for this live sample. No automatic pagination. At 5000 no next request beyond the bound; split later, never silently drop.
-5. Pick the exact returned Order ID from the text/datalist field and click **Kiểm tra chi tiết đơn** then **Kiểm tra sản phẩm đơn**. Each click uses one existing client call. Order/item IDs never pass through JS Number, float or PHP integer coercion. Same-SKU items remain distinct.
-6. Optionally paste a known Excel marketplace ID in the comparison field. Exact case-sensitive string comparison produces MATCH/NO MATCH; leading zeros matter. The pre-check does not persist matching status or normalize differing IDs into matches.
-7. Save/share only the displayed SAFE structural evidence (not browser network logs). `response_evidence.field_paths` contains representative observed JSON paths, never raw values. This can confirm paths such as `data.orders[].order_id`, `data.statuses[]`, `data[].order_item_id`, `data[].status`, `data.address_shipping.first_name`, monetary fields, `request_id`, `data.countTotal`. These are fixture expectations until seen LIVE; do not report them as production proof beforehand. Invalid normalized shape includes observed paths where decoding succeeded.
+1. Deploy 0.7.21; confirm the Lazada shop is ACTIVE/READY. Expand the Order diagnostic.
+2. Copy the exact marketplace ID from the old Batch into the single Order ID field. No Batch reprocessing. Select date 2026-10-03 and paste ID 532935709720247 for the requested manual sample.
+3. Press the single primary button. GetOrder then GetOrderItems run directly with the exact string; no list prerequisite and no date required for direct checks.
+4. Optionally enable the list check. GetOrders runs after direct checks, using selected date midnight in Asia/Ho_Chi_Minh and the existing serializer. Only created_after is sent: one page, limit 100, default offset 0. No hard end-of-day bound or automatic pagination. A missing ID means absent from this returned page, not absent from Lazada.
+5. Review the friendly summary first: connection, direct order, exact comparison, items, raw API statuses and PII availability. List comparison is separate. Advanced settings contain manual offset; collapsed technical details contain redacted per-endpoint evidence, request IDs, HTTP/provider codes and structural paths. No raw buyer payload.
+6. Expected manual result: READY, order found, GetOrder/GetOrderItems success, exact MATCH, no visible tokens/secrets. Record actual live results; this workspace has made zero real provider calls.
+
+Response audit: the prior browser used response.json() and a single catch for parsing and network failures. Synthetic non-JSON/PHP and network responses reproduce that generic-error path; the original live response is unavailable, so its exact cause remains unconfirmed. The updated handler separates JSON provider errors, permission/nonce errors (including WordPress -1), malformed JSON/envelopes, PHP/non-JSON HTTP responses and network failures. Arbitrary response bodies are never displayed; safe backend messages and HTTP classifications are shown. No blind retries.
 
 The UI displays normalized provider amounts/statuses without interpreting accounting meaning. Shipping PII values are omitted from the diagnostic response; only component availability is shown: AVAILABLE/MASKED/MISSING (`*` indicates masking, presence is not a guarantee of full unmasked access). Buyer name/address missing or masked is not automatically an API failure and may require Sensitive Data Privilege. Item name/SKU is displayed only as returned and escaped as text.
 

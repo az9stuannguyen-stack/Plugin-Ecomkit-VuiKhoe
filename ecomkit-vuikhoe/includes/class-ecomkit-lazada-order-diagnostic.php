@@ -11,8 +11,8 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Diagnostic {
 		$value = $input[$key] ?? ''; if ( ! is_string( $value ) || strlen( $value ) > 128 ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID' ); } return $value;
 	}
 	private static function date( string $value, DateTimeZone $timezone ): DateTimeImmutable {
-		$date = DateTimeImmutable::createFromFormat( '!Y-m-d\TH:i', $value, $timezone );
-		if ( ! $date || $date->format( 'Y-m-d\TH:i' ) !== $value ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_WINDOW_INVALID' ); } return $date;
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d', $value, $timezone );
+		if ( ! $date || $date->format( 'Y-m-d' ) !== $value ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_WINDOW_INVALID' ); } return $date;
 	}
 	private static function pii( ?array $address ): array {
 		$fields = array(); $present = false; $masked = false;
@@ -33,41 +33,58 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Diagnostic {
 		$ready = false;
 		foreach ( $this->tokens->safe_connections() as $connection ) { if ( (string) $connection['id'] === $id && 'ACTIVE' === $connection['status'] && in_array( $connection['lifecycle'], array( 'READY', 'REFRESH_NEEDED' ), true ) ) { $ready = true; break; } }
 		if ( ! $ready ) { throw new RuntimeException( 'LAZADA_ORDER_AUTH_REQUIRED' ); }
-		$operation = self::value( $input, 'operation' ); $excel = self::value( $input, 'excel_order_id' );
-		if ( ! in_array( $operation, array( 'orders', 'order', 'items' ), true ) ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID' ); }
+		$order_id = self::value( $input, 'order_id' );
+		if ( '' !== $order_id ) { $order_id = Ecomkit_Vuikhoe_Lazada_Order_Normalizer::id( $order_id ); }
+		$list = '1' === self::value( $input, 'check_list' );
+		if ( '' === $order_id && ! $list ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID' ); }
+		$from = $list ? self::date( self::value( $input, 'order_date' ), new DateTimeZone( 'Asia/Ho_Chi_Minh' ) ) : null;
+		$offset = self::value( $input, 'offset' ); $offset = '' === $offset ? '0' : $offset;
+		if ( $list && ( 1 !== preg_match( '/^[0-9]{1,4}$/D', $offset ) || (int) $offset > 5000 || 0 !== (int) $offset % 100 ) ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID' ); }
 		$client = ( $this->client_factory )( (int) $id );
-		$result = array( 'stage' => $operation, 'connection_id' => $id, 'request_count' => 1, 'request_count_scope' => 'ORDER_API_ONLY; optional lifecycle refresh excluded', 'persistence' => false, 'canonical_mapping' => false );
-		if ( 'orders' === $operation ) {
-			$from = self::date( self::value( $input, 'from' ), wp_timezone() ); $to = self::date( self::value( $input, 'to' ), wp_timezone() );
-			$seconds = $to->getTimestamp() - $from->getTimestamp();
-			if ( $seconds <= 0 || $seconds > 86400 ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_WINDOW_INVALID' ); }
-			$offset = self::value( $input, 'offset' ); if ( 1 !== preg_match( '/^[0-9]{1,4}$/D', $offset ) || (int) $offset > 5000 || 0 !== (int) $offset % 100 ) { throw new RuntimeException( 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID' ); }
-			$page = $client->get_orders( new Ecomkit_Vuikhoe_Lazada_Order_Query( $from, 'all', 100, (int) $offset ) );
-			$result['orders'] = array_map( array( self::class, 'safe_order' ), $page['orders'] );
-			$result['order_count'] = count( $result['orders'] ); $result['offsets'] = array( $offset ); $result['countTotal'] = $page['countTotal'];
-			$result['window'] = array( 'from' => Ecomkit_Vuikhoe_Lazada_Order_Query::date( $from ), 'to_reference_only' => Ecomkit_Vuikhoe_Lazada_Order_Query::date( $to ), 'provider_end_bound_sent' => false );
-			$result['pagination'] = 'ONE_PAGE_ONLY_NOT_FULL_WINDOW';
-			$result['next_offset'] = 100 === $result['order_count'] && ( null === $page['countTotal'] || (int) $offset + 100 < $page['countTotal'] ) ? ( (int) $offset + 100 <= 5000 ? (string) ( (int) $offset + 100 ) : 'WINDOW_TOO_LARGE' ) : null;
-			if ( '' !== $excel ) { $result['excel_comparison'] = array_map( static fn( array $o ): array => array( 'provider_order_id' => $o['providerOrderId'], 'excel_order_id' => $excel, 'result' => $excel === $o['providerOrderId'] ? 'MATCH' : 'NO MATCH' ), $result['orders'] ); }
-		} else {
-			$order_id = Ecomkit_Vuikhoe_Lazada_Order_Normalizer::id( self::value( $input, 'order_id' ) );
-			$result['order_id'] = $order_id;
-			if ( 'order' === $operation ) { $result['order'] = self::safe_order( $client->get_order( $order_id ) ); }
-			else { $result['items'] = $client->get_order_items( $order_id ); $result['item_count'] = count( $result['items'] ); }
-			if ( '' !== $excel ) {
-				$provider_id = 'order' === $operation ? $result['order']['providerOrderId'] : ( $result['items'][0]['providerOrderId'] ?? null );
-				$result['excel_comparison'] = array( 'excel_order_id' => $excel, 'provider_order_id' => $provider_id, 'result' => $excel === $provider_id ? 'MATCH' : 'NO MATCH' );
-			}
+		$result = array( 'connection' => 'READY', 'order_id' => $order_id, 'request_count' => 0, 'request_count_scope' => 'ORDER_API_ONLY; optional lifecycle refresh excluded', 'persistence' => false, 'canonical_mapping' => false, 'checks' => array() );
+		// Each endpoint has independent evidence: list failure cannot erase direct success.
+		$check = static function( string $stage, callable $read ) use ( &$result, $client ): void {
+			++$result['request_count'];
+			try { $result['checks'][$stage] = array( 'success' => true, 'data' => $read(), 'evidence' => $client->last_evidence() ); }
+			catch ( Throwable $e ) { $result['checks'][$stage] = array( 'success' => false, 'classification' => self::error_code( $e ), 'message' => self::message( self::error_code( $e ), $stage ), 'evidence' => $e instanceof Ecomkit_Vuikhoe_Lazada_Provider_Exception ? $e->diagnostic : array() ); }
+		};
+		if ( '' !== $order_id ) {
+			$check( 'order', static function() use ( $client, $order_id ): array {
+				$order = self::safe_order( $client->get_order( $order_id ) );
+				return array( 'provider_order_id' => $order['providerOrderId'], 'comparison' => $order_id === $order['providerOrderId'] ? 'MATCH' : 'NO MATCH', 'raw_statuses' => $order['rawStatuses'], 'pii' => $order['piiAvailability'] );
+			} );
+			$check( 'items', static function() use ( $client, $order_id ): array {
+				$items = $client->get_order_items( $order_id );
+				return array( 'item_count' => count( $items ), 'comparison' => $items ? ( count( array_filter( $items, static fn( array $item ): bool => $order_id !== $item['providerOrderId'] ) ) ? 'NO MATCH' : 'MATCH' ) : 'UNVERIFIED' );
+			} );
 		}
-		$result['response_evidence'] = $client->last_evidence(); return $result;
+		if ( $list ) {
+			$check( 'orders', static function() use ( $client, $from, $offset, $order_id ): array {
+				$page = $client->get_orders( new Ecomkit_Vuikhoe_Lazada_Order_Query( $from, 'all', 100, (int) $offset ) );
+				$ids = array_column( $page['orders'], 'providerOrderId' );
+				return array( 'comparison' => '' === $order_id ? 'UNVERIFIED' : ( in_array( $order_id, $ids, true ) ? 'MATCH' : 'NO MATCH' ), 'order_count' => count( $ids ), 'countTotal' => $page['countTotal'], 'offset' => $offset, 'limit' => 100, 'created_after' => Ecomkit_Vuikhoe_Lazada_Order_Query::date( $from ), 'provider_end_bound_sent' => false, 'pagination' => 'ONE_PAGE_ONLY_NOT_FULL_DAY' );
+			} );
+		}
+		return $result;
 	}
+	private static function error_code( Throwable $e ): string {
+		$allowed = array( 'LAZADA_ORDER_AUTH_REQUIRED', 'LAZADA_ORDER_HTTP_ERROR', 'LAZADA_ORDER_PROVIDER_ERROR', 'LAZADA_ORDER_INVALID_RESPONSE', 'LAZADA_ORDER_NETWORK_ERROR', 'LAZADA_ORDER_NOT_FOUND', 'LAZADA_ORDER_PAGINATION_ERROR', 'LAZADA_ORDER_WINDOW_TOO_LARGE', 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID', 'LAZADA_ORDER_DIAGNOSTIC_WINDOW_INVALID' );
+		return in_array( $e->getMessage(), $allowed, true ) ? $e->getMessage() : 'LAZADA_ORDER_INVALID_RESPONSE';
+	}
+	private static function message( string $code, string $stage = '' ): string {
+		if ( 'LAZADA_ORDER_AUTH_REQUIRED' === $code ) { return 'Token Lazada cần được ủy quyền lại.'; }
+		if ( 'LAZADA_ORDER_NOT_FOUND' === $code ) { return 'Không tìm thấy đơn Lazada này.'; }
+		if ( 'LAZADA_ORDER_DIAGNOSTIC_WINDOW_INVALID' === $code ) { return 'Chọn ngày đơn hợp lệ để kiểm tra danh sách.'; }
+		if ( 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID' === $code ) { return 'Nhập mã đơn Lazada hoặc chọn kiểm tra danh sách theo ngày.'; }
+		return 'items' === $stage ? 'Không thể lấy sản phẩm của đơn.' : ( 'orders' === $stage ? 'Không thể kiểm tra danh sách đơn.' : 'Không thể lấy chi tiết đơn.' );
+	}
+
 	public function ajax(): void {
 		Ecomkit_Vuikhoe_Security::require_management_capability(); check_ajax_referer( 'ecomkit_lazada_order_diagnostic', 'nonce' ); nocache_headers();
 		try { $result = $this->run( wp_unslash( $_POST ) ); }
 		catch ( Throwable $e ) {
-			$allowed = array( 'LAZADA_ORDER_AUTH_REQUIRED', 'LAZADA_ORDER_HTTP_ERROR', 'LAZADA_ORDER_PROVIDER_ERROR', 'LAZADA_ORDER_INVALID_RESPONSE', 'LAZADA_ORDER_NETWORK_ERROR', 'LAZADA_ORDER_NOT_FOUND', 'LAZADA_ORDER_PAGINATION_ERROR', 'LAZADA_ORDER_WINDOW_TOO_LARGE', 'LAZADA_ORDER_DIAGNOSTIC_INPUT_INVALID', 'LAZADA_ORDER_DIAGNOSTIC_WINDOW_INVALID' );
-			$code = in_array( $e->getMessage(), $allowed, true ) ? $e->getMessage() : 'LAZADA_ORDER_INVALID_RESPONSE';
-			wp_send_json_error( array( 'classification' => $code, 'stage' => 'ORDER_DIAGNOSTIC', 'message' => 'LAZADA_ORDER_AUTH_REQUIRED' === $code ? 'Chưa thể kiểm tra Order API. Vui lòng kết nối Lazada trước.' : 'Kiểm tra chưa thành công. Xem bằng chứng an toàn; không tự động thử lại.', 'diagnostic' => $e instanceof Ecomkit_Vuikhoe_Lazada_Provider_Exception ? $e->diagnostic : array() ), 400 );
+			$code = self::error_code( $e );
+			wp_send_json_error( array( 'classification' => $code, 'message' => self::message( $code ), 'diagnostic' => $e instanceof Ecomkit_Vuikhoe_Lazada_Provider_Exception ? $e->diagnostic : array() ), 400 );
 		}
 		wp_send_json_success( $result );
 	}
