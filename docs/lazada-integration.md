@@ -157,3 +157,14 @@ Explicit reconciliation rebuilds counters from persisted rows, processes only ac
 Main progress reconciliation/detail counters are Shopee-only, as shown by their Shopee denominators and the Auto Pipeline implementation. Their labels now say Shopee in both initial PHP and polling JavaScript. Lazada has its own persistent aggregate line; Payment/Income are not merged.
 
 Manual gate: deploy 0.7.26 and open Batch #31 without pressing reconciliation. The existing seven terminal matches must show total/processed/matched=7, unmatched/errors/pending=0, no Continue button, and identical evidence/raw statuses. This is an automated fixture PASS only until that live state is confirmed; do not start WP.6J.5 or WP.7.
+
+
+## WP.6J.5.3 ? Account transaction scan (0.7.30)
+
+Official contract audited 2026-10-06: https://open.lazada.com/apps/doc/api?path=/finance/transaction/accountTransactions/query
+Machine-readable official reference: `docs/lazada-account-transactions-contract.json`.
+Account discovery uses POST `/finance/transaction/accountTransactions/query`, required `start_time`/`end_time` in yyyyMMdd, `page_num` and `page_size`. Optional documented filters (not sent) are transaction_type, sub_transaction_type, transaction_number. No trade_order_id, offset, limit or trans_type is sent. A conservative local diagnostic window remains under 180 days; this is not claimed as an account API constraint. One explicit page per click, next page only from provider page_info.total_page.
+Official envelope: success/error_code/msg, data.page_info and data.transactions[]. Safe fields retained: type, sub_type, amount, currency, pmt_reference, transaction_number, transaction_time. Payee accounts, remarks and tracking free text excluded. These are documented paths, not observed live account response evidence.
+No documented order/item linking field exists here. Payment reference is NOT treated as an order ID. Exact LAZADA/selected connection order lookup remains for order-mode order_no. Order mode uses QueryTransactionDetails with exact trade_order_id by default; legacy singular diagnostic remains available. Payout remains SELLER_STATEMENT_NOT_ORDER. No canonical/finance writes, no fee mapping, no migration or Shopee semantic reuse.
+Reproduced previous metadata-loss mechanism: decimal/identifier normalization threw plain RuntimeException after HTTP, so diagnostic catch produced empty evidence. It now wraps normalization failure in Provider_Exception preserving safe HTTP metadata. Actual live offending field/envelope cannot be determined without a safe response structural observation; handler/client-invoked flags alone do not prove HTTP occurred.
+Manual gate: deploy 0.7.30, hard refresh, select scan, shop 100070635, dates 2026-09-01 through 2026-10-06, page 1. Inspect safe rows and page_info; explicitly advance pages. Empty transactions[] is valid evidence, not zero fees. Keep WP.6J.6/WP.7 closed pending review.

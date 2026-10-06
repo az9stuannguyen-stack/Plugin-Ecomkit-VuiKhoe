@@ -4,7 +4,7 @@ Plugin WordPress nội bộ dùng để nhập, đồng bộ, đối chiếu và
 
 ## Trạng thái dự án
 
-Current stage: **WP.6J.5.2 — Discover Lazada Finance Transactions**, plugin `0.7.29`, DB `9`, canonical `v9`. Finance diagnostic supports exact order audit and unfiltered date-window discovery with explicit next-page navigation and shop-scoped Ecomkit references. Operator confirms QueryTransactionDetails live access but zero records for the three tested orders; no live transaction table is available yet. No canonical financial mapping, no Shopee fee reuse, no automatic Lazada pipeline. [Finance contracts, audit matrix and manual gate](docs/lazada-financial-source-audit.md). WP.6J.6 and WP.7 have not started.
+Current stage: **WP.6J.5.2 — Discover Lazada Finance Transactions**, plugin `0.7.30`, DB `9`, canonical `v9`. Finance diagnostic supports exact order audit and unfiltered date-window discovery with explicit next-page navigation and shop-scoped Ecomkit references. Operator confirms QueryTransactionDetails live access but zero records for the three tested orders; no live transaction table is available yet. No canonical financial mapping, no Shopee fee reuse, no automatic Lazada pipeline. [Finance contracts, audit matrix and manual gate](docs/lazada-financial-source-audit.md). WP.6J.6 and WP.7 have not started.
 
 Stage **WP.3B — Zero-Config Credential Master Key** triển khai plugin phiên bản `0.3.2`, schema `4`: mặc định dẫn xuất khóa mã hóa bằng HKDF-SHA256 từ WordPress Security Keys; advanced installation vẫn có thể ưu tiên `ECOMKIT_CREDENTIAL_KEY`. Không lưu master key trong database và không cần sửa `wp-config.php` ở hosting WordPress thông thường.
 

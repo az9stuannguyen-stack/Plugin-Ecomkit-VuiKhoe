@@ -18,7 +18,7 @@
             const head = document.createElement('tr'); fields.forEach(key => { const th = document.createElement('th'); th.textContent = key; head.append(th); }); t.append(head);
             rows.forEach(row => { const tr = document.createElement('tr'); fields.forEach(key => { const td = document.createElement('td'); td.textContent = scalar(row[key]); tr.append(td); }); t.append(tr); }); output.append(t);
         }
-        const diagFields = ['api_path', 'http_method', 'http_status', 'provider_code', 'safe_provider_message', 'request_id'];
+        const diagFields = ['api_path', 'http_method', 'http_status', 'provider_code', 'safe_provider_message', 'request_id', 'response_container'];
         text('p', `Chế độ: ${result.audit_mode === 'scan' ? 'Quét giao dịch theo ngày' : 'Theo mã đơn'} · Order ID: ${result.order_id || '—'} · Candidate canonical: UNKNOWN · Không ghi tài chính/24 cột.`);
         if (result.transport) table([result.transport], ['layer', 'handler_reached', 'permission_passed', 'nonce_passed', 'finance_client_invoked', 'plugin_version']);
         for (const [stage, check] of Object.entries(result.checks || {})) {
@@ -26,8 +26,9 @@
             if (!check.success) { text('p', check.classification || 'UNKNOWN'); table([check.evidence || {}], diagFields); continue; }
             const data = check.data;
             if (stage === 'transactions') {
-                text('p', `Giao dịch hiển thị: ${data.matched_count} · Returned count: ${data.page_count} · Offset: ${data.offset} · Coverage: ${data.coverage} · Offset tiếp theo: ${scalar(data.next_offset)}`);
-                table(data.records, ['transaction_type', 'fee_type', 'fee_name', 'amount', 'currency', 'order_no', 'orderItem_no', 'reference', 'linkage_scope', 'ecomkit_presence', 'ecomkit_references', 'transaction_date', 'statement', 'paid_status', 'transaction_number', 'VAT_in_amount', 'WHT_amount', 'WHT_included_in_amount', 'orderItem_status', 'canonical_candidate']);
+                text('p', `Giao dịch hiển thị: ${data.matched_count} · Returned count: ${data.page_count} · ${result.audit_mode === 'scan' ? 'Page: ' + data.page_num : 'Offset: ' + data.offset} · Coverage: ${data.coverage} · Offset tiếp theo: ${scalar(data.next_page ?? data.next_offset)}`);
+                table(data.records, result.audit_mode === 'scan' ? ['type', 'sub_type', 'amount', 'currency', 'pmt_reference', 'transaction_number', 'transaction_time', 'linkage_scope', 'ecomkit_presence'] : ['transaction_type', 'fee_type', 'fee_name', 'amount', 'currency', 'order_no', 'orderItem_no', 'reference', 'linkage_scope', 'ecomkit_presence', 'ecomkit_references', 'transaction_date', 'statement', 'paid_status', 'transaction_number', 'VAT_in_amount', 'WHT_amount', 'WHT_included_in_amount', 'orderItem_status', 'canonical_candidate']);
+                if (data.page_info) table([data.page_info], ['page_num', 'page_size', 'total_page', 'total_count']);
                 table([data.diagnostic], diagFields);
             } else if (stage === 'payout') {
                 text('p', `Statement của shop: ${data.provider_count} · Preview truncated: ${data.preview_truncated} · Liên kết payout→đơn: ${data.order_payout_link}`);
@@ -40,7 +41,7 @@
             }
         }
         text('h3', 'Tên phí/type quan sát trong trang — chưa xác minh mapping');
-        table(result.distinct_names, ['fee_type', 'fee_name', 'transaction_type', 'frequency', 'positive', 'negative', 'zero', 'missing_amount', 'scopes', 'meaning', 'confidence']);
+        table(result.distinct_names, ['fee_type', 'fee_name', 'transaction_type', 'sub_type', 'frequency', 'positive', 'negative', 'zero', 'missing_amount', 'scopes', 'meaning', 'confidence']);
     }
     if (typeof module !== 'undefined' && module.exports) module.exports = {readResponse, render};
     if (typeof document === 'undefined') return;
@@ -54,6 +55,8 @@
                 const scan = mode.value === 'scan';
                 form.querySelector('[name="order_id"]').required = !scan;
                 const endpoint = form.querySelector('[name="endpoint"]'); if (scan) endpoint.value = 'details'; endpoint.disabled = scan;
+                const page = form.querySelector('[name="page_num"]'); if (page) page.parentElement.hidden = !scan;
+                const offset = form.querySelector('[name="offset"]'); if (offset) offset.parentElement.hidden = scan;
                 const orderCheck = form.querySelector('[name="check_order"]'); orderCheck.disabled = scan; if (scan) orderCheck.checked = false;
                 clearNext();
             };
@@ -68,7 +71,7 @@
                 // input[name=action] shadows form.action in the real browser DOM.
                 const response = await fetch(form.getAttribute('action'), {method: 'POST', credentials: 'same-origin', body: payload, headers: {'Accept': 'application/json'}});
                 const result = await readResponse(response); render(output, result);
-                const offset = result.checks?.transactions?.data?.next_offset;
+                const offset = result.checks?.transactions?.data?.next_page ?? result.checks?.transactions?.data?.next_offset;
                 nextOffset = Number.isInteger(offset) && offset > 0 && offset <= 1000000 ? offset : null;
                 lastPayload = new URLSearchParams(payload);
                 if (next) next.hidden = nextOffset === null;
@@ -80,9 +83,9 @@
         });
         if (next && typeof next.addEventListener === 'function') next.addEventListener('click', async () => {
             if (nextOffset === null || !lastPayload) return;
-            const payload = new URLSearchParams(lastPayload); payload.set('offset', String(nextOffset));
+            const payload = new URLSearchParams(lastPayload); payload.set(lastPayload.get('audit_mode') === 'scan' ? 'page_num' : 'offset', String(nextOffset));
             payload.delete('check_payout'); payload.delete('check_order'); // Next page reads Finance transactions only.
-            const offsetInput = form.querySelector('[name="offset"]'); if (offsetInput) offsetInput.value = String(nextOffset);
+            const offsetInput = form.querySelector(lastPayload.get('audit_mode') === 'scan' ? '[name="page_num"]' : '[name="offset"]'); if (offsetInput) offsetInput.value = String(nextOffset);
             await run(payload);
         });
     });

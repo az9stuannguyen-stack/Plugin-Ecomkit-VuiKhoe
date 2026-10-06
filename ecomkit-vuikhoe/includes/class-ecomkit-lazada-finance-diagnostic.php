@@ -37,6 +37,8 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic {
 		$from = Ecomkit_Vuikhoe_Lazada_Finance_Client::date( $start ); $to = Ecomkit_Vuikhoe_Lazada_Finance_Client::date( $end );
 		$offset = self::value( $input, 'offset' ); $offset = '' === $offset ? '0' : $offset;
 		if ( $to < $from || (int) $from->diff( $to )->days >= 180 || ! preg_match( '/^[0-9]{1,7}$/D', $offset ) || (int) $offset > 1000000 ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); }
+		$page = self::value( $input, 'page_num' ); $page = '' === $page ? '1' : $page;
+		if ( ! preg_match( '/^[1-9][0-9]{0,5}$/D', $page ) ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); }
 		$endpoint = $scan ? 'details' : self::value( $input, 'endpoint' );
 		if ( ! in_array( $endpoint, array( 'detail', 'details' ), true ) ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); }
 		$client = ( $this->factory )( (int) $id ); $checks = array();
@@ -45,7 +47,7 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic {
 			catch ( Throwable $e ) { $checks[$key] = array( 'success' => false, 'classification' => self::error_code( $e ), 'evidence' => $e instanceof Ecomkit_Vuikhoe_Lazada_Provider_Exception ? $e->diagnostic : array() ); }
 		};
 		$this->finance_client_invoked = true;
-		$check( 'transactions', fn() => $client->transactions( $order_id, $start, $end, (int) $offset, 100, 'details' === $endpoint, $scan ) );
+		$check( 'transactions', fn() => $scan ? $client->account_transactions( $start, $end, (int) $page ) : $client->transactions( $order_id, $start, $end, (int) $offset, 100, 'details' === $endpoint ) );
 		$refs = array();
 		if ( isset( $checks['transactions']['data']['records'] ) ) {
 			foreach ( $checks['transactions']['data']['records'] as &$record ) {
@@ -73,8 +75,8 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic {
 		}
 		$names = array();
 		foreach ( $checks['transactions']['data']['records'] ?? array() as $r ) {
-			$key = wp_json_encode( array( $r['fee_type'], $r['fee_name'], $r['transaction_type'] ) );
-			$names[$key] ??= array( 'fee_type' => $r['fee_type'], 'fee_name' => $r['fee_name'], 'transaction_type' => $r['transaction_type'], 'frequency' => 0, 'positive' => 0, 'negative' => 0, 'zero' => 0, 'missing_amount' => 0, 'scopes' => array(), 'meaning' => 'UNKNOWN', 'confidence' => 'UNKNOWN' );
+			$key = wp_json_encode( array( $r['fee_type'], $r['fee_name'], $r['transaction_type'], $r['sub_type'] ?? null ) );
+			$names[$key] ??= array( 'fee_type' => $r['fee_type'], 'fee_name' => $r['fee_name'], 'transaction_type' => $r['transaction_type'], 'sub_type' => $r['sub_type'] ?? null, 'frequency' => 0, 'positive' => 0, 'negative' => 0, 'zero' => 0, 'missing_amount' => 0, 'scopes' => array(), 'meaning' => 'UNKNOWN', 'confidence' => 'UNKNOWN' );
 			++$names[$key]['frequency']; $amount = $r['amount'];
 			$sign = null === $amount ? 'missing_amount' : ( ! preg_match( '/[1-9]/', $amount ) ? 'zero' : ( str_starts_with( $amount, '-' ) ? 'negative' : 'positive' ) );
 			++$names[$key][$sign]; $names[$key]['scopes'][$r['linkage_scope']] = true;

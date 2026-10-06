@@ -1,0 +1,350 @@
+{
+  "title": "QueryAccountTransactions",
+  "path": "/finance/transaction/accountTransactions/query",
+  "method": "post",
+  "parameters": {
+    "data": [
+      {
+        "treeId": 70527,
+        "data": [],
+        "children": [],
+        "name": "transaction_type",
+        "id": 278,
+        "type": "String",
+        "required": false,
+        "desc": "transaction type,Enumeration values for(Deposit,Withdrawal,Payment,null)"
+      },
+      {
+        "treeId": 70528,
+        "data": [],
+        "children": [],
+        "name": "sub_transaction_type",
+        "id": 278,
+        "type": "String",
+        "required": false,
+        "desc": "sub transaction type,Enumeration values for(Settlement,Failed Payment,Returned Payment,Auto Withdrawal,Manual Withdrawal,Sponsored Solutions Top-up,null)"
+      },
+      {
+        "treeId": 70529,
+        "data": [],
+        "children": [],
+        "name": "transaction_number",
+        "id": 278,
+        "type": "String",
+        "required": false,
+        "desc": "transaction number"
+      },
+      {
+        "treeId": 70530,
+        "data": [],
+        "children": [],
+        "name": "page_size",
+        "id": 278,
+        "type": "Number",
+        "required": true,
+        "desc": "page size"
+      },
+      {
+        "treeId": 70531,
+        "data": [],
+        "children": [],
+        "name": "start_time",
+        "id": 278,
+        "type": "String",
+        "required": true,
+        "desc": "start time,format:yyyyMMdd"
+      },
+      {
+        "treeId": 70532,
+        "data": [],
+        "children": [],
+        "name": "end_time",
+        "id": 278,
+        "type": "String",
+        "required": true,
+        "desc": "start time,format:yyyyMMdd"
+      },
+      {
+        "treeId": 70533,
+        "data": [],
+        "children": [],
+        "name": "page_num",
+        "id": 278,
+        "type": "Number",
+        "required": true,
+        "desc": "page number"
+      }
+    ],
+    "id": 278
+  },
+  "outputParameters": {
+    "data": [
+      {
+        "treeId": 70536,
+        "data": [],
+        "children": [],
+        "name": "msg",
+        "id": 280,
+        "type": "String",
+        "required": true,
+        "desc": "error message"
+      },
+      {
+        "treeId": 70537,
+        "data": [],
+        "children": [
+          {
+            "treeId": 70538,
+            "data": [],
+            "children": [
+              {
+                "treeId": 70539,
+                "data": [],
+                "children": [],
+                "name": "page_num",
+                "id": 280,
+                "type": "Number",
+                "required": false,
+                "desc": "pageNum"
+              },
+              {
+                "treeId": 70540,
+                "data": [],
+                "children": [],
+                "name": "page_size",
+                "id": 280,
+                "type": "Number",
+                "required": false,
+                "desc": "pageSize"
+              },
+              {
+                "treeId": 70541,
+                "data": [],
+                "children": [],
+                "name": "total_page",
+                "id": 280,
+                "type": "Number",
+                "required": false,
+                "desc": "totalPage"
+              },
+              {
+                "treeId": 70542,
+                "data": [],
+                "children": [],
+                "name": "total_count",
+                "id": 280,
+                "type": "Number",
+                "required": false,
+                "desc": "totalCount"
+              }
+            ],
+            "name": "page_info",
+            "id": 280,
+            "type": "Object",
+            "required": false,
+            "desc": "page Info"
+          },
+          {
+            "treeId": 70543,
+            "data": [],
+            "children": [
+              {
+                "treeId": 86844,
+                "data": [],
+                "children": [],
+                "name": "pmt_reference",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "pmt reference"
+              },
+              {
+                "treeId": 70544,
+                "data": [],
+                "children": [],
+                "name": "transaction_number",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "trading serial number"
+              },
+              {
+                "treeId": 70545,
+                "data": [],
+                "children": [],
+                "name": "transaction_time",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "trading occurred time"
+              },
+              {
+                "treeId": 70546,
+                "data": [],
+                "children": [],
+                "name": "type",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "trading type"
+              },
+              {
+                "treeId": 70547,
+                "data": [],
+                "children": [],
+                "name": "sub_type",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "trading sub type"
+              },
+              {
+                "treeId": 70548,
+                "data": [],
+                "children": [
+                  {
+                    "treeId": 70549,
+                    "data": [],
+                    "children": [],
+                    "name": "account",
+                    "id": 280,
+                    "type": "String",
+                    "required": false,
+                    "desc": "payee Account"
+                  },
+                  {
+                    "treeId": 70550,
+                    "data": [],
+                    "children": [],
+                    "name": "description",
+                    "id": 280,
+                    "type": "String",
+                    "required": false,
+                    "desc": "description"
+                  }
+                ],
+                "name": "payee_account",
+                "id": 280,
+                "type": "Object",
+                "required": false,
+                "desc": "payee Account"
+              },
+              {
+                "treeId": 70551,
+                "data": [],
+                "children": [],
+                "name": "amount",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "amount"
+              },
+              {
+                "treeId": 70552,
+                "data": [],
+                "children": [],
+                "name": "currency",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "currency"
+              },
+              {
+                "treeId": 70553,
+                "data": [],
+                "children": [],
+                "name": "remarks",
+                "id": 280,
+                "type": "String",
+                "required": false,
+                "desc": "remarks"
+              },
+              {
+                "treeId": 70554,
+                "data": [],
+                "children": [
+                  {
+                    "treeId": 70555,
+                    "data": [],
+                    "children": [],
+                    "name": "name",
+                    "id": 280,
+                    "type": "String",
+                    "required": false,
+                    "desc": "The name of the state"
+                  },
+                  {
+                    "treeId": 70556,
+                    "data": [],
+                    "children": [],
+                    "name": "status",
+                    "id": 280,
+                    "type": "String",
+                    "required": false,
+                    "desc": "Configuration of multilingual copywriting"
+                  },
+                  {
+                    "treeId": 70557,
+                    "data": [],
+                    "children": [],
+                    "name": "update_time",
+                    "id": 280,
+                    "type": "String",
+                    "required": false,
+                    "desc": "Update time"
+                  },
+                  {
+                    "treeId": 70558,
+                    "data": [],
+                    "children": [],
+                    "name": "remark",
+                    "id": 280,
+                    "type": "String",
+                    "required": false,
+                    "desc": "remark"
+                  }
+                ],
+                "name": "tracking_list",
+                "id": 280,
+                "type": "Object[]",
+                "required": false,
+                "desc": "tracking list"
+              }
+            ],
+            "name": "transactions",
+            "id": 280,
+            "type": "Object[]",
+            "required": false,
+            "desc": "transactions"
+          }
+        ],
+        "name": "data",
+        "id": 280,
+        "type": "Object",
+        "required": true,
+        "desc": "result"
+      },
+      {
+        "treeId": 70559,
+        "data": [],
+        "children": [],
+        "name": "success",
+        "id": 280,
+        "type": "Boolean",
+        "required": true,
+        "desc": "success:true,fail:false"
+      },
+      {
+        "treeId": 70560,
+        "data": [],
+        "children": [],
+        "name": "error_code",
+        "id": 280,
+        "type": "String",
+        "required": true,
+        "desc": "error code "
+      }
+    ],
+    "id": 280
+  }
+}

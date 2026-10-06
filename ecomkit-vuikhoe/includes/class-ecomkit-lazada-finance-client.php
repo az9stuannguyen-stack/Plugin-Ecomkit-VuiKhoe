@@ -5,6 +5,7 @@ defined( 'ABSPATH' ) || exit;
 final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 	public const TRANSACTIONS = '/finance/transaction/detail/get';
 	public const QUERY_TRANSACTIONS = '/finance/transaction/details/get';
+	public const ACCOUNT = '/finance/transaction/accountTransactions/query';
 	public const PAYOUT = '/finance/payout/status/get';
 	private array $secrets = array();
 	public function __construct( private int $connection_id, private ?Ecomkit_Vuikhoe_Lazada_Token_Service $tokens = null, private ?Ecomkit_Vuikhoe_Lazada_Config $config = null, private mixed $transport = null ) {
@@ -30,48 +31,65 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 		return $value;
 	}
 	/** Lossless JSON numeric lexemes, including unquoted decimals/large identifiers. */
-	private static function decode( string $body ): array {
+	private static function decode( string $body, bool $account = false ): array {
 		$body = preg_replace_callback( '~"(?:[^"\\\\]|\\\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?(?=\s*[,}\]])~s', static fn( array $m ): string => '"' === $m[0][0] ? $m[0] : '"' . $m[0] . '"', $body );
 		$shape = json_decode( (string) $body, false, 40, JSON_THROW_ON_ERROR );
-		if ( ! is_object( $shape ) || ( isset( $shape->data ) && ! is_array( $shape->data ) ) ) { throw new RuntimeException(); }
+		if ( ! is_object( $shape ) || ( ! $account && isset( $shape->data ) && ! is_array( $shape->data ) ) ) { throw new RuntimeException(); }
 		$d = json_decode( (string) $body, true, 40, JSON_THROW_ON_ERROR );
-		if ( ! is_array( $d ) || array_is_list( $d ) ) { throw new RuntimeException(); } return $d;
+		if ( ! is_array( $d ) || array_is_list( $d ) ) { throw new RuntimeException(); }
+		if ( $account ) { $d['_transactions_array'] = isset( $shape->data->transactions ) && is_array( $shape->data->transactions ); }
+		return $d;
 	}
 	private function request( string $path, array $business ): array {
-		$diag = array( 'api_path' => $path, 'http_method' => 'GET', 'http_status' => null, 'provider_code' => '', 'safe_provider_message' => '', 'request_id' => '' );
+		$account = self::ACCOUNT === $path; $method = $account ? 'POST' : 'GET';
+		$diag = array( 'api_path' => $path, 'http_method' => $method, 'http_status' => null, 'provider_code' => '', 'safe_provider_message' => '', 'request_id' => '' );
 		$fail = static function( string $code ) use ( &$diag ): never { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( $code, $diag ); };
 		try { $token = $this->tokens->ensure_usable_access_token( $this->connection_id ); $app = $this->config->credentials(); } catch ( Throwable ) { $fail( 'LAZADA_FINANCE_AUTH_REQUIRED' ); }
 		$params = array_merge( array( 'app_key' => $app['app_key'], 'access_token' => $token, 'timestamp' => (string) ( time() * 1000 ), 'sign_method' => 'sha256' ), $business );
 		$params['sign'] = Ecomkit_Vuikhoe_Lazada_Signer::sign( $path, $params, $app['app_secret'] );
 		$this->secrets = array( $token, $app['app_secret'], $params['sign'] );
 		// Never log or return this credential-bearing URL. No automatic retry or redirects.
-		try { $r = ( $this->transport )( Ecomkit_Vuikhoe_Lazada_Config::API_BASE . $path . '?' . http_build_query( $params, '', '&', PHP_QUERY_RFC3986 ), array( 'method' => 'GET', 'timeout' => 20, 'sslverify' => true, 'redirection' => 0, 'limit_response_size' => 2097152 ) ); } catch ( Throwable ) { $fail( 'LAZADA_FINANCE_NETWORK_ERROR' ); }
+		try {
+			$args = array( 'method' => $method, 'timeout' => 20, 'sslverify' => true, 'redirection' => 0, 'limit_response_size' => 2097152 );
+			$url = Ecomkit_Vuikhoe_Lazada_Config::API_BASE . $path;
+			$transport = $this->transport;
+			if ( $account ) { $args['body'] = $params; if ( 'wp_remote_get' === $transport ) { $transport = 'wp_remote_post'; } }
+			else { $url .= '?' . http_build_query( $params, '', '&', PHP_QUERY_RFC3986 ); }
+			$r = $transport( $url, $args );
+		} catch ( Throwable ) { $fail( 'LAZADA_FINANCE_NETWORK_ERROR' ); }
 		if ( is_wp_error( $r ) ) { $fail( 'LAZADA_FINANCE_NETWORK_ERROR' ); }
 		$diag['http_status'] = (int) wp_remote_retrieve_response_code( $r );
 		$http_error = $diag['http_status'] < 200 || $diag['http_status'] >= 300;
-		try { $body = wp_remote_retrieve_body( $r ); if ( ! is_string( $body ) || strlen( $body ) >= 2097152 ) { throw new RuntimeException(); } $d = self::decode( $body ); }
+		try { $body = wp_remote_retrieve_body( $r ); if ( ! is_string( $body ) || strlen( $body ) >= 2097152 ) { throw new RuntimeException(); } $d = self::decode( $body, $account ); }
 		catch ( Throwable ) { $fail( $http_error ? 'LAZADA_FINANCE_HTTP_ERROR' : 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
 		$this->secrets = array_merge( $this->secrets, array_filter( array( $d['access_token'] ?? null, $d['refresh_token'] ?? null, $d['app_secret'] ?? null, $d['sign'] ?? null ), 'is_string' ) );
-		foreach ( array( 'provider_code' => 'code', 'safe_provider_message' => 'message', 'request_id' => 'request_id' ) as $to => $from ) { $diag[$to] = $this->text( $d[$from] ?? '' ); }
+		foreach ( array( 'provider_code' => 'code', 'safe_provider_message' => 'message', 'request_id' => 'request_id' ) as $to => $from ) { $diag[$to] = $this->text( $d[$from] ?? ( $account && 'provider_code' === $to ? ( $d['error_code'] ?? '' ) : ( $account && 'safe_provider_message' === $to ? ( $d['msg'] ?? '' ) : '' ) ) ); }
 		if ( $http_error ) { $fail( 'LAZADA_FINANCE_HTTP_ERROR' ); }
+		if ( $account ) {
+			if ( false === ( $d['success'] ?? null ) ) { $fail( 'LAZADA_FINANCE_PROVIDER_ERROR' ); }
+			if ( true !== ( $d['success'] ?? null ) || ! is_array( $d['data'] ?? null ) || array_is_list( $d['data'] ) ) { $fail( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
+			if ( ! $d['_transactions_array'] ) { $fail( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
+			$diag['response_container'] = 'data.transactions[]';
+			return array( 'data' => $d['data'], 'diagnostic' => $diag );
+		}
 		if ( ! is_string( $d['code'] ?? null ) ) { $fail( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
 		if ( '0' !== $d['code'] ) { $fail( 'LAZADA_FINANCE_PROVIDER_ERROR' ); }
 		if ( ! is_array( $d['data'] ?? null ) || ! array_is_list( $d['data'] ) ) { $fail( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
 		return array( 'data' => $d['data'], 'diagnostic' => $diag );
 	}
 	/** One bounded page; filter locally with strict order_no equality. Singular endpoint has no order filter. */
-	public function transactions( string $order_id, string $start, string $end, int $offset = 0, int $limit = 100, bool $query = false, bool $scan = false ): array {
-		$order_id = $scan ? '' : Ecomkit_Vuikhoe_Lazada_Order_Normalizer::id( $order_id );
-		if ( $scan ) { $query = true; }
+	public function transactions( string $order_id, string $start, string $end, int $offset = 0, int $limit = 100, bool $query = false ): array {
+		$order_id = Ecomkit_Vuikhoe_Lazada_Order_Normalizer::id( $order_id );
 		$from = self::date( $start ); $to = self::date( $end );
 		if ( $to < $from || (int) $from->diff( $to )->days >= 180 || $offset < 0 || $offset > 1000000 || $limit < 1 || $limit > 500 ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); }
 		$p = array( 'start_time' => $start, 'end_time' => $end, 'trans_type' => '-1', 'offset' => (string) $offset, 'limit' => (string) $limit );
-		if ( $query && ! $scan ) { $p['trade_order_id'] = $order_id; }
+		if ( $query ) { $p['trade_order_id'] = $order_id; }
 		$r = $this->request( $query ? self::QUERY_TRANSACTIONS : self::TRANSACTIONS, $p ); $rows = array();
 		if ( count( $r['data'] ) > $limit ) { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( 'LAZADA_FINANCE_INVALID_RESPONSE', $r['diagnostic'] ); }
 		foreach ( $r['data'] as $raw ) {
 			if ( ! is_array( $raw ) ) { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( 'LAZADA_FINANCE_INVALID_RESPONSE', $r['diagnostic'] ); }
-			if ( ! $scan && $order_id !== ( $raw['order_no'] ?? null ) ) { continue; }
+			if ( $order_id !== ( $raw['order_no'] ?? null ) ) { continue; }
+			try {
 			$provider_id = $raw['order_no'] ?? null;
 			$safe = array( 'order_no' => self::identifier( $provider_id ) );
 			foreach ( array( 'orderItem_no', 'reference' ) as $key ) { $safe[$key] = self::identifier( $raw[$key] ?? null ); }
@@ -81,8 +99,36 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 			$safe['currency'] = is_string( $raw['currency'] ?? null ) && preg_match( '/^[A-Z]{3}$/D', $raw['currency'] ) ? $raw['currency'] : null;
 			$safe['linkage_scope'] = $safe['orderItem_no'] || $safe['reference'] ? 'ITEM_REFERENCE_PRESENT_NOT_AGGREGATED' : 'ORDER_REFERENCE_ONLY';
 			$safe['canonical_candidate'] = 'UNKNOWN'; $rows[] = $safe;
+			} catch ( Throwable ) { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( 'LAZADA_FINANCE_INVALID_RESPONSE', $r['diagnostic'] ); }
 		}
 		return array( 'records' => $rows, 'page_count' => count( $r['data'] ), 'matched_count' => count( $rows ), 'offset' => $offset, 'limit' => $limit, 'next_offset' => count( $r['data'] ) === $limit ? $offset + $limit : null, 'coverage' => 0 === $offset && count( $r['data'] ) < $limit ? 'REQUESTED_WINDOW_ONLY' : 'PAGE_ONLY_NOT_COMPLETE', 'diagnostic' => $r['diagnostic'] );
+	}
+	/** Official account scope: POST, yyyyMMdd, page_num/page_size. No documented order key. */
+	public function account_transactions( string $start, string $end, int $page = 1, int $size = 100 ): array {
+		$from = self::date( $start ); $to = self::date( $end );
+		if ( $to < $from || $page < 1 || $page > 1000000 || $size < 1 || $size > 100 ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); }
+		$r = $this->request( self::ACCOUNT, array( 'start_time' => $from->format( 'Ymd' ), 'end_time' => $to->format( 'Ymd' ), 'page_num' => (string) $page, 'page_size' => (string) $size ) );
+		try {
+			$data = $r['data']; $raws = $data['transactions'] ?? null;
+			if ( ! is_array( $raws ) || ! array_is_list( $raws ) || count( $raws ) > $size ) { throw new RuntimeException(); }
+			$info = $data['page_info'] ?? array(); $pagination = array();
+			foreach ( array( 'page_num', 'page_size', 'total_page', 'total_count' ) as $key ) {
+				$value = $info[$key] ?? null;
+				if ( null !== $value && ( ! is_string( $value ) || ! preg_match( '/^[0-9]{1,9}$/D', $value ) ) ) { throw new RuntimeException(); }
+				$pagination[$key] = $value;
+			}
+			if ( null !== $pagination['page_num'] && (string) $page !== $pagination['page_num'] ) { throw new RuntimeException(); }
+			$rows = array();
+			foreach ( $raws as $raw ) {
+				if ( ! is_array( $raw ) ) { throw new RuntimeException(); }
+				$safe = array( 'order_no' => null, 'orderItem_no' => null, 'fee_type' => null, 'fee_name' => null, 'transaction_type' => $this->text( $raw['type'] ?? null ), 'amount' => self::decimal( $raw['amount'] ?? null ), 'linkage_scope' => 'ACCOUNT_NOT_ORDER', 'canonical_candidate' => 'UNKNOWN' );
+				foreach ( array( 'type', 'sub_type', 'pmt_reference', 'transaction_number', 'transaction_time' ) as $key ) { $safe[$key] = $this->text( $raw[$key] ?? null ); }
+				$safe['currency'] = is_string( $raw['currency'] ?? null ) && preg_match( '/^[A-Z]{3}$/D', $raw['currency'] ) ? $raw['currency'] : null;
+				// payee_account, remarks and tracking free text excluded: may contain sensitive data.
+				$rows[] = $safe;
+			}
+		} catch ( Throwable ) { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( 'LAZADA_FINANCE_INVALID_RESPONSE', $r['diagnostic'] ); }
+		return array( 'records' => $rows, 'page_count' => count( $rows ), 'matched_count' => count( $rows ), 'page_num' => $page, 'page_size' => $size, 'page_info' => $pagination, 'next_page' => null !== $pagination['total_page'] && $page < (int) $pagination['total_page'] ? $page + 1 : null, 'coverage' => 'ACCOUNT_PAGE_ONLY_NOT_ORDER_SETTLEMENT', 'diagnostic' => $r['diagnostic'] );
 	}
 	/** Statement-level evidence, NOT order payout; no undocumented pagination parameters. */
 	public function payouts( string $created_after ): array {

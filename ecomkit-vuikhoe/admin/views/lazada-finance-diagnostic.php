@@ -14,7 +14,9 @@ $finance_connections = ( new Ecomkit_Vuikhoe_Lazada_Reconciliation_Service() )->
 <p><label>Mã đơn Lazada <input type="text" name="order_id" inputmode="numeric" maxlength="40"></label> <small>Bắt buộc ở chế độ theo mã đơn; không dùng để lọc ở chế độ quét ngày.</small></p>
 <p><label>Từ ngày giao dịch <input type="date" name="start_date" required></label> <label>Đến ngày giao dịch <input type="date" name="end_date" required></label></p>
 <p>Khoảng ngày ngắn hơn 180 ngày. Mỗi lần đọc một trang tối đa 100 giao dịch; không tự gọi trang tiếp theo.</p>
-<p><label>API <select name="endpoint"><option value="detail">GetTransactionDetails — đọc kỳ, đối chiếu mã tại Ecomkit</option><option value="details" selected>QueryTransactionDetails — theo mã đơn hoặc quét ngày</option></select></label></p>
+<p><label>API theo mã đơn <select name="endpoint"><option value="detail">GetTransactionDetails — đọc kỳ, đối chiếu mã tại Ecomkit</option><option value="details" selected>QueryTransactionDetails — theo mã đơn</option></select></label></p>
+<p><label hidden>Trang account <input name="page_num" type="number" value="1" min="1" max="999999" step="1"></label></p>
+<p>Quét ngày dùng QueryAccountTransactions; payout vẫn thuộc statement của shop, không phải đơn.</p>
 <p><label>Offset trang <input name="offset" type="number" value="0" min="0" max="1000000" step="100"></label></p>
 <p><label><input type="checkbox" name="check_payout" value="1"> Đọc thêm payout của shop từ ngày bắt đầu (cấp statement, không phải từng đơn)</label></p>
 <p><label><input type="checkbox" name="check_order" value="1"> Đọc thêm GetOrder/GetOrderItems để so sánh nguồn giá và raw status</label></p>
