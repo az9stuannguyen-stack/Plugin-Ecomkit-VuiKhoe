@@ -13,7 +13,7 @@ const html = `<!doctype html><meta charset="utf-8"><div><form data-lazada-financ
 <script>
 const proof={calls:[]};window.fetch=async(url,options)=>{
  proof.calls.push({url,method:options.method,payload:Object.fromEntries(options.body)});
- return {status:200,ok:true,text:async()=>JSON.stringify({success:true,data:{audit_mode:'scan',order_id:'',checks:{transactions:{success:true,data:{records:[{pmt_reference:'987654321098765432109876543210',amount:'-12345678901234567890.12345678901234567890',ecomkit_presence:'Có trong Ecomkit',ecomkit_references:['Batch #31 / Order #1']}],matched_count:1,page_count:proof.calls.length===1?100:1,page_num:options.body.get('page_num'),next_page:proof.calls.length===1?2:null,diagnostic:{}}}},distinct_names:[]}})};
+ return {status:200,ok:true,text:async()=>JSON.stringify({success:true,data:{audit_mode:'scan',order_id:'',checks:{transactions:{success:true,data:{records:[{pmt_reference:'987654321098765432109876543210',amount:'-12345678901234567890.12345678901234567890',ecomkit_presence:'Có trong Ecomkit',ecomkit_references:['Batch #31 / Order #1']}],normalized_count:1,normalization_error_count:1,normalization_errors:[{transaction_index:1,field:'amount',observed_type:'object',expected_type:'decimal string / JSON number / null',code:'ACCOUNT_AMOUNT_NOT_EXACT_DECIMAL'}],field_inventory:[{transaction_index:0,fields:[{field:'pmt_reference',observed_type:'string',classification:'OPTIONAL_DOCUMENTED'},{field:'amount',observed_type:'string',classification:'OPTIONAL_DOCUMENTED'}]}],matched_count:1,page_count:proof.calls.length===1?100:1,page_num:options.body.get('page_num'),next_page:proof.calls.length===1?2:null,diagnostic:{}}}},distinct_names:[]}})};
 };</script><script>${script}</script><script>
 const form=document.querySelector('form');const mode=form.querySelector('[name=audit_mode]');const next=form.querySelector('[data-lazada-finance-next]');
 proof.orderRequiredInitially=form.querySelector('[name=order_id]').required;
@@ -31,5 +31,6 @@ try {
  assert.strictEqual(proof.beforeNext,1);assert.strictEqual(proof.calls.length,2);assert(proof.nextVisible && proof.nextHidden);
  assert.strictEqual(proof.calls[0].url,endpoint);assert.strictEqual(proof.calls[0].payload.audit_mode,'scan');assert.strictEqual(proof.calls[0].payload.order_id,'');assert.strictEqual(proof.calls[0].payload.offset,'0');assert.strictEqual(proof.calls[1].payload.page_num,'2');
  assert(proof.text.includes('987654321098765432109876543210') && proof.text.includes('-12345678901234567890.12345678901234567890'));
+ assert(proof.text.includes('Provider: PASS') && proof.text.includes('Normalization errors: 1') && proof.text.includes('ACCOUNT_AMOUNT_NOT_EXACT_DECIMAL') && proof.text.includes('amount: string') && proof.text.includes('ORDER LINKAGE NOT AVAILABLE'));
  console.log('lazada-finance-discovery-dom-check: PASS (real mode controls, blank ID, explicit next page, exact display; zero real calls)');
 } finally {fs.rmSync(dir,{recursive:true,force:true,maxRetries:5,retryDelay:100});}

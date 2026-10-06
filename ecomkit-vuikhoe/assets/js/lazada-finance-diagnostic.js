@@ -26,8 +26,19 @@
             if (!check.success) { text('p', check.classification || 'UNKNOWN'); table([check.evidence || {}], diagFields); continue; }
             const data = check.data;
             if (stage === 'transactions') {
+                if (result.audit_mode === 'scan') {
+                    text('p', `Provider: PASS · Provider records returned: ${data.page_count} · Normalized: ${data.normalized_count ?? data.matched_count} · Normalization errors: ${data.normalization_error_count ?? 0}`);
+                    text('p', 'ORDER LINKAGE NOT AVAILABLE FROM ACCOUNT TRANSACTION API');
+                    if (data.normalization_error_count) text('p', 'Lazada đã trả dữ liệu thành công nhưng có bản ghi Ecomkit chưa đọc được.');
+                    if (data.normalization_errors?.length) table(data.normalization_errors, ['transaction_index', 'field', 'observed_type', 'expected_type', 'code', 'classification', 'observed_fields']);
+                    if (data.normalization_warnings?.length) table(data.normalization_warnings, ['transaction_index', 'field', 'observed_type', 'expected_type', 'code']);
+                    if (data.field_inventory?.length) {
+                        const details = document.createElement('details'); const title = document.createElement('summary'); title.textContent = 'Cấu trúc trường quan sát (không có giá trị thô)'; details.append(title);
+                        data.field_inventory.forEach(record => { const p = document.createElement('p'); p.textContent = `Transaction index ${record.transaction_index}: ` + record.fields.map(field => `${field.field}: ${field.observed_type} (${field.classification})`).join(', '); details.append(p); }); output.append(details);
+                    }
+                }
                 text('p', `Giao dịch hiển thị: ${data.matched_count} · Returned count: ${data.page_count} · ${result.audit_mode === 'scan' ? 'Page: ' + data.page_num : 'Offset: ' + data.offset} · Coverage: ${data.coverage} · Offset tiếp theo: ${scalar(data.next_page ?? data.next_offset)}`);
-                table(data.records, result.audit_mode === 'scan' ? ['type', 'sub_type', 'amount', 'currency', 'pmt_reference', 'transaction_number', 'transaction_time', 'linkage_scope', 'ecomkit_presence'] : ['transaction_type', 'fee_type', 'fee_name', 'amount', 'currency', 'order_no', 'orderItem_no', 'reference', 'linkage_scope', 'ecomkit_presence', 'ecomkit_references', 'transaction_date', 'statement', 'paid_status', 'transaction_number', 'VAT_in_amount', 'WHT_amount', 'WHT_included_in_amount', 'orderItem_status', 'canonical_candidate']);
+                table(data.records, result.audit_mode === 'scan' ? ['type', 'sub_type', 'amount', 'currency', 'pmt_reference', 'transaction_number', 'transaction_time', 'linkage_scope'].filter(key => data.field_inventory ? key === 'linkage_scope' || data.field_inventory.some(record => record.fields.some(field => field.field === key)) : true) : ['transaction_type', 'fee_type', 'fee_name', 'amount', 'currency', 'order_no', 'orderItem_no', 'reference', 'linkage_scope', 'ecomkit_presence', 'ecomkit_references', 'transaction_date', 'statement', 'paid_status', 'transaction_number', 'VAT_in_amount', 'WHT_amount', 'WHT_included_in_amount', 'orderItem_status', 'canonical_candidate']);
                 if (data.page_info) table([data.page_info], ['page_num', 'page_size', 'total_page', 'total_count']);
                 table([data.diagnostic], diagFields);
             } else if (stage === 'payout') {

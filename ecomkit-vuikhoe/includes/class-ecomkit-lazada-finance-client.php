@@ -32,12 +32,13 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 	}
 	/** Lossless JSON numeric lexemes, including unquoted decimals/large identifiers. */
 	private static function decode( string $body, bool $account = false ): array {
+		$original = $account ? json_decode( $body, false, 40, JSON_THROW_ON_ERROR ) : null; // Type inventory only; values come from lossless lexemes below.
 		$body = preg_replace_callback( '~"(?:[^"\\\\]|\\\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?(?=\s*[,}\]])~s', static fn( array $m ): string => '"' === $m[0][0] ? $m[0] : '"' . $m[0] . '"', $body );
 		$shape = json_decode( (string) $body, false, 40, JSON_THROW_ON_ERROR );
 		if ( ! is_object( $shape ) || ( ! $account && isset( $shape->data ) && ! is_array( $shape->data ) ) ) { throw new RuntimeException(); }
 		$d = json_decode( (string) $body, true, 40, JSON_THROW_ON_ERROR );
 		if ( ! is_array( $d ) || array_is_list( $d ) ) { throw new RuntimeException(); }
-		if ( $account ) { $d['_transactions_array'] = isset( $shape->data->transactions ) && is_array( $shape->data->transactions ); }
+		if ( $account ) { $d['_transactions_array'] = isset( $shape->data->transactions ) && is_array( $shape->data->transactions ); $d['_account_shapes'] = $original->data->transactions ?? array(); $d['_page_shape'] = $original->data->page_info ?? null; }
 		return $d;
 	}
 	private function request( string $path, array $business ): array {
@@ -70,7 +71,7 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 			if ( true !== ( $d['success'] ?? null ) || ! is_array( $d['data'] ?? null ) || array_is_list( $d['data'] ) ) { $fail( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
 			if ( ! $d['_transactions_array'] ) { $fail( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
 			$diag['response_container'] = 'data.transactions[]';
-			return array( 'data' => $d['data'], 'diagnostic' => $diag );
+			return array( 'data' => $d['data'], 'diagnostic' => $diag, 'shapes' => $d['_account_shapes'], 'page_shape' => $d['_page_shape'] );
 		}
 		if ( ! is_string( $d['code'] ?? null ) ) { $fail( 'LAZADA_FINANCE_INVALID_RESPONSE' ); }
 		if ( '0' !== $d['code'] ) { $fail( 'LAZADA_FINANCE_PROVIDER_ERROR' ); }
@@ -103,32 +104,64 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Client {
 		}
 		return array( 'records' => $rows, 'page_count' => count( $r['data'] ), 'matched_count' => count( $rows ), 'offset' => $offset, 'limit' => $limit, 'next_offset' => count( $r['data'] ) === $limit ? $offset + $limit : null, 'coverage' => 0 === $offset && count( $r['data'] ) < $limit ? 'REQUESTED_WINDOW_ONLY' : 'PAGE_ONLY_NOT_COMPLETE', 'diagnostic' => $r['diagnostic'] );
 	}
+	private static function json_type( mixed $value ): string {
+		return match ( true ) { null === $value => 'null', is_string( $value ) => 'string', is_bool( $value ) => 'bool', is_array( $value ) => 'array', is_object( $value ) => 'object', default => 'number' };
+	}
+	/** Exact expansion of JSON exponent lexemes; never calculate through binary floating point. */
+	private static function account_decimal( mixed $value ): ?string {
+		if ( null === $value || '' === $value ) { return null; }
+		if ( ! is_string( $value ) ) { throw new RuntimeException(); }
+		if ( preg_match( '/^(-?)([0-9]+)(?:\.([0-9]+))?[eE]([+-]?[0-9]{1,3})$/D', $value, $m ) ) {
+			$digits = $m[2] . ( $m[3] ?? '' ); $point = strlen( $m[2] ) + (int) $m[4];
+			if ( abs( $point ) > 80 || strlen( $digits ) > 80 ) { throw new RuntimeException(); }
+			$value = $m[1] . ( $point <= 0 ? '0.' . str_repeat( '0', -$point ) . $digits : ( $point >= strlen( $digits ) ? $digits . str_repeat( '0', $point - strlen( $digits ) ) : substr( $digits, 0, $point ) . '.' . substr( $digits, $point ) ) );
+		}
+		return self::decimal( $value );
+	}
 	/** Official account scope: POST, yyyyMMdd, page_num/page_size. No documented order key. */
 	public function account_transactions( string $start, string $end, int $page = 1, int $size = 100 ): array {
 		$from = self::date( $start ); $to = self::date( $end );
 		if ( $to < $from || $page < 1 || $page > 1000000 || $size < 1 || $size > 100 ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); }
 		$r = $this->request( self::ACCOUNT, array( 'start_time' => $from->format( 'Ymd' ), 'end_time' => $to->format( 'Ymd' ), 'page_num' => (string) $page, 'page_size' => (string) $size ) );
-		try {
-			$data = $r['data']; $raws = $data['transactions'] ?? null;
-			if ( ! is_array( $raws ) || ! array_is_list( $raws ) || count( $raws ) > $size ) { throw new RuntimeException(); }
-			$info = $data['page_info'] ?? array(); $pagination = array();
-			foreach ( array( 'page_num', 'page_size', 'total_page', 'total_count' ) as $key ) {
-				$value = $info[$key] ?? null;
-				if ( null !== $value && ( ! is_string( $value ) || ! preg_match( '/^[0-9]{1,9}$/D', $value ) ) ) { throw new RuntimeException(); }
-				$pagination[$key] = $value;
+		$data = $r['data']; $raws = $data['transactions']; $rows = array(); $errors = array(); $inventories = array(); $warnings = array();
+		$pagination = array_fill_keys( array( 'page_num', 'page_size', 'total_page', 'total_count' ), null );
+		$info = $data['page_info'] ?? array();
+		if ( null !== ( $data['page_info'] ?? null ) && ! is_object( $r['page_shape'] ) ) { $warnings[] = array( 'field' => 'page_info', 'observed_type' => self::json_type( $r['page_shape'] ), 'expected_type' => 'object / null', 'code' => 'ACCOUNT_PAGINATION_INVALID' ); }
+		foreach ( $pagination as $key => $_ ) {
+			$value = is_array( $info ) ? ( $info[$key] ?? null ) : null;
+			if ( null !== $value && ( ! is_string( $value ) || ! preg_match( '/^[0-9]{1,9}$/D', $value ) || ( 'page_num' === $key && (string) $page !== $value ) ) ) {
+				$warnings[] = array( 'field' => 'page_info.' . $key, 'observed_type' => self::json_type( is_object( $r['page_shape'] ) ? ( $r['page_shape']->$key ?? null ) : null ), 'expected_type' => 'integer string / JSON integer; requested page_num', 'code' => 'ACCOUNT_PAGINATION_INVALID' ); continue;
 			}
-			if ( null !== $pagination['page_num'] && (string) $page !== $pagination['page_num'] ) { throw new RuntimeException(); }
-			$rows = array();
-			foreach ( $raws as $raw ) {
-				if ( ! is_array( $raw ) ) { throw new RuntimeException(); }
-				$safe = array( 'order_no' => null, 'orderItem_no' => null, 'fee_type' => null, 'fee_name' => null, 'transaction_type' => $this->text( $raw['type'] ?? null ), 'amount' => self::decimal( $raw['amount'] ?? null ), 'linkage_scope' => 'ACCOUNT_NOT_ORDER', 'canonical_candidate' => 'UNKNOWN' );
-				foreach ( array( 'type', 'sub_type', 'pmt_reference', 'transaction_number', 'transaction_time' ) as $key ) { $safe[$key] = $this->text( $raw[$key] ?? null ); }
-				$safe['currency'] = is_string( $raw['currency'] ?? null ) && preg_match( '/^[A-Z]{3}$/D', $raw['currency'] ) ? $raw['currency'] : null;
-				// payee_account, remarks and tracking free text excluded: may contain sensitive data.
-				$rows[] = $safe;
+			$pagination[$key] = $value;
+		}
+		foreach ( $raws as $index => $raw ) {
+			$shape = $r['shapes'][$index] ?? null; $inventory = array();
+			if ( is_object( $shape ) ) {
+				foreach ( get_object_vars( $shape ) as $key => $value ) {
+					// Names only, no unknown values. Bound/sanitize hostile key strings too.
+					$name = $this->text( $key );
+					$inventory[] = array( 'field' => $name, 'observed_type' => self::json_type( $value ), 'classification' => in_array( $key, array( 'type', 'sub_type', 'amount', 'currency', 'pmt_reference', 'transaction_number', 'transaction_time' ), true ) ? 'OPTIONAL_DOCUMENTED' : 'UNKNOWN_NOT_RENDERED' );
+				}
 			}
-		} catch ( Throwable ) { throw new Ecomkit_Vuikhoe_Lazada_Provider_Exception( 'LAZADA_FINANCE_INVALID_RESPONSE', $r['diagnostic'] ); }
-		return array( 'records' => $rows, 'page_count' => count( $rows ), 'matched_count' => count( $rows ), 'page_num' => $page, 'page_size' => $size, 'page_info' => $pagination, 'next_page' => null !== $pagination['total_page'] && $page < (int) $pagination['total_page'] ? $page + 1 : null, 'coverage' => 'ACCOUNT_PAGE_ONLY_NOT_ORDER_SETTLEMENT', 'diagnostic' => $r['diagnostic'] );
+			$inventories[] = array( 'transaction_index' => $index, 'fields' => $inventory );
+			$failure = function( string $field, string $expected, string $code ) use ( &$errors, $index, $shape, $inventory ): void {
+				$value = '$record' === $field ? $shape : ( is_object( $shape ) ? ( $shape->$field ?? null ) : null );
+				$errors[] = array( 'transaction_index' => $index, 'field' => $field, 'observed_type' => self::json_type( $value ), 'expected_type' => $expected, 'code' => $code, 'classification' => 'LAZADA_FINANCE_NORMALIZATION_ERROR', 'observed_fields' => array_column( $inventory, 'field' ) );
+			};
+			if ( ! is_object( $shape ) || ! is_array( $raw ) ) { $failure( '$record', 'object', 'ACCOUNT_RECORD_NOT_OBJECT' ); continue; }
+			try { $amount = self::account_decimal( $raw['amount'] ?? null ); }
+			catch ( Throwable ) { $failure( 'amount', 'decimal string / JSON number / null', 'ACCOUNT_AMOUNT_NOT_EXACT_DECIMAL' ); continue; }
+			$safe = array( 'order_no' => null, 'orderItem_no' => null, 'fee_type' => null, 'fee_name' => null, 'amount' => $amount, 'linkage_scope' => 'ORDER LINKAGE NOT AVAILABLE FROM ACCOUNT TRANSACTION API', 'canonical_candidate' => 'UNKNOWN', 'transaction_index' => $index );
+			foreach ( array( 'type', 'sub_type', 'pmt_reference', 'transaction_number', 'transaction_time', 'currency' ) as $key ) {
+				$value = $raw[$key] ?? null;
+				if ( null !== $value && ! is_string( $value ) ) { $warnings[] = array( 'transaction_index' => $index, 'field' => $key, 'observed_type' => self::json_type( $shape->$key ?? null ), 'expected_type' => 'string / number / null', 'code' => 'ACCOUNT_OPTIONAL_FIELD_UNSUPPORTED' ); $value = null; }
+				// Exact numeric references bypass generic long-token redaction, but never known secrets.
+				$safe[$key] = null === $value ? null : ( in_array( $key, array( 'pmt_reference', 'transaction_number' ), true ) && preg_match( '/^[0-9]{1,80}$/D', $value ) && ! in_array( $value, $this->secrets, true ) ? $value : $this->text( $value ) );
+			}
+			$safe['transaction_type'] = $safe['type']; $rows[] = $safe;
+		}
+		return array( 'provider_success' => true, 'records' => $rows, 'page_count' => count( $raws ), 'normalized_count' => count( $rows ), 'normalization_error_count' => count( $errors ), 'normalization_errors' => $errors, 'field_inventory' => $inventories, 'normalization_warnings' => $warnings, 'matched_count' => count( $rows ), 'page_num' => $page, 'page_size' => $size, 'page_info' => $pagination, 'next_page' => null !== $pagination['total_page'] && null !== $pagination['page_num'] && $page < (int) $pagination['total_page'] ? $page + 1 : null, 'coverage' => 'ACCOUNT_PAGE_ONLY_NOT_ORDER_SETTLEMENT', 'diagnostic' => $r['diagnostic'] );
+
 	}
 	/** Statement-level evidence, NOT order payout; no undocumented pagination parameters. */
 	public function payouts( string $created_after ): array {
