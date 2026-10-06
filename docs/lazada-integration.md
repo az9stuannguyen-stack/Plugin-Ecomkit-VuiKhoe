@@ -1,6 +1,6 @@
 # Lazada authorization, Order client and live diagnostic — WP.6J.3B
 
-Plugin 0.7.22, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator has confirmed live OAuth ACTIVE/READY; live Order response validation remains PENDING. No real Order request was made from this development workspace.
+Plugin 0.7.23, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator confirmed live OAuth ACTIVE/READY and reports manual refresh appears successful. All three Order reads failed live before this GET transport patch; successful live Order validation remains PENDING. No real Order request was made from this development workspace.
 
 ## Architecture audit
 
@@ -60,7 +60,15 @@ Official references: [App parameters and privileges](https://open.lazada.com/app
 
 `Ecomkit_Vuikhoe_Lazada_Order_Client` is not a pipeline stage. Its methods `get_orders(query)`, `get_order(id)`, `get_order_items(id)` use `/orders/get`, `/order/get`, `/order/items/get` at the centralized VN base. `/orders/items/get` is a route constant only: bulk request shape is deferred, not fabricated. WP.6J.3B adds an explicit admin diagnostic around these same methods, not a second client.
 
-The client obtains access through the existing lifecycle, then signs form POST common/business parameters with the existing Lazada signer. HTTP uses TLS verification, no redirect, timeout 20 seconds, 2 MiB response limit and no automatic retries. Tokens/signature/secret never enter request URL or client logs. Diagnostics are allowlisted to API path, connection ID, validated order ID, offset/limit, HTTP status, redacted provider code/message/request ID. Auth failures stop before seller HTTP. Unknown provider errors are not assigned speculative business meanings.
+The read client obtains access through the existing lifecycle, signs the original common/business parameter values with the unchanged signer, adds sign, then encodes the same values with RFC3986 into the query string. GetOrders, GetOrder and GetOrderItems use HTTPS GET via wp_remote_get, with no POST body or form content type. TLS verification, no redirect, timeout 20 seconds, 2 MiB response limit and no automatic retries remain unchanged. Access token and sign now travel in the query; the credential-bearing full URL must never be logged. App Secret and refresh token are not sent in these requests. Diagnostics remain allowlisted to API path, HTTP method GET, connection ID, validated order ID, offset/limit, HTTP status, redacted provider code/message/request ID. Auth failures stop before seller HTTP. Unknown provider errors are not assigned speculative business meanings. OAuth/token endpoints retain their existing form POST transport.
+
+WP.6J.3B.3 corrects the prior read-method mismatch only. Official references: [HTTP request sample for GetOrder](https://open.lazada.com/apps/doc/doc?docId=108069&nodeId=10400), [API Explorer HTTP methods](https://open.lazada.com/apps/doc/doc?docId=108328&nodeId=10833), and the Order tutorial/API references below. Fake transport tests verify all three GET paths, exact string IDs, query encoding/signature equality, unchanged pagination and safe errors. This patch is not proof that all production failures are resolved; live retest is required.
+
+### App configuration notes (operator evidence)
+
+Sensitive Data Privilege is currently **Mask**. Masked buyer fields are legitimate provider behavior, not an API failure; no masking bypass is attempted.
+
+Lazada App Overview currently shows callback `https://vuikhoe.vn/`, while Ecomkit's callback is `https://vuikhoe.vn/wp-admin/admin-post.php?action=ecomkit_lazada_oauth_callback`. Correct this mismatch in the Lazada App configuration before future reauthorization. OAuth callback code is unchanged by this transport patch.
 
 The immutable query accepts only officially verified minimum filters: timezone-aware `DateTimeImmutable created_after`, optional raw `status`, limit 1–100, offset 0–5000. Date serialization preserves the supplied timezone using ISO `Y-m-dTH:i:s±HH:MM`; no implicit PHP-local timezone. `created_before`, update filters and sort parameters are intentionally not sent until their current official contract is accessible/verified.
 
@@ -74,10 +82,10 @@ Official references: [Get Order tutorial: query, pagination, shop identity, item
 
 ## Live gate — WP.6J.3B.2 procedure
 
-1. Deploy 0.7.22; confirm the Lazada shop is ACTIVE/READY. Expand the Order diagnostic.
+1. Deploy 0.7.23, hard refresh admin and confirm Lazada shop 100070635 is ACTIVE/READY. Expand the Order diagnostic.
 2. Copy the exact marketplace ID from the old Batch into the single Order ID field. No Batch reprocessing. Select date 2026-10-03 and paste ID 532935709720247 for the requested manual sample.
 3. Press the single primary button. GetOrder then GetOrderItems run directly with the exact string; no list prerequisite and no date required for direct checks.
-4. Optionally enable the list check. GetOrders runs after direct checks, using selected date midnight in Asia/Ho_Chi_Minh and the existing serializer. Only created_after is sent: one page, limit 100, default offset 0. No hard end-of-day bound or automatic pagination. A missing ID means absent from this returned page, not absent from Lazada.
+4. Enable the list check for this live transport retest. GetOrders runs after direct checks, using selected date midnight in Asia/Ho_Chi_Minh and the existing serializer. Only created_after is sent: one page, status all, limit 100, default offset 0. No hard end-of-day bound or automatic pagination. A missing ID means absent from this returned page, not absent from Lazada.
 5. Review the friendly summary first: connection, direct order, exact comparison, items, raw API statuses and PII availability. List comparison is separate. Advanced settings contain manual offset; collapsed technical details contain redacted per-endpoint evidence, request IDs, HTTP/provider codes and structural paths. No raw buyer payload.
 6. Expected manual result: READY, order found, GetOrder/GetOrderItems success, exact MATCH, no visible tokens/secrets. Record actual live results; this workspace has made zero real provider calls.
 

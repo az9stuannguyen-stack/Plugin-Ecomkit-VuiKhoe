@@ -26,7 +26,7 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Client {
 	}
 	public function __construct( private int $connection_id, private ?Ecomkit_Vuikhoe_Lazada_Token_Service $tokens = null, private ?Ecomkit_Vuikhoe_Lazada_Config $config = null, mixed $transport = null ) {
 		if ( $connection_id < 1 ) { throw new InvalidArgumentException( 'LAZADA_ORDER_CONNECTION_INVALID' ); }
-		$this->tokens ??= new Ecomkit_Vuikhoe_Lazada_Token_Service(); $this->config ??= new Ecomkit_Vuikhoe_Lazada_Config(); $this->transport = $transport ?? 'wp_remote_post';
+		$this->tokens ??= new Ecomkit_Vuikhoe_Lazada_Token_Service(); $this->config ??= new Ecomkit_Vuikhoe_Lazada_Config(); $this->transport = $transport ?? 'wp_remote_get';
 	}
 	private function fail( string $code, array $diag ): never {
 		if ( ! empty( $this->evidence['field_paths'] ) ) { $diag['field_paths'] = $this->evidence['field_paths']; }
@@ -41,12 +41,13 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Client {
 	}
 	private function request( string $path, array $business ): array {
 		$this->evidence = array();
-		$diag = array_merge( array( 'api_path' => $path, 'connection_id' => $this->connection_id, 'http_status' => null, 'provider_code' => '', 'safe_provider_message' => '', 'request_id' => '' ), array_intersect_key( $business, array_flip( array( 'offset', 'limit', 'order_id' ) ) ) );
+		$diag = array_merge( array( 'api_path' => $path, 'http_method' => 'GET', 'connection_id' => $this->connection_id, 'http_status' => null, 'provider_code' => '', 'safe_provider_message' => '', 'request_id' => '' ), array_intersect_key( $business, array_flip( array( 'offset', 'limit', 'order_id' ) ) ) );
 		try { $token = $this->tokens->ensure_usable_access_token( $this->connection_id ); $app = $this->config->credentials(); }
 		catch ( Throwable ) { $this->fail( 'LAZADA_ORDER_AUTH_REQUIRED', $diag ); }
 		$params = array_merge( array( 'app_key' => $app['app_key'], 'access_token' => $token, 'timestamp' => (string) ( time() * 1000 ), 'sign_method' => 'sha256' ), $business );
 		$params['sign'] = Ecomkit_Vuikhoe_Lazada_Signer::sign( $path, $params, $app['app_secret'] );
-		try { $response = ( $this->transport )( Ecomkit_Vuikhoe_Lazada_Config::API_BASE . $path, array( 'timeout' => 20, 'sslverify' => true, 'redirection' => 0, 'limit_response_size' => 2097152, 'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ), 'body' => http_build_query( $params, '', '&', PHP_QUERY_RFC3986 ) ) ); }
+		// Sign original values before RFC3986 encoding. Never log this credential-bearing URL.
+		try { $response = ( $this->transport )( Ecomkit_Vuikhoe_Lazada_Config::API_BASE . $path . '?' . http_build_query( $params, '', '&', PHP_QUERY_RFC3986 ), array( 'method' => 'GET', 'timeout' => 20, 'sslverify' => true, 'redirection' => 0, 'limit_response_size' => 2097152 ) ); }
 		catch ( Throwable ) { $this->fail( 'LAZADA_ORDER_NETWORK_ERROR', $diag ); }
 		if ( is_wp_error( $response ) ) { $this->fail( 'LAZADA_ORDER_NETWORK_ERROR', $diag ); }
 		$diag['http_status'] = (int) wp_remote_retrieve_response_code( $response );

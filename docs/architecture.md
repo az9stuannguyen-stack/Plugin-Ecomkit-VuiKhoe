@@ -285,3 +285,5 @@ WP.6J.3B / 0.7.20 adds a collapsed Marketplace-only diagnostic. Native manage_op
 
 
 WP.6J.3B.1 / 0.7.21 simplifies only the admin diagnostic: date-only Asia/Ho_Chi_Minh midnight, single exact string ID, one direct GetOrder/GetOrderItems action and optional one-page GetOrders check. Offset and safe evidence are collapsed; independent endpoint results and safe response-error classification. Clients/OAuth/schema/canonical unchanged; no order persistence. Automated real provider calls: 0. Live Order validation pending; WP.6J.4 and WP.7 not started.
+
+WP.6J.3B.3 / 0.7.23 replaces the historical 0.7.19 seller read form POST transport with HTTPS GET for /orders/get, /order/get and /order/items/get only. Existing signer operates on original parameters before RFC3986 query assembly. Credential-bearing request URLs are never logged; safe evidence adds HTTP method GET. Token/OAuth transport, lifecycle, query/date, pagination, normalization, finance and canonical behavior stay unchanged. Live reads failed before this patch and require retest; no real provider request from development.

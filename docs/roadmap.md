@@ -270,3 +270,5 @@ WP.6J.3B / 0.7.20: operator confirmed OAuth live ACTIVE/READY. Admin-only Order 
 
 
 WP.6J.3B.1 / 0.7.21 simplifies only the admin diagnostic: date-only Asia/Ho_Chi_Minh midnight, single exact string ID, one direct GetOrder/GetOrderItems action and optional one-page GetOrders check. Offset and safe evidence are collapsed; independent endpoint results and safe response-error classification. Clients/OAuth/schema/canonical unchanged; no order persistence. Automated real provider calls: 0. Live Order validation pending; WP.6J.4 and WP.7 not started.
+
+WP.6J.3B.3 / 0.7.23: all three seller Order reads now use signed query-string HTTPS GET with unchanged signer, OAuth/refresh and order logic. Operator reports live ACTIVE/READY, app Online and Order Information ACTIVE; reads failed before this patch. Next gate: deploy and retest shop 100070635, date 2026-10-03, exact ID 532935709720247 with list check enabled. Masked PII is allowed. Correct App callback configuration before future reauthorization. WP.6J.4 requires live PASS; WP.7 not started.
