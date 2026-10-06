@@ -26,12 +26,13 @@ const response = (raw, status = 200) => ({status, ok: status < 400, text: async 
     assert(!nodes(output).some(n => n.tag === 'img'));
     let submitted; let calls = 0; let request;
     const button = {disabled: false};
-    const form = {action: 'https://example.test/subsite/wp-admin/admin-ajax.php', querySelector: () => button, parentElement: {querySelector: () => output}, addEventListener: (_, fn) => {submitted = fn;}};
+    const endpoint = 'https://example.test/subsite/wp-admin/admin-ajax.php';
+    const form = {action: {tagName: 'INPUT'}, getAttribute: key => key === 'action' ? endpoint : null, querySelector: () => button, parentElement: {querySelector: () => output}, addEventListener: (_, fn) => {submitted = fn;}};
     class FakeFormData extends Array { constructor() {super(['action', 'ecomkit_lazada_finance_diagnostic'], ['nonce', 'synthetic'], ['order_id', id]);} }
     const browser = {document: {querySelectorAll: () => [form], createElement: tag => new Element(tag)}, FormData: FakeFormData, URLSearchParams, fetch: async (url, options) => {calls++; request = {url, options}; return response(JSON.stringify({success:true,data}));}};
     vm.runInNewContext(fs.readFileSync(require.resolve('../ecomkit-vuikhoe/assets/js/lazada-finance-diagnostic.js'), 'utf8'), browser);
     await submitted({preventDefault(){}});
-    assert.equal(calls, 1); assert.equal(request.url, form.action); assert.equal(request.options.method, 'POST'); assert.equal(request.options.credentials, 'same-origin'); assert.equal(request.options.body.get('order_id'), id); assert.equal(button.disabled, false);
+    assert.equal(calls, 1); assert.equal(request.url, endpoint); assert.equal(request.options.method, 'POST'); assert.equal(request.options.credentials, 'same-origin'); assert.equal(request.options.body.get('order_id'), id); assert.equal(button.disabled, false);
     browser.fetch = async () => {calls++; throw new Error('network');};
     await submitted({preventDefault(){}}); assert.equal(calls, 2); assert.match(output.textContent, /network/);
     console.log('lazada-finance-browser-check: PASS (JSON/error/non-JSON/network, exact strings, text-only rendering)');

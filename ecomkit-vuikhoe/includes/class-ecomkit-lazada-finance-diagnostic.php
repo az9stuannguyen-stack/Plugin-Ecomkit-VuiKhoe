@@ -3,6 +3,7 @@ defined( 'ABSPATH' ) || exit;
 
 /** Explicit admin source inspection. Response memory only; lifecycle may rotate credentials. */
 final class Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic {
+	private bool $finance_client_invoked = false;
 	public function __construct( private ?Ecomkit_Vuikhoe_Lazada_Token_Service $tokens = null, private mixed $factory = null, private mixed $order_factory = null ) {
 		$this->tokens ??= new Ecomkit_Vuikhoe_Lazada_Token_Service();
 		$this->factory ??= static fn( int $id ) => new Ecomkit_Vuikhoe_Lazada_Finance_Client( $id );
@@ -13,6 +14,7 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic {
 		$v = $input[$key] ?? ''; if ( ! is_string( $v ) || strlen( $v ) > 128 ) { throw new RuntimeException( 'LAZADA_FINANCE_INPUT_INVALID' ); } return $v;
 	}
 	public function run( array $input ): array {
+		$this->finance_client_invoked = false;
 		Ecomkit_Vuikhoe_Security::require_management_capability();
 		$id = self::value( $input, 'connection_id' ); $ready = false;
 		foreach ( $this->tokens->safe_connections() as $c ) { if ( (string) $c['id'] === $id && 'ACTIVE' === $c['status'] && in_array( $c['lifecycle'], array( 'READY', 'REFRESH_NEEDED' ), true ) ) { $ready = true; break; } }
@@ -29,6 +31,7 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic {
 			try { $checks[$key] = array( 'success' => true, 'data' => $read() ); }
 			catch ( Throwable $e ) { $checks[$key] = array( 'success' => false, 'classification' => self::error_code( $e ), 'evidence' => $e instanceof Ecomkit_Vuikhoe_Lazada_Provider_Exception ? $e->diagnostic : array() ); }
 		};
+		$this->finance_client_invoked = true;
 		$check( 'transactions', fn() => $client->transactions( $order_id, $start, $end, (int) $offset, 100, 'details' === $endpoint ) );
 		if ( '1' === self::value( $input, 'check_payout' ) ) { $check( 'payout', fn() => $client->payouts( $start ) ); }
 		if ( '1' === self::value( $input, 'check_order' ) ) {
@@ -58,10 +61,16 @@ final class Ecomkit_Vuikhoe_Lazada_Finance_Diagnostic {
 	}
 	public function ajax(): void {
 		nocache_headers();
-		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'classification' => 'WORDPRESS_PERMISSION_DENIED', 'message' => 'Bạn không có quyền kiểm tra tài chính Lazada.' ), 403 ); }
-		if ( false === check_ajax_referer( 'ecomkit_lazada_finance_diagnostic', 'nonce', false ) ) { wp_send_json_error( array( 'classification' => 'WORDPRESS_NONCE_INVALID', 'message' => 'Phiên kiểm tra đã hết hạn. Tải lại trang.' ), 403 ); }
+		header( 'X-Ecomkit-Lazada-Finance-Diagnostic: handler' );
+		$this->finance_client_invoked = false;
+		$route = array( 'layer' => 'WORDPRESS_FINANCE_DIAGNOSTIC', 'handler_reached' => true, 'permission_passed' => false, 'nonce_passed' => false, 'finance_client_invoked' => false, 'plugin_version' => ECOMKIT_VUIKHOE_VERSION );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'classification' => 'WORDPRESS_PERMISSION_DENIED', 'message' => 'Bạn không có quyền kiểm tra tài chính Lazada.', 'transport' => $route ), 403 ); }
+		$route['permission_passed'] = true;
+		if ( false === check_ajax_referer( 'ecomkit_lazada_finance_diagnostic', 'nonce', false ) ) { wp_send_json_error( array( 'classification' => 'WORDPRESS_NONCE_INVALID', 'message' => 'Phiên kiểm tra đã hết hạn. Tải lại trang.', 'transport' => $route ), 403 ); }
+		$route['nonce_passed'] = true;
 		try { $result = $this->run( wp_unslash( $_POST ) ); }
-		catch ( Throwable $e ) { wp_send_json_error( array( 'classification' => self::error_code( $e ), 'message' => 'Không thể kiểm tra. Kiểm tra shop, token và khoảng ngày giao dịch.' ), 400 ); }
+		catch ( Throwable $e ) { $route['finance_client_invoked'] = $this->finance_client_invoked; wp_send_json_error( array( 'classification' => self::error_code( $e ), 'message' => 'Không thể kiểm tra. Kiểm tra shop, token và khoảng ngày giao dịch.', 'transport' => $route ), 400 ); }
+		$route['finance_client_invoked'] = $this->finance_client_invoked; $result['transport'] = $route;
 		wp_send_json_success( $result );
 	}
 }

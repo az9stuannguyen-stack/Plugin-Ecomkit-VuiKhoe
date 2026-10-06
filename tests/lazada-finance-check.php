@@ -1,7 +1,9 @@
 <?php
 /** Fake Finance HTTP only; real signer, lifecycle, lossless decoder, admin AJAX and projection. */
 declare(strict_types=1);
+ob_start();
 require __DIR__ . '/lazada-oauth-check.php';
+define('ECOMKIT_VUIKHOE_VERSION','0.7.28');
 $db=$GLOBALS['wpdb'];
 $contracts=json_decode(file_get_contents(__DIR__.'/../docs/lazada-finance-contract.json'),true);
 auth_check(count($contracts)===3 && $contracts[0]['path']===Ecomkit_Vuikhoe_Lazada_Finance_Client::TRANSACTIONS && $contracts[1]['path']===Ecomkit_Vuikhoe_Lazada_Finance_Client::QUERY_TRANSACTIONS && $contracts[2]['path']===Ecomkit_Vuikhoe_Lazada_Finance_Client::PAYOUT,'Official contract paths');
@@ -61,13 +63,18 @@ $input=['connection_id'=>(string)$id,'order_id'=>$large,'start_date'=>'2026-10-0
 $r=$diagnostic->run($input);auth_check($r['checks']['transactions']['success'] && !$r['canonical_write'] && !$r['finance_persistence'] && count($r['distinct_names'])===3 && $r['distinct_names'][1]['negative']===1 && $r['distinct_names'][2]['zero']===1,'Safe source audit names/signs');
 auth_check($snapshot===[$db->rows,$GLOBALS['options'],$GLOBALS['transients']],'Audit persisted/canonical state');
 $compare=$input;$compare['check_order']='1';$r=$diagnostic->run($compare);auth_check($order_reads===2 && count($r['checks']['item_candidates']['data'])===2 && $r['checks']['order_candidates']['data']['raw_statuses']===['shipped'] && !str_contains(json_encode($r),'DO-NOT-EXPOSE'),'Price/items/PII candidate projection');
-$GLOBALS['authorized']=false;expect_auth_error('DENIED_403',fn()=>$diagnostic->run($input));try{$diagnostic->ajax();}catch(FinanceJson $j){auth_check($j->status===403,'Finance permission');}$GLOBALS['authorized']=true;
-try{$diagnostic->ajax();}catch(FinanceJson $j){auth_check($j->status===403 && $j->body['data']['classification']==='WORDPRESS_NONCE_INVALID','Finance nonce missing');}
-$GLOBALS['finance_nonce']=1;$_POST=$input;try{$diagnostic->ajax();}catch(FinanceJson $j){auth_check($j->body['success'] && $j->body['data']['order_id']===$large,'Finance JSON success');}
-$mode='provider';try{$diagnostic->ajax();}catch(FinanceJson $j){auth_check($j->body['success'] && !$j->body['data']['checks']['transactions']['success'],'Structured provider failure');}
+$callback=$GLOBALS['hooks']['wp_ajax_ecomkit_lazada_finance_diagnostic'];$before=count($finance_calls);
+$GLOBALS['authorized']=false;expect_auth_error('DENIED_403',fn()=>$diagnostic->run($input));try{$callback();}catch(FinanceJson $j){$t=$j->body['data']['transport'];auth_check($j->status===403 && $t['handler_reached'] && !$t['permission_passed'] && !$t['nonce_passed'] && !$t['finance_client_invoked'],'Finance permission');}$GLOBALS['authorized']=true;
+try{$callback();}catch(FinanceJson $j){$t=$j->body['data']['transport'];auth_check($j->status===403 && $j->body['data']['classification']==='WORDPRESS_NONCE_INVALID' && $t['handler_reached'] && $t['permission_passed'] && !$t['nonce_passed'] && !$t['finance_client_invoked'],'Finance nonce missing');}
+auth_check(count($finance_calls)===$before,'Denied route called Finance provider');
+$GLOBALS['finance_nonce']=1;$_POST=$input;try{$callback();}catch(FinanceJson $j){$t=$j->body['data']['transport'];auth_check($j->body['success'] && $j->body['data']['order_id']===$large && $t['handler_reached'] && $t['permission_passed'] && $t['nonce_passed'] && $t['finance_client_invoked'] && $t['plugin_version']==='0.7.28','Finance JSON success');}
+$mode='provider';try{$callback();}catch(FinanceJson $j){auth_check($j->body['success'] && !$j->body['data']['checks']['transactions']['success'] && $j->body['data']['transport']['finance_client_invoked'] && $j->body['data']['checks']['transactions']['evidence']['api_path']===Ecomkit_Vuikhoe_Lazada_Finance_Client::QUERY_TRANSACTIONS,'Structured provider failure');}
 $mode='empty';$r=$diagnostic->run($input);auth_check($r['checks']['transactions']['data']['matched_count']===0 && $r['canonical_confidence']==='UNKNOWN','Empty is not zero fees');
 $db->rows[$id]['status']='SUSPENDED';$before=count($finance_calls);expect_auth_error('LAZADA_FINANCE_AUTH_REQUIRED',fn()=>$client->transactions($large,'2026-10-01','2026-10-06'));auth_check(count($finance_calls)===$before,'Auth sent finance request');
 $view=file_get_contents(__DIR__.'/../ecomkit-vuikhoe/admin/views/lazada-finance-diagnostic.php');auth_check(str_contains($view,'<details ') && !str_contains($view,'<details open') && str_contains($view,"admin_url( 'admin-ajax.php' )") && str_contains($view,'type="text" name="order_id"') && str_contains($view,'ECOMKIT_VUIKHOE_VERSION'),'Finance UI/version/ID');
+auth_check(str_contains($view,'name="action" value="ecomkit_lazada_finance_diagnostic"') && isset($GLOBALS['hooks']['wp_ajax_ecomkit_lazada_finance_diagnostic']),'Frontend/backend action mismatch');
 $client_source=file_get_contents(__DIR__.'/../ecomkit-vuikhoe/includes/class-ecomkit-lazada-finance-client.php');auth_check(!str_contains($client_source,'$wpdb') && !str_contains($client_source,'error_log(') && !str_contains($client_source,'(float)'),'No finance writes/logs/float');
 auth_check(str_contains(file_get_contents(__DIR__.'/../ecomkit-vuikhoe/ecomkit-vuikhoe.php'), "define( 'ECOMKIT_VUIKHOE_DB_VERSION', 9 )"),'Finance migrated DB');
 echo "WP.6J.5 Finance source audit: PASS (GET/signing, precision, signs, scopes, pages, payout, failures, AJAX security, no writes; zero real provider calls)\n";
+
+ob_end_flush();

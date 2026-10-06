@@ -20,6 +20,7 @@
         }
         const diagFields = ['api_path', 'http_method', 'http_status', 'provider_code', 'safe_provider_message', 'request_id'];
         text('p', `Order ID: ${result.order_id} · Candidate canonical: UNKNOWN · Không ghi tài chính/24 cột.`);
+        if (result.transport) table([result.transport], ['layer', 'handler_reached', 'permission_passed', 'nonce_passed', 'finance_client_invoked', 'plugin_version']);
         for (const [stage, check] of Object.entries(result.checks || {})) {
             text('h3', `${stage}: ${check.success ? 'PASS' : 'FAIL'}`);
             if (!check.success) { text('p', check.classification || 'UNKNOWN'); table([check.evidence || {}], diagFields); continue; }
@@ -48,7 +49,8 @@
             event.preventDefault(); const button = form.querySelector('button[type="submit"]'); const output = form.parentElement.querySelector('[data-lazada-finance-output]');
             if (button.disabled) return; button.disabled = true; output.textContent = 'Đang kiểm tra nguồn tài chính Lazada…';
             try {
-                const response = await fetch(form.action, {method: 'POST', credentials: 'same-origin', body: new URLSearchParams(new FormData(form)), headers: {'Accept': 'application/json'}});
+                // input[name=action] shadows form.action in the real browser DOM.
+                const response = await fetch(form.getAttribute('action'), {method: 'POST', credentials: 'same-origin', body: new URLSearchParams(new FormData(form)), headers: {'Accept': 'application/json'}});
                 render(output, await readResponse(response));
             } catch (error) { output.textContent = `Không thể hoàn tất kiểm tra: ${error.message || 'Lỗi mạng'}. Không tự động thử lại.`; }
             finally { button.disabled = false; }
