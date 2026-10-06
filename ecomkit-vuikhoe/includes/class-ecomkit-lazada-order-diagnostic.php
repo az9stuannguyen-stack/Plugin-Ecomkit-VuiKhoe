@@ -80,12 +80,24 @@ final class Ecomkit_Vuikhoe_Lazada_Order_Diagnostic {
 	}
 
 	public function ajax(): void {
-		Ecomkit_Vuikhoe_Security::require_management_capability(); check_ajax_referer( 'ecomkit_lazada_order_diagnostic', 'nonce' ); nocache_headers();
+		nocache_headers();
+		header( 'X-Ecomkit-Lazada-Diagnostic: handler' );
+		$route = array( 'layer' => 'WORDPRESS_DIAGNOSTIC', 'handler_reached' => true, 'permission_passed' => false, 'nonce_passed' => false, 'client_invoked' => false, 'plugin_version' => ECOMKIT_VUIKHOE_VERSION );
+		if ( ! current_user_can( Ecomkit_Vuikhoe_Security::MANAGEMENT_CAPABILITY ) ) {
+			wp_send_json_error( array( 'classification' => 'WORDPRESS_PERMISSION_DENIED', 'message' => 'Bạn không có quyền kiểm tra đơn Lazada.', 'transport' => $route ), 403 );
+		}
+		$route['permission_passed'] = true;
+		if ( false === check_ajax_referer( 'ecomkit_lazada_order_diagnostic', 'nonce', false ) ) {
+			wp_send_json_error( array( 'classification' => 'WORDPRESS_NONCE_INVALID', 'message' => 'Phiên kiểm tra đã hết hạn. Tải lại trang và thử lại.', 'transport' => $route ), 403 );
+		}
+		$route['nonce_passed'] = true;
 		try { $result = $this->run( wp_unslash( $_POST ) ); }
 		catch ( Throwable $e ) {
 			$code = self::error_code( $e );
-			wp_send_json_error( array( 'classification' => $code, 'message' => self::message( $code ), 'diagnostic' => $e instanceof Ecomkit_Vuikhoe_Lazada_Provider_Exception ? $e->diagnostic : array() ), 400 );
+			wp_send_json_error( array( 'classification' => $code, 'message' => self::message( $code ), 'transport' => $route, 'diagnostic' => $e instanceof Ecomkit_Vuikhoe_Lazada_Provider_Exception ? $e->diagnostic : array() ), 400 );
 		}
+		$route['client_invoked'] = $result['request_count'] > 0;
+		$result['transport'] = $route;
 		wp_send_json_success( $result );
 	}
 }

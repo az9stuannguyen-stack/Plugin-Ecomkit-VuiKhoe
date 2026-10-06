@@ -1,6 +1,6 @@
 # Lazada authorization, Order client and live diagnostic — WP.6J.3B
 
-Plugin 0.7.21, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator has confirmed live OAuth ACTIVE/READY; live Order response validation remains PENDING. No real Order request was made from this development workspace.
+Plugin 0.7.22, schema 9, canonical v9. No migration, dependency, extension, environment variable or scheduled service added. OAuth/token refresh, an in-memory Order client and an admin live diagnostic are implemented; Financial API, reconciliation and automatic Lazada order processing are NOT implemented. Automated tests use fake transport only. Operator has confirmed live OAuth ACTIVE/READY; live Order response validation remains PENDING. No real Order request was made from this development workspace.
 
 ## Architecture audit
 
@@ -72,9 +72,9 @@ Price/voucher/shipping_fee and item prices are exact validated decimal strings, 
 
 Official references: [Get Order tutorial: query, pagination, shop identity, item statuses and fields](https://open.lazada.com/apps/doc/doc?docId=121327&nodeId=29616), [GetOrders API](https://open.lazada.com/apps/doc/api?path=%2Forders%2Fget), [HTTP requests](https://open.lazada.com/apps/doc/doc?docId=108066&nodeId=10448), [Sensitive Data Privilege / DataMoat](https://open.lazada.com/apps/doc/doc?docId=108297&nodeId=10784). Masked/missing buyer data is not itself OAuth failure.
 
-## Live gate ? WP.6J.3B.1 procedure
+## Live gate — WP.6J.3B.2 procedure
 
-1. Deploy 0.7.21; confirm the Lazada shop is ACTIVE/READY. Expand the Order diagnostic.
+1. Deploy 0.7.22; confirm the Lazada shop is ACTIVE/READY. Expand the Order diagnostic.
 2. Copy the exact marketplace ID from the old Batch into the single Order ID field. No Batch reprocessing. Select date 2026-10-03 and paste ID 532935709720247 for the requested manual sample.
 3. Press the single primary button. GetOrder then GetOrderItems run directly with the exact string; no list prerequisite and no date required for direct checks.
 4. Optionally enable the list check. GetOrders runs after direct checks, using selected date midnight in Asia/Ho_Chi_Minh and the existing serializer. Only created_after is sent: one page, limit 100, default offset 0. No hard end-of-day bound or automatic pagination. A missing ID means absent from this returned page, not absent from Lazada.
@@ -82,6 +82,16 @@ Official references: [Get Order tutorial: query, pagination, shop identity, item
 6. Expected manual result: READY, order found, GetOrder/GetOrderItems success, exact MATCH, no visible tokens/secrets. Record actual live results; this workspace has made zero real provider calls.
 
 Response audit: the prior browser used response.json() and a single catch for parsing and network failures. Synthetic non-JSON/PHP and network responses reproduce that generic-error path; the original live response is unavailable, so its exact cause remains unconfirmed. The updated handler separates JSON provider errors, permission/nonce errors (including WordPress -1), malformed JSON/envelopes, PHP/non-JSON HTTP responses and network failures. Arbitrary response bodies are never displayed; safe backend messages and HTTP classifications are shown. No blind retries.
+
+### HTTP 404 routing audit (0.7.22)
+
+0.7.21 used `fetch(form.action, ...)` on a form containing `<input name="action">`. A real Chromium DOM confirms that this named input shadows the native action property: it is an HTMLInputElement, stringified as `[object HTMLInputElement]`. The browser resolves it relative to the admin page as `…/wp-admin/[object%20HTMLInputElement]`, instead of admin-ajax.php. `tests/lazada-diagnostic-dom-check.js` reproduces the old defect and verifies the actual fixed JS. The original production Network URL is unavailable; confirmation of this defect as the cause of that specific live request is pending.
+
+The fix reads `form.getAttribute('action')`; WordPress still supplies the URL through `admin_url('admin-ajax.php')`, including subdirectory installs. Method: POST. Action before/after: `ecomkit_lazada_order_diagnostic`. Hook: `wp_ajax_ecomkit_lazada_order_diagnostic`, registered in plugin startup. Callback: `Ecomkit_Vuikhoe_Lazada_Order_Diagnostic::ajax`. Nonce field/action: `nonce` / `ecomkit_lazada_order_diagnostic`. Payload: action, nonce, WordPress _wp_http_referer, connection_id, order_date, order_id, offset and optional check_list. No route rename or client change.
+
+The handler sends `X-Ecomkit-Lazada-Diagnostic: handler` and JSON transport evidence for handler entry, manage_options, nonce, client invocation and plugin version. Permission/nonce failures now return structured JSON HTTP 403. Provider failures remain inside the existing JSON endpoint results with safe API path/HTTP/provider-code/message/request-ID evidence. Fake Lazada HTTP 404 is verified to return WordPress HTTP 200 JSON with a nested API HTTP 404, not browser HTTP 404 non-JSON. Browser transport evidence shows endpoint/method/action/HTTP and handler marker, never raw response bodies. Missing handler evidence does not prove a provider call; headers may also be stripped.
+
+Enqueue continues using ECOMKIT_VUIKHOE_VERSION, now `?ver=0.7.22`, without random versions. Deploy PHP and JS together and hard refresh; invalidate any cache that ignores query versions. Retest date 2026-10-03 and exact string ID 532935709720247: confirm admin-ajax.php and handler evidence first, then assess GetOrder/GetOrderItems. Automated real provider calls remain 0; live Order results pending. WP.6J.4 and WP.7 remain unopened.
 
 The UI displays normalized provider amounts/statuses without interpreting accounting meaning. Shipping PII values are omitted from the diagnostic response; only component availability is shown: AVAILABLE/MASKED/MISSING (`*` indicates masking, presence is not a guarantee of full unmasked access). Buyer name/address missing or masked is not automatically an API failure and may require Sensitive Data Privilege. Item name/SKU is displayed only as returned and escaped as text.
 

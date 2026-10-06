@@ -40,18 +40,21 @@
             status.textContent = 'Chọn ngày đơn để kiểm tra danh sách.'; return;
         }
         const data = new FormData(form);
+        // A named input "action" shadows HTMLFormElement.action. Read the server attribute.
+        const endpoint = form.getAttribute('action');
         busy = true;
         status.textContent = 'Đang kiểm tra Lazada…';
         output.textContent = ''; summary.textContent = '';
         try {
-            const response = await fetch(form.action, {method: 'POST', body: data, credentials: 'same-origin', cache: 'no-store'});
+            const response = await fetch(endpoint, {method: 'POST', body: data, credentials: 'same-origin', cache: 'no-store'});
             const text = await response.text();
+            output.textContent = JSON.stringify({layer: 'BROWSER_TO_WORDPRESS', endpoint: endpoint, method: 'POST', action: data.get('action'), http_status: response.status, handler_reached: response.headers.get('X-Ecomkit-Lazada-Diagnostic') === 'handler' ? true : null, provider_call_proven: false}, null, 2);
             let result;
             try { result = JSON.parse(text); } catch (_) {
                 // Never display arbitrary PHP/HTML bodies: they may contain secrets or buyer data.
                 if (response.status === 401 || response.status === 403 || text.trim() === '-1') status.textContent = 'Không có quyền kiểm tra hoặc phiên đã hết hạn. Tải lại trang và đăng nhập lại.';
                 else if (/Fatal error|Parse error|Uncaught|critical error/i.test(text)) status.textContent = 'Máy chủ gặp lỗi PHP khi kiểm tra (HTTP ' + response.status + '). Xem nhật ký máy chủ đã che thông tin nhạy cảm.';
-                else status.textContent = 'Máy chủ trả phản hồi không phải JSON (HTTP ' + response.status + '). Không tự động thử lại.';
+                else status.textContent = 'Máy chủ trả phản hồi không phải JSON (HTTP ' + response.status + '). Chưa có bằng chứng gọi Lazada. Xem Chi tiết kỹ thuật; không tự động thử lại.';
                 return;
             }
             if (!result || typeof result.success !== 'boolean' || !result.data || typeof result.data !== 'object') {
