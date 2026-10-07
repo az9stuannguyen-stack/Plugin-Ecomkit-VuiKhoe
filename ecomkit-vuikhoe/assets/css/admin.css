@@ -4,7 +4,12 @@
 .ecomkit-admin .ecomkit-layout-1b0f4999{margin-top:16px}
 .ecomkit-admin .ecomkit-layout-a548ea71{white-space:pre-wrap}
 .ecomkit-admin .ecomkit-layout-16667867{max-height:520px;overflow:auto;white-space:pre-wrap}
-.ecomkit-admin .ecomkit-layout-4d32e898{max-width:900px;padding:20px;background:var(--ecomkit-card);border:1px solid var(--ecomkit-border);margin:16px 0}
+.ecomkit-admin .ecomkit-layout-4d32e898 {
+	padding: 20px;
+	background: var(--ecomkit-card);
+	border: 1px solid var(--ecomkit-border);
+	margin: 16px 0;
+}
 .ecomkit-admin .ecomkit-layout-d60550f6{margin:12px 0}
 .ecomkit-admin .ecomkit-layout-71e17938{max-width:760px}
 .ecomkit-admin .ecomkit-layout-be094664{max-width:900px;padding:20px;background:var(--ecomkit-card);border:1px solid var(--ecomkit-border);border-radius:6px;margin:16px 0}
