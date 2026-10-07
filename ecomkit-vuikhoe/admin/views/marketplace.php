@@ -1,5 +1,6 @@
 <?php defined( 'ABSPATH' ) || exit; $config = $data['shopee_config']; $ready = $data['shopee_readiness']; $key_ui = $data['partner_key_ui']; ?>
 <div class="wrap ecomkit-admin ecomkit-page-marketplace"><header class="ecomkit-page-header"><h1><?php echo esc_html__( 'Marketplace', 'ecomkit-vuikhoe' ); ?></h1><p class="ecomkit-subtitle">Excel &rarr; Xử lý &rarr; Kết quả &rarr; Sao chép</p></header>
+<?php require ECOMKIT_VUIKHOE_DIR . 'admin/views/tiktok-foundation.php'; ?>
 <?php $lazada_config = new Ecomkit_Vuikhoe_Lazada_Config(); $lazada = $lazada_config->safe_state(); $lazada_connections = ( new Ecomkit_Vuikhoe_Lazada_Token_Service() )->safe_connections(); ?>
 <section class="ecomkit-layout-4d32e898">
 <h2>Lazada Việt Nam</h2>

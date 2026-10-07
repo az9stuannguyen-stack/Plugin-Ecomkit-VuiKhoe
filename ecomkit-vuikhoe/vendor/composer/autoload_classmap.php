@@ -86,6 +86,8 @@ return array(
     'Ecomkit_Vuikhoe_Shopee_SPX_Labels' => $baseDir . '/includes/class-ecomkit-shopee-spx-labels.php',
     'Ecomkit_Vuikhoe_Shopee_Signer' => $baseDir . '/includes/class-ecomkit-shopee-signer.php',
     'Ecomkit_Vuikhoe_Shopee_Token_Service' => $baseDir . '/includes/class-ecomkit-shopee-token-service.php',
+    'Ecomkit_Vuikhoe_Tiktok_Config' => $baseDir . '/includes/class-ecomkit-tiktok-config.php',
+    'Ecomkit_Vuikhoe_Tiktok_Http_Client' => $baseDir . '/includes/class-ecomkit-tiktok-http-client.php',
     'Matrix\\Builder' => $vendorDir . '/markbaker/matrix/classes/src/Builder.php',
     'Matrix\\Decomposition\\Decomposition' => $vendorDir . '/markbaker/matrix/classes/src/Decomposition/Decomposition.php',
     'Matrix\\Decomposition\\LU' => $vendorDir . '/markbaker/matrix/classes/src/Decomposition/LU.php',

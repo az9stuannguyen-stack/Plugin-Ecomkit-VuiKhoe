@@ -157,6 +157,8 @@ class ComposerStaticInitd74ecf4ee8d50ecbfc842f388bed9551
         'Ecomkit_Vuikhoe_Shopee_SPX_Labels' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-spx-labels.php',
         'Ecomkit_Vuikhoe_Shopee_Signer' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-signer.php',
         'Ecomkit_Vuikhoe_Shopee_Token_Service' => __DIR__ . '/../..' . '/includes/class-ecomkit-shopee-token-service.php',
+        'Ecomkit_Vuikhoe_Tiktok_Config' => __DIR__ . '/../..' . '/includes/class-ecomkit-tiktok-config.php',
+        'Ecomkit_Vuikhoe_Tiktok_Http_Client' => __DIR__ . '/../..' . '/includes/class-ecomkit-tiktok-http-client.php',
         'Matrix\\Builder' => __DIR__ . '/..' . '/markbaker/matrix/classes/src/Builder.php',
         'Matrix\\Decomposition\\Decomposition' => __DIR__ . '/..' . '/markbaker/matrix/classes/src/Decomposition/Decomposition.php',
         'Matrix\\Decomposition\\LU' => __DIR__ . '/..' . '/markbaker/matrix/classes/src/Decomposition/LU.php',

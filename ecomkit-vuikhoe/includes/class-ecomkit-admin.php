@@ -14,6 +14,8 @@ final class Ecomkit_Vuikhoe_Admin {
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_ui' ) );
+		add_action( 'admin_post_ecomkit_tiktok_save_config', array( $this, 'handle_tiktok_save_config' ) );
+		add_action( 'admin_post_ecomkit_tiktok_oauth_callback', array( $this, 'handle_tiktok_foundation_callback' ) );
 		add_action( 'admin_post_ecomkit_lazada_save_config', array( $this, 'handle_lazada_save_config' ) );
 		add_action( 'admin_notices', array( $this, 'database_notice' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
@@ -362,6 +364,28 @@ final class Ecomkit_Vuikhoe_Admin {
 		}
 		$order_test = null; if ( isset( $_GET['order_test'] ) ) { $reference = sanitize_key( wp_unslash( $_GET['order_test'] ) ); $stored = get_transient( 'ecomkit_shopee_order_test_' . $reference ); delete_transient( 'ecomkit_shopee_order_test_' . $reference ); if ( is_array( $stored ) && (int) ( $stored['user_id'] ?? 0 ) === get_current_user_id() && is_array( $stored['result'] ?? null ) ) { $order_test = $stored['result']; } }
 		$this->render( 'marketplace', array( 'shopee_config' => $config, 'partner_key_ui' => $config_service->partner_key_ui_state(), 'shopee_readiness' => $config_service->readiness(), 'encryption_ready' => $encryption->ready(), 'key_source' => $encryption->ready() ? $encryption->key_source_label() : '', 'callback_url' => $config_service->callback_url(), 'connections' => ( new Ecomkit_Vuikhoe_Marketplace_Connection_Service() )->list_shopee( (string) ( $config['fingerprint'] ?? '' ) ), 'oauth_diagnostic' => $oauth_diagnostic, 'order_test' => $order_test ) );
+	}
+
+	/** Application configuration only: POST, capability, nonce and safe PRG feedback. */
+	public function handle_tiktok_save_config(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		check_admin_referer( 'ecomkit_tiktok_save_config', 'ecomkit_tiktok_nonce' );
+		try {
+			$key = wp_unslash( $_POST['app_key'] ?? '' );
+			$service_id = wp_unslash( $_POST['service_id'] ?? '' );
+			$secret = wp_unslash( $_POST['app_secret'] ?? '' );
+			if ( ! is_string( $key ) || ! is_string( $secret ) || ! is_string( $service_id ) ) { throw new InvalidArgumentException(); }
+			( new Ecomkit_Vuikhoe_Tiktok_Config() )->save( trim( $key ), $secret, trim( $service_id ) );
+			$notice = 'saved';
+		} catch ( Throwable ) { $notice = 'failed'; }
+		wp_safe_redirect( add_query_arg( array( 'page' => 'ecomkit-vuikhoe-marketplace', 'tiktok_notice' => $notice ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
+	/** No authorization/code handling in WP.6L.1. Never reads or logs callback input. */
+	public function handle_tiktok_foundation_callback(): void {
+		Ecomkit_Vuikhoe_Security::require_management_capability();
+		wp_die( esc_html__( 'TikTok Shop chưa triển khai ủy quyền người bán.', 'ecomkit-vuikhoe' ), '', array( 'response' => 403 ) );
 	}
 
 	/** Application configuration only: POST, capability, nonce and safe PRG feedback. */
