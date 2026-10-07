@@ -15,7 +15,6 @@ final class Ecomkit_Vuikhoe_Admin {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_ui' ) );
 		add_action( 'admin_post_ecomkit_tiktok_save_config', array( $this, 'handle_tiktok_save_config' ) );
-		add_action( 'admin_post_ecomkit_tiktok_oauth_callback', array( $this, 'handle_tiktok_foundation_callback' ) );
 		add_action( 'admin_post_ecomkit_lazada_save_config', array( $this, 'handle_lazada_save_config' ) );
 		add_action( 'admin_notices', array( $this, 'database_notice' ) );
 		add_action( 'admin_post_ecomkit_vuikhoe_import_excel', array( $this, 'handle_excel_import' ) );
@@ -380,12 +379,6 @@ final class Ecomkit_Vuikhoe_Admin {
 		} catch ( Throwable ) { $notice = 'failed'; }
 		wp_safe_redirect( add_query_arg( array( 'page' => 'ecomkit-vuikhoe-marketplace', 'tiktok_notice' => $notice ), admin_url( 'admin.php' ) ) );
 		exit;
-	}
-
-	/** No authorization/code handling in WP.6L.1. Never reads or logs callback input. */
-	public function handle_tiktok_foundation_callback(): void {
-		Ecomkit_Vuikhoe_Security::require_management_capability();
-		wp_die( esc_html__( 'TikTok Shop chưa triển khai ủy quyền người bán.', 'ecomkit-vuikhoe' ), '', array( 'response' => 403 ) );
 	}
 
 	/** Application configuration only: POST, capability, nonce and safe PRG feedback. */

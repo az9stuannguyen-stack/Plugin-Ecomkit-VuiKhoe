@@ -3,7 +3,7 @@
 declare(strict_types=1);
 ob_start();
 require __DIR__.'/access-restoration-check.php';
-define('ECOMKIT_VUIKHOE_DIR',__DIR__.'/../ecomkit-vuikhoe/');define('ECOMKIT_VUIKHOE_VERSION','0.7.34');define('ECOMKIT_VUIKHOE_MIN_PHP','8.1');define('ECOMKIT_VUIKHOE_MIN_WP','6.0');$wp_version='6.8';
+define('ECOMKIT_VUIKHOE_DIR',__DIR__.'/../ecomkit-vuikhoe/');define('ECOMKIT_VUIKHOE_VERSION','0.7.35');define('ECOMKIT_VUIKHOE_MIN_PHP','8.1');define('ECOMKIT_VUIKHOE_MIN_WP','6.0');$wp_version='6.8';
 function esc_html(mixed $s): string{return htmlspecialchars((string)$s);}
 function esc_attr(mixed $s): string{return esc_html($s);}function esc_url(string $s): string{return $s;}
 function admin_url(string $s): string{return 'https://example.test/wp-admin/'.$s;}

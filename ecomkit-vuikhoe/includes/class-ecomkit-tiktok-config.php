@@ -1,5 +1,5 @@
 <?php
-/** TikTok Shop application foundation. No HTTP/OAuth/token operations. */
+/** Encrypted TikTok application configuration, isolated from seller tokens. */
 defined( 'ABSPATH' ) || exit;
 final class Ecomkit_Vuikhoe_Tiktok_Config implements Ecomkit_Vuikhoe_Provider_Configuration {
 	public const OPTION = 'ecomkit_vuikhoe_tiktok_config';
@@ -8,7 +8,7 @@ final class Ecomkit_Vuikhoe_Tiktok_Config implements Ecomkit_Vuikhoe_Provider_Co
 	private const AAD = 'ecomkit|tiktok|provider-config|v1';
 	public function __construct( private ?Ecomkit_Vuikhoe_Credential_Encryption $encryption = null ) { $this->encryption ??= new Ecomkit_Vuikhoe_Credential_Encryption(); }
 	public function platform(): string { return Ecomkit_Vuikhoe_Marketplace_Platform::TIKTOK; }
-	/** Reserved callback URL; the foundation handler only denies premature use. */
+	/** Stable HTTPS seller callback; unchanged from the foundation. */
 	public function callback_url(): string {
 		$url = add_query_arg( 'action', 'ecomkit_tiktok_oauth_callback', admin_url( 'admin-post.php' ) );
 		if ( 'https' !== parse_url( $url, PHP_URL_SCHEME ) ) { throw new RuntimeException( 'TIKTOK_CALLBACK_HTTPS_REQUIRED' ); }
@@ -20,6 +20,7 @@ final class Ecomkit_Vuikhoe_Tiktok_Config implements Ecomkit_Vuikhoe_Provider_Co
 		if ( ! is_array( $stored ) || 1 !== ( $stored['v'] ?? null ) ) { throw new RuntimeException( 'TIKTOK_CONFIG_UNAVAILABLE' ); }
 		$plain = $this->encryption->decrypt( (string) ( $stored['credential_envelope'] ?? '' ), self::AAD );
 		if ( 1 !== ( $plain['v'] ?? null ) || self::COUNTRY !== ( $plain['country'] ?? null ) || ! is_string( $plain['app_key'] ?? null ) || ! is_string( $plain['app_secret'] ?? null ) || ! is_string( $plain['service_id'] ?? null ) || '' === $plain['app_secret'] ) { throw new RuntimeException( 'TIKTOK_CONFIG_INVALID' ); }
+		if ( ! preg_match( '/^[A-Za-z0-9_-]{1,128}$/D', $plain['app_key'] ) || ! preg_match( '/^[A-Za-z0-9_-]{1,128}$/D', $plain['service_id'] ) || strlen( $plain['app_secret'] ) > 4096 || preg_match( '/[\x00-\x1f\x7f]/', $plain['app_secret'] ) ) { throw new RuntimeException( 'TIKTOK_CONFIG_INVALID' ); }
 		return $plain;
 	}
 	public function safe_state(): array {

@@ -81,6 +81,5 @@ function wp_safe_redirect(string $url): never {throw new RuntimeException($url);
 $GLOBALS['valid_nonce']=true;$_POST=['app_key'=>'test-app','app_secret'=>'controller-secret','service_id'=>'service-1'];
 try {(new Ecomkit_Vuikhoe_Admin())->handle_tiktok_save_config();throw new RuntimeException('No redirect');}catch(RuntimeException $e){tiktok_check(str_contains($e->getMessage(),'tiktok_notice=saved'),'Authorized save callback');}
 tiktok_check($config->credentials()['app_secret']==='controller-secret','Authorized save not persisted');
-try {(new Ecomkit_Vuikhoe_Admin())->handle_tiktok_foundation_callback();throw new RuntimeException('Callback performed auth');}catch(RuntimeException $e){tiktok_check($e->getMessage()==='DENIED_403','Foundation callback boundary');}
-try {(new Ecomkit_Vuikhoe_Tiktok_Http_Client())->request();throw new RuntimeException('HTTP call allowed');}catch(LogicException $e){tiktok_check($e->getMessage()==='TIKTOK_CLIENT_NOT_IMPLEMENTED','Inert HTTP boundary');}
+tiktok_check(!method_exists(Ecomkit_Vuikhoe_Tiktok_Http_Client::class,'request'),'No arbitrary HTTP boundary');
 echo "WP.6L.1 TikTok foundation: PASS (encryption, isolation, pending multi-shop, actual card, permissions, nonce, callback, parser audit; zero provider calls)\n";
