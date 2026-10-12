@@ -4,8 +4,13 @@
 defined( 'ABSPATH' ) || exit;
 
 final class Ecomkit_Vuikhoe_Shopee_SPX_Labels {
-	public const MAX_BYTES = 5242880; // 5 MiB; the PHP/WordPress limit may be lower.
-	public const MAX_PAGES = 50;
+	public const MAX_BYTES = 104857600; // 100 MiB per file; the PHP/WordPress limit may be lower.
+	public const MAX_PAGES = 2000;
+	public const MAX_FILES = 50; // Browser queue: one temporary-file request at a time.
+
+	public static function upload_limit(): int {
+		return function_exists( 'wp_max_upload_size' ) ? max( 0, min( self::MAX_BYTES, (int) wp_max_upload_size() ) ) : self::MAX_BYTES;
+	}
 
 	/**
 	 * The PHP upload temporary file is the only server-side copy. It is removed
@@ -38,6 +43,7 @@ final class Ecomkit_Vuikhoe_Shopee_SPX_Labels {
 				'pages' => $parsed['pages'], 'parsed' => $parsed['parsed'], 'matched' => count( $matched ),
 				'names_enriched' => count( $matched ), 'addresses_enriched' => count( $matched ),
 				'unmatched' => $unmatched, 'duplicate_conflicts' => $parsed['duplicate_conflicts'],
+				'conflicted_order_ids' => array_values( array_filter( $parsed['conflicted_order_ids'], static fn( string $id ): bool => isset( $wanted[ $id ] ) ) ),
 				'page_status_counts' => $parsed['page_status_counts'], 'enrichment' => $matched,
 			);
 		} finally {
@@ -54,8 +60,7 @@ final class Ecomkit_Vuikhoe_Shopee_SPX_Labels {
 		}
 		$name = is_string( $upload['name'] ?? null ) ? $upload['name'] : '';
 		if ( 'pdf' !== strtolower( pathinfo( $name, PATHINFO_EXTENSION ) ) ) { throw new RuntimeException( 'SHOPEE_PDF_INVALID' ); }
-		$limit = self::MAX_BYTES;
-		if ( function_exists( 'wp_max_upload_size' ) ) { $limit = min( $limit, (int) wp_max_upload_size() ); }
+		$limit = self::upload_limit();
 		$size = filesize( $path );
 		if ( false === $size || $size < 5 || $size > $limit ) { throw new RuntimeException( 'SHOPEE_PDF_TOO_LARGE' ); }
 		$handle = fopen( $path, 'rb' );
@@ -68,7 +73,9 @@ final class Ecomkit_Vuikhoe_Shopee_SPX_Labels {
 
 	/** @return array<string,mixed> */
 	public static function parse_file( string $path ): array {
-		try { $document = ( new \Smalot\PdfParser\Parser() )->parseFile( $path ); }
+		// Label extraction needs text and coordinates, not embedded barcode/image bytes.
+		$config = new \Smalot\PdfParser\Config(); $config->setRetainImageContent( false );
+		try { $document = ( new \Smalot\PdfParser\Parser( array(), $config ) )->parseFile( $path ); }
 		catch ( Throwable $exception ) { throw new RuntimeException( 'SHOPEE_PDF_INVALID', 0, $exception ); }
 		$pages = $document->getPages();
 		if ( count( $pages ) > self::MAX_PAGES ) { throw new RuntimeException( 'SHOPEE_PDF_TOO_MANY_PAGES' ); }
@@ -88,7 +95,7 @@ final class Ecomkit_Vuikhoe_Shopee_SPX_Labels {
 		}
 		if ( 0 === $text_pages ) { throw new RuntimeException( 'SHOPEE_PDF_TEXT_LAYER_REQUIRED' ); }
 		if ( 0 === $parsed_count ) { throw new RuntimeException( 'SHOPEE_PDF_NO_VALID_LABELS' ); }
-		return array( 'pages' => count( $pages ), 'parsed' => $parsed_count, 'labels' => $labels, 'duplicate_conflicts' => count( $conflicted ), 'page_status_counts' => $counts );
+		return array( 'pages' => count( $pages ), 'parsed' => $parsed_count, 'labels' => $labels, 'duplicate_conflicts' => count( $conflicted ), 'conflicted_order_ids' => array_map( 'strval', array_keys( $conflicted ) ), 'page_status_counts' => $counts );
 	}
 
 	/**

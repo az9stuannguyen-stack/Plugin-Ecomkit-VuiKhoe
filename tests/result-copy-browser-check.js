@@ -8,7 +8,7 @@ const merge = new Function('values', 'enrichment', functionSource[0] + '\nreturn
 const first = Array(24).fill('');
 first[2] = '261005S50BGX90'; first[3] = 'SHOPEE'; first[4] = 'Giao Hàng Thành Công';
 first[5] = 'Existing Name'; first[6] = '09***'; first[7] = 'Existing Address';
-first[14] = '312000'; first[15] = '0.298269230769230769'; first[17] = '0';
+first[14] = '312000'; first[15] = '29.83%'; first[17] = '0';
 const second = first.slice(); second[2] = '261005UNMATCHED'; second[5] = 'Other Name'; second[7] = 'Other Address';
 const third = first.slice(); third[3] = 'LAZADA'; third[5] = 'Lazada Name';
 const base = [first, second, third].map(cells => cells.join('\t')).join('\n');
@@ -21,7 +21,7 @@ assert.strictEqual(rows[0][5], 'Mai Example');
 assert.strictEqual(rows[0][7], 'Số 12 Đường Mẫu');
 assert.strictEqual(rows[0][6], '09***', 'PDF changed phone');
 assert.strictEqual(rows[0][14], '312000', 'PDF changed money');
-assert.strictEqual(rows[0][15], '0.298269230769230769', 'PDF changed exact ratio');
+assert.strictEqual(rows[0][15], '29.83%', 'PDF changed percentage clipboard format');
 assert.strictEqual(rows[0][17], '0', 'PDF changed explicit zero');
 assert.strictEqual(rows[1][5], 'Other Name', 'Unmatched Shopee row changed');
 assert.strictEqual(rows[2][5], 'Lazada Name', 'Non-Shopee row changed');

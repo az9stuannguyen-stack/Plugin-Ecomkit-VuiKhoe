@@ -195,13 +195,15 @@ foreach ( $result['rows'] as $clipboard_row ) {
 	if ( null !== $status['diagnostic'] ) { $unmapped_status_count++; }
 }
 ?>
-<section aria-label="Bổ sung tên và địa chỉ từ PDF nhãn Shopee" class="ecomkit-layout-71731d45">
-<h3 class="ecomkit-layout-d462248a"><?php echo esc_html__( 'Bổ sung tên/địa chỉ từ PDF nhãn Shopee', 'ecomkit-vuikhoe' ); ?></h3>
-<label for="ecomkit-spx-pdf"><?php echo esc_html__( 'Chọn PDF nhãn Shopee', 'ecomkit-vuikhoe' ); ?></label>
-<input type="file" id="ecomkit-spx-pdf" accept=".pdf,application/pdf" aria-label="Chọn PDF nhãn Shopee">
+<section aria-label="Bổ sung tên và địa chỉ từ nhiều PDF nhãn đơn hàng" class="ecomkit-layout-71731d45">
+<h3 class="ecomkit-layout-d462248a"><?php echo esc_html__( 'Bổ sung tên/địa chỉ từ PDF nhãn đơn hàng', 'ecomkit-vuikhoe' ); ?></h3>
+<label for="ecomkit-spx-pdf"><?php echo esc_html__( 'Chọn nhiều PDF nhãn', 'ecomkit-vuikhoe' ); ?></label>
+<input type="file" id="ecomkit-spx-pdf" accept=".pdf,application/pdf" multiple aria-label="Chọn nhiều PDF nhãn đơn hàng" aria-describedby="ecomkit-pdf-help">
 <button type="button" class="button" id="ecomkit-clear-spx-pdf" disabled><?php echo esc_html__( 'Xóa dữ liệu PDF tạm', 'ecomkit-vuikhoe' ); ?></button>
-<p class="ecomkit-layout-ef0b7a11"><?php echo esc_html__( 'Dùng khi cần bổ sung thông tin khách hàng trước khi sao chép. PDF chỉ được xử lý tạm thời và không lưu trên hệ thống. Dữ liệu PDF tự mất khi tải lại trang.', 'ecomkit-vuikhoe' ); ?></p>
+<p id="ecomkit-pdf-help" class="ecomkit-layout-ef0b7a11"><?php echo esc_html( sprintf( 'Chọn tối đa %d file một lần, %s MB/file, tối đa %d trang/file. Có thể chọn thêm file để bổ sung vào dữ liệu đã đọc. Hiện hỗ trợ nhãn Shopee SPX; file nhãn khác sẽ được thông báo nếu chưa đọc được. PDF được xử lý tạm thời, dữ liệu tự mất khi tải lại trang hoặc bấm Xóa dữ liệu PDF tạm.', Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_FILES, rtrim( rtrim( number_format( Ecomkit_Vuikhoe_Shopee_SPX_Labels::upload_limit() / 1048576, 2, '.', '' ), '0' ), '.' ), Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_PAGES ) ); ?></p>
+<?php if ( Ecomkit_Vuikhoe_Shopee_SPX_Labels::upload_limit() < Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_BYTES ) : ?><p class="description"><?php echo esc_html__( 'Plugin hỗ trợ 100 MB/file. Hosting hiện giới hạn thấp hơn; quản trị viên cần tăng giới hạn tải file để dùng đủ 100 MB.', 'ecomkit-vuikhoe' ); ?></p><?php endif; ?>
 <p id="ecomkit-spx-summary" role="status" aria-live="polite"></p>
+<ul id="ecomkit-pdf-errors" aria-label="File PDF chưa xử lý được"></ul>
 </section>
 <?php if ( $unmapped_status_count > 0 ) : ?><p class="description"><?php echo esc_html( sprintf( 'UNMAPPED_SHOPEE_BUSINESS_STATUS: %d trạng thái Shopee chưa đủ bằng chứng để đổi sang nhãn nghiệp vụ; giữ nguyên trạng thái gốc khi sao chép.', $unmapped_status_count ) ); ?></p><?php endif; ?>
 <div class="ecomkit-toolbar">
@@ -214,12 +216,42 @@ foreach ( $result['rows'] as $clipboard_row ) {
     const values = <?php echo wp_json_encode( $clipboard_values, $clipboard_json_flags ); ?>;
     const headers = <?php echo wp_json_encode( $clipboard_headers, $clipboard_json_flags ); ?>;
     const count = <?php echo (int) $clipboard_count; ?>;
-    const maxPdfBytes = <?php echo (int) min( Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_BYTES, wp_max_upload_size() ); ?>;
+    const maxPdfBytes = <?php echo (int) Ecomkit_Vuikhoe_Shopee_SPX_Labels::upload_limit(); ?>;
+    const maxPdfFiles = <?php echo (int) Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_FILES; ?>;
     const feedback = document.getElementById('ecomkit-copy-feedback');
     const summary = document.getElementById('ecomkit-spx-summary');
     const input = document.getElementById('ecomkit-spx-pdf');
     const clear = document.getElementById('ecomkit-clear-spx-pdf');
+    const errors = document.getElementById('ecomkit-pdf-errors');
     const enrichment = new Map(); // Page memory only; never browser storage or HTML.
+    const conflicts = new Set();
+    const totals = {files: 0, pages: 0, parsed: 0, unmatched: 0, failed: 0};
+    let queueVersion = 0;
+    let activeRequest = null;
+    let pdfBusy = false;
+    function setCopyBusy(busy) {
+        pdfBusy = busy;
+        for (const id of ['ecomkit-copy-values', 'ecomkit-copy-with-headers']) document.getElementById(id).disabled = busy || count === 0;
+    }
+    function reportFileError(file, message) {
+        totals.failed++;
+        const item = document.createElement('li');
+        item.textContent = file.name + ': ' + message;
+        errors.appendChild(item);
+    }
+    function mergeEnrichment(data) {
+        for (const id of data.conflicted_order_ids || []) { conflicts.add(id); enrichment.delete(id); }
+        for (const [id, recipient] of Object.entries(data.enrichment || {})) {
+            if (typeof recipient.name !== 'string' || typeof recipient.address !== 'string' || conflicts.has(id)) continue;
+            const previous = enrichment.get(id);
+            if (previous && (previous.name !== recipient.name || previous.address !== recipient.address)) {
+                enrichment.delete(id); conflicts.add(id);
+            } else { enrichment.set(id, {name: recipient.name, address: recipient.address}); }
+        }
+    }
+    function showTotals() {
+        summary.textContent = 'Đã đọc ' + totals.files + ' file · ' + totals.pages + ' trang · ' + totals.parsed + ' nhãn · Khớp Result: ' + enrichment.size + ' · Không khớp: ' + totals.unmatched + (conflicts.size ? ' · Trùng mã mâu thuẫn: ' + conflicts.size + ' (giữ dữ liệu Ecomkit)' : '') + (totals.failed ? ' · File chưa đọc được: ' + totals.failed : '') + (enrichment.size ? '. Sẵn sàng sao chép.' : '. Chưa có mã đơn khớp để bổ sung.');
+    }
     function currentValues() {
         if (!enrichment.size) return values;
         return values.split('\n').map(line => {
@@ -230,33 +262,54 @@ foreach ( $result['rows'] as $clipboard_row ) {
         }).join('\n');
     }
     input.addEventListener('change', async function () {
-        const file = this.files && this.files[0];
-        if (!file) return;
-        enrichment.clear(); clear.disabled = true;
-        if (file.size > maxPdfBytes) { summary.textContent = 'PDF vượt quá giới hạn cho phép.'; this.value = ''; return; }
-        summary.textContent = 'Đang đọc PDF nhãn Shopee…';
+        const files = Array.from(this.files || []);
+        if (!files.length) return;
+        if (files.length > maxPdfFiles) { summary.textContent = 'Vui lòng chọn tối đa ' + maxPdfFiles + ' file mỗi lần. Dữ liệu đã đọc vẫn được giữ.'; this.value = ''; return; }
+        const version = ++queueVersion;
+        this.disabled = true; clear.disabled = false; setCopyBusy(true);
         try {
-            const form = new FormData();
-            form.append('action', 'ecomkit_shopee_spx_pdf');
-            form.append('nonce', <?php echo wp_json_encode( wp_create_nonce( 'ecomkit_shopee_spx_pdf' ), $clipboard_json_flags ); ?>);
-            form.append('batch_id', <?php echo (int) $batch['id']; ?>);
-            form.append('platform', <?php echo wp_json_encode( $data['platform_filter'], $clipboard_json_flags ); ?>);
-            form.append('matching', <?php echo wp_json_encode( $data['matching_filter'], $clipboard_json_flags ); ?>);
-            form.append('pdf', file);
-            const response = await fetch(<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ), $clipboard_json_flags ); ?>, {method: 'POST', body: form, credentials: 'same-origin', cache: 'no-store'});
-            const payload = await response.json();
-            if (!response.ok || !payload.success || !payload.data) throw new Error(payload.data && payload.data.message ? payload.data.message : 'Không thể đọc PDF.');
-            for (const [id, recipient] of Object.entries(payload.data.enrichment || {})) {
-                if (typeof recipient.name === 'string' && typeof recipient.address === 'string') enrichment.set(id, {name: recipient.name, address: recipient.address});
+            for (const [index, file] of files.entries()) {
+                if (version !== queueVersion) break;
+                summary.textContent = 'Đang đọc file ' + (index + 1) + '/' + files.length + ': ' + file.name + ' · Đã khớp: ' + enrichment.size;
+                if (!/\.pdf$/i.test(file.name)) { reportFileError(file, 'Chỉ hỗ trợ file PDF.'); continue; }
+                if (file.size > maxPdfBytes) { reportFileError(file, 'Vượt giới hạn ' + (maxPdfBytes / 1048576).toFixed(2).replace(/\.?0+$/, '') + ' MB/file của hệ thống.'); continue; }
+                try {
+                    const form = new FormData();
+                    form.append('action', 'ecomkit_shopee_spx_pdf');
+                    form.append('nonce', <?php echo wp_json_encode( wp_create_nonce( 'ecomkit_shopee_spx_pdf' ), $clipboard_json_flags ); ?>);
+                    form.append('batch_id', <?php echo (int) $batch['id']; ?>);
+                    form.append('platform', <?php echo wp_json_encode( $data['platform_filter'], $clipboard_json_flags ); ?>);
+                    form.append('matching', <?php echo wp_json_encode( $data['matching_filter'], $clipboard_json_flags ); ?>);
+                    form.append('pdf', file);
+                    activeRequest = new AbortController();
+                    const response = await fetch(<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ), $clipboard_json_flags ); ?>, {method: 'POST', body: form, credentials: 'same-origin', cache: 'no-store', signal: activeRequest.signal});
+                    if (version !== queueVersion) break;
+                    if (response.status === 413) throw new Error('Hosting từ chối dung lượng PDF. Cần tăng giới hạn tải file trên hosting.');
+                    if (response.status === 504) throw new Error('Hosting hết thời gian đọc PDF. Dữ liệu từ các file đã đọc vẫn được giữ.');
+                    let payload;
+                    try { payload = await response.json(); } catch (error) { throw new Error('Máy chủ không trả kết quả đọc PDF. Kiểm tra giới hạn tải file hoặc thời gian xử lý trên hosting.'); }
+                    if (version !== queueVersion) break;
+                    if (!response.ok || !payload.success || !payload.data) throw new Error(payload.data && payload.data.message ? payload.data.message : 'Không thể đọc PDF.');
+                    const data = payload.data;
+                    mergeEnrichment(data);
+                    totals.files++; totals.pages += data.pages || 0; totals.parsed += data.parsed || 0; totals.unmatched += data.unmatched || 0;
+                } catch (error) {
+                    if (version !== queueVersion) break;
+                    reportFileError(file, error.message || 'Không thể đọc PDF.');
+                } finally { if (version === queueVersion) activeRequest = null; }
             }
-            clear.disabled = enrichment.size === 0;
-            const data = payload.data;
-            summary.textContent = 'Đã đọc: ' + data.pages + ' trang, ' + data.parsed + ' nhãn · Khớp Result: ' + data.matched + ' · Tên được bổ sung: ' + data.names_enriched + ' · Địa chỉ được bổ sung: ' + data.addresses_enriched + ' · Không khớp: ' + data.unmatched + (data.duplicate_conflicts ? ' · Trùng mã mâu thuẫn: ' + data.duplicate_conflicts : '') + (data.matched ? '' : ' Đã đọc PDF nhưng không có mã đơn nào khớp Batch hiện tại.');
-        } catch (error) { summary.textContent = error.message || 'PDF không hợp lệ.'; }
-        finally { this.value = ''; }
+            if (version === queueVersion) showTotals();
+        } finally {
+            if (version === queueVersion) { this.value = ''; this.disabled = false; clear.disabled = totals.files + totals.failed === 0; setCopyBusy(false); }
+        }
     });
     clear.addEventListener('click', function () {
-        enrichment.clear(); input.value = ''; clear.disabled = true;
+        queueVersion++;
+        if (activeRequest) activeRequest.abort();
+        activeRequest = null;
+        enrichment.clear(); conflicts.clear();
+        for (const key of Object.keys(totals)) totals[key] = 0;
+        errors.replaceChildren(); input.value = ''; input.disabled = false; clear.disabled = true; setCopyBusy(false);
         summary.textContent = 'Đã xóa dữ liệu PDF tạm. Lần sao chép tiếp theo dùng giá trị Ecomkit.';
     });
     async function copyPlainText(value) {
@@ -282,7 +335,7 @@ foreach ( $result['rows'] as $clipboard_row ) {
                 await copyPlainText(withHeaders ? headers + '\n' + data : data);
                 feedback.textContent = withHeaders ? 'Đã sao chép ' + count + ' đơn + tiêu đề.' : 'Đã sao chép ' + count + ' đơn × 24 cột.';
             } catch (error) { feedback.textContent = 'Không thể sao chép. Vui lòng kiểm tra quyền clipboard của trình duyệt.'; }
-            finally { this.disabled = false; }
+            finally { this.disabled = pdfBusy || count === 0; }
         });
     }
 })();

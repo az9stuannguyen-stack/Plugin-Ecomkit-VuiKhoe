@@ -35,12 +35,31 @@ $data = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( $result );
 $cells = clipboard_cells( $data );
 clipboard_check( 24 === count( $cells ) && 1 === count( explode( "\n", $data ) ), 'Data-only row shape failed.' );
 $by_key = array_combine( array_column( $definitions, 'key' ), $cells );
-foreach ( array( 'product_price_vat_8' => '312000', 'affiliate_fee_vuikhoe' => '0', 'discount_vuikhoe' => '17160', 'fixed_platform_fee' => '51480', 'service_platform_fee' => '5700', 'transaction_platform_fee' => '18720', 'total_amount_to_collect' => '218940', 'discount_percent_vuikhoe' => '0.055', 'platform_cost_percent' => '0.243269230769230769', 'total_cost_percent' => '0.298269230769230769', 'order_date' => '2026-09-24', 'vat_issued_date' => '' ) as $key => $expected ) {
+foreach ( array( 'product_price_vat_8' => '312000', 'affiliate_fee_vuikhoe' => '0', 'discount_vuikhoe' => '17160', 'fixed_platform_fee' => '51480', 'service_platform_fee' => '5700', 'transaction_platform_fee' => '18720', 'total_amount_to_collect' => '218940', 'discount_percent_vuikhoe' => '5.50%', 'platform_cost_percent' => '24.33%', 'total_cost_percent' => '29.83%', 'order_date' => '2026-09-24', 'vat_issued_date' => '' ) as $key => $expected ) {
 	clipboard_check( $expected === $by_key[ $key ], "Golden clipboard value wrong: $key" );
 }
-clipboard_check( ! str_contains( $data, '312,000' ) && ! str_contains( $data, '29.83%' ) && ! str_contains( $data, '—' ), 'Presentation format leaked.' );
+clipboard_check( ! str_contains( $data, '312,000' ) && str_contains( $data, '29.83%' ) && ! str_contains( $data, '—' ), 'Presentation format leaked.' );
 $with_header = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( $result, true );
 clipboard_check( $headers . "\n" . $data === $with_header, 'Header mode failed.' );
+clipboard_check( '0.055' === $result['rows'][0]['columns']['discount_percent_vuikhoe'] && '17160' === $result['rows'][0]['rational']['discount_percent_vuikhoe']['numerator'], 'Clipboard formatting modified canonical ratios.' );
+
+foreach ( array( 'total_cost_percent', 'discount_percent_vuikhoe', 'platform_cost_percent' ) as $key ) {
+	foreach ( array(
+		array( '0', array( 'numerator' => '0', 'denominator' => '100' ), '0.00%' ),
+		array( '0.01005', array( 'numerator' => '1005', 'denominator' => '100000' ), '1.01%' ),
+		array( '-0.055', array( 'numerator' => '-55', 'denominator' => '1000' ), '-5.50%' ),
+		array( '0.055', array( 'numerator' => '55', 'denominator' => '0' ), '' ),
+		array( '0.055', array( 'numerator' => 'invalid', 'denominator' => '1000' ), '' ),
+		array( '0.055', array(), '' ),
+		array( null, array( 'numerator' => '55', 'denominator' => '1000' ), '' ),
+	) as [ $value, $fraction, $expected ] ) {
+		$edge_result = array( 'rows' => array( clipboard_row( array( $key => $value ), array( $key => $fraction ) ) ) );
+		$edge_tsv = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( $edge_result );
+		$edge_cells = array_combine( array_column( $definitions, 'key' ), clipboard_cells( $edge_tsv ) );
+		clipboard_check( $expected === $edge_cells[ $key ], "Percentage zero/rounding/invalid/null projection failed: $key" );
+		clipboard_check( $headers . "\n" . $edge_tsv === Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( $edge_result, true ), 'Percent formatting differs between copy buttons.' );
+	}
+}
 
 $text = $golden;
 $text['customer_name'] = '<b>=2+2</b>';

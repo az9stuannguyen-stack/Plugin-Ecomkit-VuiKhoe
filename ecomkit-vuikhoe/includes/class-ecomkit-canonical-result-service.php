@@ -19,8 +19,7 @@ final class Ecomkit_Vuikhoe_Canonical_Result_Service {
 				if ( isset( $contracts[ $key ]['denominator'] ) ) {
 					$rational = $row['rational'][ $key ] ?? null;
 					if ( ! is_array( $rational ) || ! isset( $rational['numerator'], $rational['denominator'] ) ) { $cells[] = ''; continue; }
-					try { $cells[] = Ecomkit_Vuikhoe_Exact_Financial_Math::ratio( $rational['numerator'], $rational['denominator'], 18 )['ratio']; }
-					catch ( InvalidArgumentException ) { $cells[] = ''; }
+					$cells[] = Ecomkit_Vuikhoe_Exact_Financial_Math::format_percent_two_decimals( $rational ) ?? '';
 				} elseif ( Ecomkit_Vuikhoe_Canonical_Columns::is_money( $key ) ) {
 					$cells[] = ( is_int( $value ) || is_string( $value ) ) && 1 === preg_match( '/\A-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\z/D', (string) $value ) ? (string) $value : '';
 				} elseif ( in_array( $key, array( 'order_date', 'vat_issued_date' ), true ) ) {

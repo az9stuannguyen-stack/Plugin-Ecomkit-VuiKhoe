@@ -10,7 +10,7 @@ Plugin WordPress nội bộ dùng để xử lý, đối chiếu và tổng hợ
 
 ## Current State
 
-- Plugin: `0.7.36`
+- Plugin: `0.7.38`
 - DB schema: `9`
 - Canonical: `v9`
 - Canonical Result: `24 columns`
@@ -64,7 +64,7 @@ Policy dùng native capabilities: normal use là `manage_options OR edit_pages O
 
 Result có đúng **24 cột hiển thị**, giữ thứ tự canonical `v9`. Missing là `NULL`, hiển thị `—`; explicit zero là `0`. Đối chiếu chỉ dùng exact provider order ID trong ngữ cảnh marketplace/shop, không fuzzy-match tên khách hàng, điện thoại, địa chỉ hoặc sản phẩm. Mã đơn ESHOP là identity nội bộ độc lập.
 
-Clipboard xuất TSV 24 cột, tôn trọng filters, có copy dữ liệu/copy kèm tiêu đề, bảo vệ formula injection, NULL thành ô trống và giữ zero. Money là raw numeric; tỷ lệ là decimal fraction. **Clipboard không phải WP.7 full export.**
+Clipboard xuất TSV 24 cột, tôn trọng filters, có copy dữ liệu/copy kèm tiêu đề, bảo vệ formula injection, NULL thành ô trống và giữ zero. Money là raw numeric; ba cột tỷ lệ sao chép đúng dạng phần trăm như Result, với 2 chữ số thập phân HALF-UP (ví dụ `5.50%`, `29.83%`, `24.33%`). Giá trị tỷ lệ canonical và công thức không đổi; tỷ lệ thiếu dữ liệu/không hợp lệ xuất ô trống, tỷ lệ bằng zero xuất `0.00%`. **Clipboard không phải WP.7 full export.**
 
 ## Paused / Future Work
 
@@ -126,11 +126,15 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.7.36`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.7.38`, Composer classmap autoload và text domain.
 
 ## PDF nhãn Shopee chỉ dùng khi sao chép
 
-Trong **Ecomkit → Kết quả**, người dùng có quyền normal workflow có thể chọn PDF nhãn SPX gốc (có lớp văn bản), tối đa **5 MiB hoặc giới hạn WordPress nếu thấp hơn**, tối đa **50 trang**. Plugin đọc trực tiếp từ file upload tạm của PHP và xóa file trong `finally`; không đưa PDF vào Media Library, `wp-content/uploads`, database, transient hoặc cache. Tên/địa chỉ khớp mã đơn chỉ tồn tại trong bộ nhớ của tab cho hai nút sao chép TSV, không thay đổi Result HTML/canonical; tải lại trang hoặc bấm **Xóa dữ liệu PDF tạm** sẽ bỏ nguồn tạm. PDF không cung cấp SĐT nên SĐT luôn lấy từ Ecomkit. File scan không có lớp văn bản bị từ chối, không chạy OCR. Dữ liệu PDF tạm có thể chiếm dung lượng bằng cỡ file (ví dụ khoảng 5 MiB) trong lúc request đang chạy; sau đó không có lưu trữ PDF hoặc PII đã phân tích trên máy chủ.
+Trong **Ecomkit → Kết quả**, người dùng có quyền normal workflow có thể chọn **nhiều PDF cùng lúc**, tối đa **50 file/lượt chọn**, **100 MiB/file hoặc giới hạn WordPress nếu thấp hơn**, **2.000 trang/file**. Trình duyệt tự xử lý lần lượt mỗi file; chọn thêm file sẽ bổ sung vào dữ liệu đã đọc. File lỗi không chặn các file khác; cùng mã đơn nhưng thông tin nhận hàng mâu thuẫn sẽ dùng lại dữ liệu Ecomkit cho mã đó. Giao diện hiển thị giới hạn hosting thực tế và báo nếu thấp hơn 100 MiB.
+
+Bộ đọc đã được kiểm chứng cho **nhãn Shopee SPX gốc có lớp văn bản**. Chưa xác nhận mẫu nhãn Lazada/TikTok: file chưa nhận diện được được báo riêng và không áp dữ liệu sang sàn khác. Cần mẫu PDF thật để triển khai/kiểm chứng bộ đọc tương ứng.
+
+Plugin đọc trực tiếp từ file upload tạm của PHP và xóa file trong `finally`; không đưa PDF vào Media Library, `wp-content/uploads`, database, transient hoặc cache. Tên/địa chỉ khớp mã đơn chỉ tồn tại trong bộ nhớ của tab cho hai nút sao chép TSV, không thay đổi Result HTML/canonical; tải lại trang hoặc bấm **Xóa dữ liệu PDF tạm** sẽ bỏ nguồn tạm. PDF không bổ sung SĐT nên SĐT luôn lấy từ Ecomkit. File scan không có lớp văn bản bị từ chối, không chạy OCR. Bộ phân tích bỏ nội dung ảnh nhúng để giảm bộ nhớ. Tham khảo [giới hạn và quy trình nhiều PDF](docs/pdf-multi-upload.md).
 - Compatibility notices cho PHP/WordPress.
 - Các bảng custom có prefix động, schema version `9`, tạo mới rõ ràng với `ENGINE=InnoDB` và nâng cấp tại chỗ không cần deactivate/reactivate.
 - Migration `2 → 3` chỉ chuyển các bảng Ecomkit chưa phải InnoDB, không drop/truncate; kiểm tra lại số dòng, cột, index và collation trước khi ghi schema version mới. Nếu dừng giữa chừng, lần chạy sau bỏ qua bảng đã đúng và tiếp tục phần còn lại.

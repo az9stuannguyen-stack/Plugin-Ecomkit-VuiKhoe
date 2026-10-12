@@ -142,10 +142,10 @@ final class Ecomkit_Vuikhoe_Admin {
 		nocache_headers();
 		if ( null !== $error_code ) {
 			$messages = array(
-				'SHOPEE_PDF_TOO_LARGE' => 'PDF vượt quá giới hạn cho phép.',
-				'SHOPEE_PDF_TOO_MANY_PAGES' => 'PDF có quá nhiều trang.',
+				'SHOPEE_PDF_TOO_LARGE' => sprintf( 'PDF vượt quá giới hạn %s MB mỗi file của hệ thống (plugin hỗ trợ tối đa 100 MB).', rtrim( rtrim( number_format( Ecomkit_Vuikhoe_Shopee_SPX_Labels::upload_limit() / 1048576, 2, '.', '' ), '0' ), '.' ) ),
+				'SHOPEE_PDF_TOO_MANY_PAGES' => sprintf( 'PDF vượt quá giới hạn %d trang mỗi file.', Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_PAGES ),
 				'SHOPEE_PDF_TEXT_LAYER_REQUIRED' => 'PDF này không có lớp văn bản có thể đọc. Vui lòng dùng file nhãn Shopee PDF gốc thay vì bản scan/ảnh.',
-				'SHOPEE_PDF_NO_VALID_LABELS' => 'Không tìm thấy nhãn Shopee hợp lệ.',
+				'SHOPEE_PDF_NO_VALID_LABELS' => 'Chưa nhận diện được nhãn trong PDF này. Hiện bộ đọc hỗ trợ nhãn Shopee SPX; nhãn Lazada/TikTok cần mẫu phù hợp để bổ sung bộ đọc.',
 				'SHOPEE_PDF_BATCH_NOT_FOUND' => 'Không tìm thấy Batch Result.',
 				'SHOPEE_PDF_TEMP_CLEANUP_FAILED' => 'Không thể xóa PDF tạm sau khi đọc. Vui lòng liên hệ quản trị viên.',
 			);

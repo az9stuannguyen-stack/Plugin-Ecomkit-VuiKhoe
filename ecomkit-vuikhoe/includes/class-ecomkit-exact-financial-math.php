@@ -68,7 +68,7 @@ final class Ecomkit_Vuikhoe_Exact_Financial_Math {
 		} catch ( InvalidArgumentException ) { return null; }
 	}
 
-	/** Result display only: exact rational percentage, two places, HALF-UP. */
+	/** Result display and clipboard: exact rational percentage, two places, HALF-UP. */
 	public static function format_percent_two_decimals( array $rational ): ?string {
 		if ( ! isset( $rational['numerator'], $rational['denominator'] ) ) { return null; }
 		try {

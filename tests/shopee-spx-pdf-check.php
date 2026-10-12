@@ -5,7 +5,7 @@ declare(strict_types=1);
 define( 'ABSPATH', __DIR__ . '/wordpress-placeholder/' );
 require __DIR__ . '/../ecomkit-vuikhoe/vendor/autoload.php';
 function spx_check( bool $condition, string $message ): void { if ( ! $condition ) { throw new RuntimeException( $message ); } }
-function wp_max_upload_size(): int { return 10 * 1024 * 1024; }
+function wp_max_upload_size(): int { return (int) ( $GLOBALS['spx_upload_limit'] ?? 128 * 1024 * 1024 ); }
 function current_user_can( string $capability ): bool { return (bool) ( $GLOBALS['spx_test_admin'] ?? false ); }
 function esc_html__( string $value, string $domain ): string { return $value; }
 function wp_die( string $message, string $title, array $args ): never { throw new RuntimeException( 'DENIED_' . (string) $args['response'] ); }
@@ -30,6 +30,7 @@ function spx_blank_pdf( int $pages ): string {
 $fixture = __DIR__ . '/fixtures/spx-synthetic-10-pages.pdf';
 spx_check( is_file( $fixture ), 'Synthetic fixture missing.' );
 $parsed = Ecomkit_Vuikhoe_Shopee_SPX_Labels::parse_file( $fixture );
+spx_check( 100 * 1024 * 1024 === Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_BYTES && 2000 === Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_PAGES && 50 === Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_FILES, 'Large/multiple PDF limits changed.' );
 spx_check( 10 === $parsed['pages'] && 7 === $parsed['parsed'], 'Ten-page SPX extraction failed.' );
 spx_check( 1 === $parsed['duplicate_conflicts'] && ! isset( $parsed['labels']['261005SFFHEMBC'] ), 'Conflicting duplicate enriched.' );
 spx_check( 1 === $parsed['page_status_counts']['NO_RECIPIENT'] && 1 === $parsed['page_status_counts']['NO_ORDER_ID'] && 1 === $parsed['page_status_counts']['UNSUPPORTED_PAGE'], 'Bad page classifications failed.' );
@@ -64,7 +65,12 @@ $summary = Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( $upload,
 spx_check( ! is_file( $temp ), 'Successful parse retained temporary PDF.' );
 spx_check( 2 === $summary['matched'] && 2 === $summary['unmatched'] && 2 === $summary['names_enriched'] && 2 === $summary['addresses_enriched'], 'Exact Result matching/partial coverage failed.' );
 spx_check( ! isset( $summary['enrichment']['261005SFFHEMBC'] ) && ! isset( $summary['enrichment']['261005EXTRA001'] ), 'Conflict/extra order enriched.' );
+spx_check( array() === $summary['conflicted_order_ids'], 'Unmatched conflict IDs leaked into the browser map.' );
 spx_check( ! isset( $summary['enrichment']['261005S50BGX90']['phone'] ), 'PDF invented a phone number.' );
+$conflict_result = $result; $conflict_result['rows'][] = array( 'platform' => 'SHOPEE', 'columns' => array( 'raw_order_code' => '261005SFFHEMBC' ) );
+$conflict_temp = tempnam( sys_get_temp_dir(), 'spx-test-' ); copy( $fixture, $conflict_temp );
+$conflict_summary = Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'conflict.pdf', 'tmp_name' => $conflict_temp, 'error' => 0 ), $conflict_result, false );
+spx_check( array( '261005SFFHEMBC' ) === $conflict_summary['conflicted_order_ids'] && ! is_file( $conflict_temp ), 'Matched conflicting IDs were not quarantined for cross-file merging.' );
 
 $wrong = tempnam( sys_get_temp_dir(), 'spx-test-' ); file_put_contents( $wrong, '%PDF-actually not a readable PDF' );
 try { Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'labels.pdf', 'tmp_name' => $wrong, 'error' => 0 ), $result, false ); throw new RuntimeException( 'Malformed PDF accepted.' ); }
@@ -78,12 +84,25 @@ $oversized = tempnam( sys_get_temp_dir(), 'spx-test-' ); $stream = fopen( $overs
 try { Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'labels.pdf', 'tmp_name' => $oversized, 'error' => 0 ), $result, false ); throw new RuntimeException( 'Oversized PDF accepted.' ); }
 catch ( RuntimeException $exception ) { spx_check( 'SHOPEE_PDF_TOO_LARGE' === $exception->getMessage(), 'Oversize error changed.' ); }
 spx_check( ! is_file( $oversized ), 'Oversized temporary PDF retained.' );
+$large_valid = tempnam( sys_get_temp_dir(), 'spx-test-' ); copy( $fixture, $large_valid ); file_put_contents( $large_valid, "\n%" . str_repeat( ' ', 6 * 1024 * 1024 ) . "\n", FILE_APPEND );
+$large_summary = Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'large-labels.pdf', 'tmp_name' => $large_valid, 'error' => 0 ), $result, false );
+spx_check( 2 === $large_summary['matched'] && ! is_file( $large_valid ), 'PDF larger than the previous 5 MB cap did not parse/clean up.' );
+$GLOBALS['spx_upload_limit'] = 1024;
+$host_limited = tempnam( sys_get_temp_dir(), 'spx-test-' ); copy( $fixture, $host_limited );
+try { Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'labels.pdf', 'tmp_name' => $host_limited, 'error' => 0 ), $result, false ); throw new RuntimeException( 'Hosting limit ignored.' ); }
+catch ( RuntimeException $exception ) { spx_check( 'SHOPEE_PDF_TOO_LARGE' === $exception->getMessage(), 'Hosting cap classification changed.' ); }
+spx_check( ! is_file( $host_limited ) && 1024 === Ecomkit_Vuikhoe_Shopee_SPX_Labels::upload_limit(), 'Hosting cap or cleanup failed.' );
+unset( $GLOBALS['spx_upload_limit'] );
 $blank = tempnam( sys_get_temp_dir(), 'spx-test-' ); file_put_contents( $blank, spx_blank_pdf( 1 ) );
 try { Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'blank.pdf', 'tmp_name' => $blank, 'error' => 0 ), $result, false ); throw new RuntimeException( 'Blank PDF accepted.' ); }
 catch ( RuntimeException $exception ) { spx_check( 'SHOPEE_PDF_TEXT_LAYER_REQUIRED' === $exception->getMessage(), 'Missing text layer error changed.' ); }
 spx_check( ! is_file( $blank ), 'Blank PDF temporary file retained.' );
-$too_many = tempnam( sys_get_temp_dir(), 'spx-test-' ); file_put_contents( $too_many, spx_blank_pdf( 51 ) );
-try { Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'many.pdf', 'tmp_name' => $too_many, 'error' => 0 ), $result, false ); throw new RuntimeException( '51-page PDF accepted.' ); }
+$above_old_limit = tempnam( sys_get_temp_dir(), 'spx-test-' ); file_put_contents( $above_old_limit, spx_blank_pdf( 78 ) );
+try { Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'blank-78.pdf', 'tmp_name' => $above_old_limit, 'error' => 0 ), $result, false ); throw new RuntimeException( 'Blank pages accepted.' ); }
+catch ( RuntimeException $exception ) { spx_check( 'SHOPEE_PDF_TEXT_LAYER_REQUIRED' === $exception->getMessage(), '78 pages still hit the old 50-page cap.' ); }
+spx_check( ! is_file( $above_old_limit ), '78-page PDF temp retained.' );
+$too_many = tempnam( sys_get_temp_dir(), 'spx-test-' ); file_put_contents( $too_many, spx_blank_pdf( Ecomkit_Vuikhoe_Shopee_SPX_Labels::MAX_PAGES + 1 ) );
+try { Ecomkit_Vuikhoe_Shopee_SPX_Labels::process_temporary_upload( array( 'name' => 'many.pdf', 'tmp_name' => $too_many, 'error' => 0 ), $result, false ); throw new RuntimeException( 'Over-limit pages accepted.' ); }
 catch ( RuntimeException $exception ) { spx_check( 'SHOPEE_PDF_TOO_MANY_PAGES' === $exception->getMessage(), 'Page limit error changed.' ); }
 spx_check( ! is_file( $too_many ), 'Over-page temporary PDF retained.' );
 
@@ -98,7 +117,7 @@ spx_check( 'COMPLETED' === Ecomkit_Vuikhoe_Shopee_Business_Status::resolve( 'LAZ
 $fields = array( 'raw_order_code' => '261005S50BGX90', 'sales_channel' => 'SHOPEE', 'order_status' => 'COMPLETED', 'customer_name' => 'Existing Name', 'phone' => '09***', 'address' => 'Existing Address', 'product_price_vat_8' => 312000, 'affiliate_fee_vuikhoe' => 0, 'discount_vuikhoe' => 17160, 'fixed_platform_fee' => 51480, 'service_platform_fee' => 5700, 'transaction_platform_fee' => 18720, 'total_amount_to_collect' => 218940, 'discount_percent_vuikhoe' => '0.055' );
 $tsv = Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_tsv( array( 'rows' => array( array( 'platform' => 'SHOPEE', 'columns' => $fields, 'rational' => array( 'discount_percent_vuikhoe' => array( 'numerator' => '17160', 'denominator' => '312000' ) ) ) ) ) );
 $cells = explode( "\t", $tsv );
-spx_check( 24 === count( $cells ) && 'Giao Hàng Thành Công' === $cells[4] && '09***' === $cells[6] && '312000' === $cells[14] && '0' === $cells[17] && '0.055' === $cells[19], '24-column clipboard/status/financial regression failed.' );
+spx_check( 24 === count( $cells ) && 'Giao Hàng Thành Công' === $cells[4] && '09***' === $cells[6] && '312000' === $cells[14] && '0' === $cells[17] && '5.50%' === $cells[19], '24-column clipboard/status/financial regression failed.' );
 spx_check( "'=HYPERLINK(1)" === Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_text( "=HYPERLINK(1)\n" ) && "'@SUM(1) line" === Ecomkit_Vuikhoe_Canonical_Result_Service::clipboard_text( "@SUM(1)\tline" ), 'PDF formula text not neutralized.' );
 
 $admin = file_get_contents( __DIR__ . '/../ecomkit-vuikhoe/includes/class-ecomkit-admin.php' );
