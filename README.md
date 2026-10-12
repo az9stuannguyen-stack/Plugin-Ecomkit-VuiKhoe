@@ -10,12 +10,14 @@ Plugin WordPress nội bộ dùng để xử lý, đối chiếu và tổng hợ
 
 ## Current State
 
-- Plugin: `0.7.35`
+- Plugin: `0.7.36`
 - DB schema: `9`
 - Canonical: `v9`
 - Canonical Result: `24 columns`
 - Main development branch: `laptop`
 - Status: `PAUSED`
+
+Maintenance fix **2026-10-12**: Shopee Order Detail cho một khoảng ngày có trên 50 đơn đã khớp được chia thành nhiều lượt nền, lưu từng phần và tiếp tục từ checkpoint. Batch đã dừng trên phiên bản cũ có thể dùng **Kết quả → Công cụ quản trị nâng cao → Tiếp tục xử lý sau khi kiểm tra cảnh báo** sau khi cập nhật plugin. Xem [chi tiết bản sửa và kiểm chứng](docs/shopee-detail-continuation-fix.md). Phạm vi bảo trì này không mở lại các stage Lazada/TikTok/export đang tạm dừng.
 
 Luồng nghiệp vụ: **Excel đơn hàng → Ecomkit → nhận diện marketplace → đối chiếu dữ liệu sàn → xử lý thông tin → Result chung 24 cột**.
 
@@ -124,7 +126,7 @@ Activation/update chỉ tạo hoặc nâng cấp schema bằng `dbDelta()` và k
 
 ## Chức năng đã có
 
-- Bootstrap plugin phiên bản `0.7.35`, Composer classmap autoload và text domain.
+- Bootstrap plugin phiên bản `0.7.36`, Composer classmap autoload và text domain.
 
 ## PDF nhãn Shopee chỉ dùng khi sao chép
 

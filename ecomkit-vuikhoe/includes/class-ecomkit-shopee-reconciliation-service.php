@@ -8,6 +8,7 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 	private const ERROR_SOURCE = 'SHOPEE_RECON';
 	private const MAX_WINDOW_SECONDS = 1296000;
+	private const DETAIL_BATCH_SIZE = 50;
 	private const DETAIL_FIELDS = array( 'buyer_username', 'recipient_address', 'item_list', 'estimated_shipping_fee', 'actual_shipping_fee' );
 	public array $last_diagnostic = array();
 
@@ -70,8 +71,11 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		$windows = self::derive_windows( array_values( $dates_by_id ), $timezone );
 		$all_windows_count = count( $windows );
 		$window_offset = is_array( $auto_limits ) ? max( 0, (int) ( $auto_limits['window_offset'] ?? 0 ) ) : 0;
-		if ( $window_offset > 0 ) { $planning_errors = array(); } // Already persisted on the first bounded window.
-		if ( is_array( $auto_limits ) ) { $windows = array_slice( $windows, $window_offset, max( 1, min( 2, (int) ( $auto_limits['max_windows'] ?? 1 ) ) ) ); }
+		$continuation = (array) ( $auto_limits['continuation'] ?? array() );
+		$resuming_details = is_array( $auto_limits ) && 'DETAIL' === ( $continuation['phase'] ?? '' );
+		$previous_summary = $resuming_details ? (array) ( $continuation['base_summary'] ?? array() ) : (array) ( $batch_metadata['shopee_reconciliation'] ?? array() );
+		if ( $window_offset > 0 || $resuming_details ) { $planning_errors = array(); } // Already persisted on the first bounded window.
+		if ( is_array( $auto_limits ) ) { $windows = array_slice( $windows, $window_offset, 1 ); } // A checkpoint belongs to exactly one window.
 		$started_at = current_time( 'mysql', true );
 		$provider_by_sn = array();
 		$complete_order_ids = array();
@@ -84,8 +88,11 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 			$window_excel_sns = array_values( array_map( static fn( int $id ): string => (string) $by_id[ $id ]['marketplace_order_id'], $window_ids ) );
 			$result = null;
 			try {
-				if ( is_array( $auto_limits ) ) {
-					$continuation = (array) ( $auto_limits['continuation'] ?? array() );
+				$window_fingerprint = hash( 'sha256', (string) wp_json_encode( array( $connection_id, $window, $window_excel_sns ) ) );
+				if ( $resuming_details ) {
+					if ( ! hash_equals( $window_fingerprint, (string) ( $continuation['window_fingerprint'] ?? '' ) ) ) { $this->fail( 'SHOPEE_RECON_DETAIL_CONTINUATION_INVALID', 'RECON_PLAN' ); }
+					$result = array( 'orders' => array_map( static fn( mixed $sn ): array => array( 'order_sn' => (string) $sn ), array_keys( (array) $continuation['provider_ids'] ) ), 'page_count' => (int) $continuation['page_count'], 'request_ids' => (array) $continuation['request_ids'] );
+				} elseif ( is_array( $auto_limits ) ) {
 					$cursor = $continuation['cursor'] ?? null;
 					if ( null !== $cursor && ( ! is_string( $cursor ) || '' === $cursor ) ) { throw new RuntimeException( 'SHOPEE_RECON_CURSOR_INVALID' ); }
 					$provider_ids = (array) ( $continuation['provider_ids'] ?? array() );
@@ -107,7 +114,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 						return array( 'status' => 'PROCESSING', 'matched_count' => (int) ( $batch_metadata['shopee_reconciliation']['matched_count'] ?? 0 ), 'missing_count' => (int) ( $batch_metadata['shopee_reconciliation']['missing_count'] ?? 0 ), 'detail_count' => (int) ( $batch_metadata['shopee_reconciliation']['detail_count'] ?? 0 ), 'total_windows' => $all_windows_count, 'next_window_offset' => $window_offset, 'continuation' => array( 'cursor' => $cursor, 'provider_ids' => $provider_ids, 'seen_cursors' => $seen, 'request_ids' => $request_ids, 'page_count' => $page_count ) );
 					}
 				} else { $result = $this->orders->get_all_orders( $connection_id, 'create_time', $window['time_from'], $window['time_to'], 100 ); }
-				$api_calls += (int) $result['page_count'];
+				$api_calls += $resuming_details ? (int) $continuation['api_calls'] : (int) $result['page_count'];
 				foreach ( $result['orders'] as $provider_order ) {
 					$provider_by_sn[ $provider_order['order_sn'] ] = $provider_order;
 				}
@@ -144,9 +151,12 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		$details_by_sn = array();
 		$detail_missing = array();
 		$detail_failed = false;
+		$detail_offset = $resuming_details ? (int) $continuation['detail_offset'] : 0;
+		$detail_sns = array_keys( $matched );
+		if ( is_array( $auto_limits ) ) { $detail_sns = array_slice( $detail_sns, $detail_offset, self::DETAIL_BATCH_SIZE * max( 1, min( 2, (int) ( $auto_limits['max_detail_batches'] ?? 1 ) ) ) ); }
 		if ( $matched ) {
 			try {
-				$detail = $this->orders->get_order_details_batched( $connection_id, array_keys( $matched ), self::DETAIL_FIELDS, is_array( $auto_limits ) ? max( 1, min( 2, (int) ( $auto_limits['max_detail_batches'] ?? 1 ) ) ) : PHP_INT_MAX );
+				$detail = $this->orders->get_order_details_batched( $connection_id, $detail_sns, self::DETAIL_FIELDS, is_array( $auto_limits ) ? max( 1, min( 2, (int) ( $auto_limits['max_detail_batches'] ?? 1 ) ) ) : PHP_INT_MAX );
 				$api_calls += count( $detail['request_ids'] );
 				$details_by_sn = $detail['orders_by_sn'];
 				$detail_missing = $detail['missing_order_sn'];
@@ -166,7 +176,11 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		}
 
 		$all_errors = array_merge( $planning_errors, $provider_errors );
-		$status = $provider_errors ? 'INCOMPLETE' : ( $planning_errors || $detail_missing ? 'WARNING' : 'SUCCESS' );
+		$detail_count = count( $details_by_sn ) + ( $resuming_details ? (int) $continuation['detail_count'] : 0 );
+		$detail_missing_count = count( $detail_missing ) + ( $resuming_details ? (int) $continuation['detail_missing_count'] : 0 );
+		$missing_date_count = $resuming_details ? (int) $continuation['missing_date_count'] : count( array_filter( $planning_errors, static fn( array $error ): bool => 'SHOPEE_RECON_ORDER_DATE_MISSING' === $error['error_code'] ) );
+		$detail_pending = is_array( $auto_limits ) && ! $detail_failed && $detail_offset + count( $detail_sns ) < count( $matched );
+		$status = $provider_errors || $detail_missing_count ? 'INCOMPLETE' : ( $missing_date_count ? 'WARNING' : 'SUCCESS' );
 		$summary = array(
 			'connection_id'       => $connection_id,
 			'shop_id'             => (string) $connection['external_shop_id'],
@@ -180,16 +194,20 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 			'matched_count'       => count( $matched ),
 			'missing_count'       => count( $missing ),
 			'extra_count'         => count( $extra ),
-			'detail_count'        => count( $details_by_sn ),
-			'detail_missing_count'=> count( $detail_missing ),
-			'missing_date_count'  => count( array_filter( $planning_errors, static fn( array $error ): bool => 'SHOPEE_RECON_ORDER_DATE_MISSING' === $error['error_code'] ) ),
+			'detail_count'        => $detail_count,
+			'detail_missing_count'=> $detail_missing_count,
+			'missing_date_count'  => $missing_date_count,
 			'extra_order_sns'     => array_slice( $extra, 0, 100 ),
 			'status'              => $status,
 			'total_windows'       => $all_windows_count,
-			'next_window_offset'  => $window_offset + count( $windows ),
+			'next_window_offset'  => $detail_pending ? $window_offset : $window_offset + count( $windows ),
 		);
-		if ( is_array( $auto_limits ) && $window_offset > 0 && is_array( $batch_metadata['shopee_reconciliation'] ?? null ) ) {
-			$previous = $batch_metadata['shopee_reconciliation'];
+		if ( $detail_pending ) {
+			// Provider payloads/PII are persisted on Orders, never in the continuation checkpoint.
+			$summary['continuation'] = array( 'phase' => 'DETAIL', 'window_fingerprint' => $window_fingerprint, 'provider_ids' => array_fill_keys( array_keys( $provider_by_sn ), true ), 'page_count' => (int) $result['page_count'], 'request_ids' => (array) $result['request_ids'], 'detail_offset' => $detail_offset + count( $detail_sns ), 'detail_count' => $detail_count, 'detail_missing_count' => $detail_missing_count, 'missing_date_count' => $missing_date_count, 'api_calls' => $api_calls, 'base_summary' => $window_offset > 0 ? $previous_summary : array() );
+		}
+		if ( is_array( $auto_limits ) && $window_offset > 0 && $previous_summary ) {
+			$previous = $previous_summary;
 			foreach ( array( 'provider_windows_executed', 'shopee_api_calls', 'provider_count', 'matched_count', 'missing_count', 'extra_count', 'detail_count', 'detail_missing_count', 'missing_date_count' ) as $count_key ) { $summary[ $count_key ] += (int) ( $previous[ $count_key ] ?? 0 ); }
 			$summary['windows'] = array_merge( (array) ( $previous['windows'] ?? array() ), $summary['windows'] );
 			$summary['extra_order_sns'] = array_slice( array_unique( array_merge( (array) ( $previous['extra_order_sns'] ?? array() ), $summary['extra_order_sns'] ) ), 0, 100 );
@@ -197,6 +215,7 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		}
 		$summary['classification'] = self::classify_summary( $summary );
 		if ( in_array( $summary['classification'], array( 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY', 'SHOPEE_RECON_ZERO_INTERSECTION', 'SHOPEE_RECON_PARTIAL_MATCH' ), true ) && 'SUCCESS' === $summary['status'] ) { $summary['status'] = 'WARNING'; }
+		if ( $detail_pending ) { $summary['status'] = 'PROCESSING'; }
 
 		$this->persist( $batch, $batch_metadata, $connection_id, $complete_order_ids, $matched, $missing, $details_by_sn, $detail_missing, $detail_failed, $all_errors, $summary );
 		return $summary;
@@ -245,6 +264,8 @@ final class Ecomkit_Vuikhoe_Shopee_Reconciliation_Service {
 		$windows = (array) ( $summary['windows'] ?? array() );
 		if ( (int) ( $summary['excel_shopee_count'] ?? 0 ) < 1 || ! $windows || count( $windows ) !== (int) ( $summary['total_windows'] ?? count( $windows ) ) || (int) ( $summary['next_window_offset'] ?? count( $windows ) ) < (int) ( $summary['total_windows'] ?? count( $windows ) ) ) { return null; }
 		foreach ( $windows as $window ) { if ( 'SUCCESS' !== ( $window['status'] ?? '' ) || false === ( $window['pagination_complete'] ?? true ) ) { return in_array( (string) ( $window['failure_code'] ?? '' ), array( 'SHOPEE_RECON_PAGINATION_INCOMPLETE', 'SHOPEE_RECON_LIST_FAILED' ), true ) ? $window['failure_code'] : 'SHOPEE_RECON_PAGINATION_INCOMPLETE'; } }
+		if ( (int) ( $summary['detail_missing_count'] ?? 0 ) > 0 ) { return 'SHOPEE_RECON_DETAIL_MISSING'; }
+		if ( 'INCOMPLETE' === ( $summary['status'] ?? '' ) && (int) ( $summary['detail_count'] ?? 0 ) < (int) ( $summary['matched_count'] ?? 0 ) ) { return 'SHOPEE_RECON_DETAIL_FAILED'; }
 		if ( (int) ( $summary['missing_date_count'] ?? 0 ) > 0 ) { return null; }
 		$matched = (int) ( $summary['matched_count'] ?? 0 ); $excel = (int) $summary['excel_shopee_count'];
 		if ( 0 === $matched ) { return 0 === (int) ( $summary['provider_count'] ?? 0 ) ? 'SHOPEE_RECON_PROVIDER_WINDOW_EMPTY' : 'SHOPEE_RECON_ZERO_INTERSECTION'; }
